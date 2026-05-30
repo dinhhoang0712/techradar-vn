@@ -1,0 +1,279 @@
+schema: '2.0'
+stages:
+  extract:
+    cmd: python -m pipelines.stage_01_extract --params params.yaml
+    deps:
+    - path: pipelines/stage_01_extract.py
+      hash: md5
+      md5: 8f4d56504fa1ee966e830ccb531fcf83
+      size: 3629
+    - path: src/data/neo4j_loader.py
+      hash: md5
+      md5: 566b98c2a144579e78249aba62c0547d
+      size: 12832
+    - path: src/data/snapshot.py
+      hash: md5
+      md5: 1e7b1d2843fd064aa17bcb779195e740
+      size: 7596
+    params:
+      params.yaml:
+        snapshot:
+          tag: '2026-05-13'
+          min_tech_degree: 1
+    outs:
+    - path: data/raw/snapshot_2026-05-13
+      hash: md5
+      md5: 290bb9fc52446841d62965a0545a088e.dir
+      size: 3197255
+      nfiles: 12
+  features:
+    cmd: python -m pipelines.stage_02_features --params params.yaml
+    deps:
+    - path: data/raw/snapshot_2026-05-13
+      hash: md5
+      md5: 290bb9fc52446841d62965a0545a088e.dir
+      size: 3197255
+      nfiles: 12
+    - path: pipelines/stage_02_features.py
+      hash: md5
+      md5: 848623bd067bd3288c18ce356b3667c5
+      size: 10884
+    - path: src/features
+      hash: md5
+      md5: aadd5577dd6455c889e3359e4e57ce62.dir
+      size: 115869
+      nfiles: 16
+    params:
+      params.yaml:
+        features:
+          fastrp:
+            enabled: false
+            embedding_dim: 64
+            iteration_weights:
+            - 0.0
+            - 1.0
+            - 1.0
+            - 1.0
+            normalization_strength: 0.0
+          node2vec:
+            enabled: false
+            embedding_dim: 64
+            walk_length: 10
+            walks_per_node: 10
+          pagerank:
+            enabled: false
+            damping: 0.85
+            max_iter: 20
+          louvain:
+            enabled: false
+            max_levels: 10
+            top_k_communities: 20
+          noise_filter:
+            enabled: true
+            min_job_count: 3
+            blocklist:
+            - Dau
+            - Mau
+            - CCCD
+            - openclaw
+            - enscape
+            - emotion
+            - fiber
+            - lookout
+            - Fair
+            - NVR
+            - Rhino
+            - FCC
+            - Mô Hình Ngôn Ngữ
+            - Cinema4D
+            - Substance 3D
+            - FCC
+            - Mô Hình Ngôn Ngữ
+            - Revit
+            - 3ds Max
+            - 3DS Max
+            - 3Ds Max
+            - 3Ds max
+            - 3ds max
+            - Lumion
+            - Cinema4D
+            - Substance 3D
+            - Unity
+            - Unreal
+            - Trello
+            - Asana
+            - Confluence
+            - JIRA
+            - ServiceNow
+            - Agile
+            - Scrum
+            - IT
+            - vibe coding
+            - Capcut
+            - Figma
+            - Adobe Photoshop
+            - Adobe Illustrator
+            - Adobe Premiere
+            - After Effects
+            - InDesign
+            - Blender
+            - SketchUp
+            - Mixpanel
+            - Amplitude
+            - Google Analytics
+            heuristic_patterns:
+            - ^[a-z]{1,3}$
+            - ^(an|theo|trong|bang|quan|ly|co|voi|cac|khi|tai|lam|va|hoac|duoc)$
+          use_name_embedding: true
+          name_emb_pca_components: 64
+          article_embedding_aggregation:
+            enabled: true
+            method: mean
+            min_articles_per_tech: 1
+          use_company_tfidf: false
+          use_job_tfidf: true
+          tfidf_min_df: 2
+          tfidf_max_features: 500
+          feature_weights:
+            graph_stats: 1.0
+            content_emb: 0.5
+            job_tfidf: 2.0
+          scaler: standard
+          reduce_dim:
+            enabled: true
+            method: umap
+            n_components: 32
+        snapshot:
+          tag: '2026-05-13'
+          min_tech_degree: 1
+    outs:
+    - path: data/features/2026-05-13
+      hash: md5
+      md5: 09bf37ae7b3d2f7be154d3ffd82fb6e4.dir
+      size: 53314
+      nfiles: 3
+  train:
+    cmd: python -m pipelines.stage_03_train --params params.yaml
+    deps:
+    - path: data/features/2026-05-13
+      hash: md5
+      md5: 09bf37ae7b3d2f7be154d3ffd82fb6e4.dir
+      size: 53314
+      nfiles: 3
+    - path: pipelines/stage_03_train.py
+      hash: md5
+      md5: 754e1200a0731786d3f46c04288260b1
+      size: 10021
+    - path: src/clustering
+      hash: md5
+      md5: bad69dac60f4ee3c639e6b6ba9fc8317.dir
+      size: 37252
+      nfiles: 8
+    - path: src/tracking/mlflow_logger.py
+      hash: md5
+      md5: 28e40a3aa2fd8d1c9c67e2515bb855d7
+      size: 7238
+    params:
+      params.yaml:
+        clustering:
+          algorithm: hdbscan
+          dbscan:
+            eps_grid:
+            - 0.5
+            - 1.0
+            - 1.5
+            - 2.0
+            - 2.5
+            - 3.0
+            - 4.0
+            min_samples_grid:
+            - 3
+            - 5
+            - 7
+            - 10
+            metric: euclidean
+          hdbscan:
+            min_cluster_size_grid:
+            - 3
+            - 4
+            - 5
+            - 6
+            - 7
+            - 8
+            min_samples_grid:
+            - 1
+            - 2
+            - 3
+            cluster_selection_method: leaf
+          kmeans:
+            n_clusters_grid:
+            - 20
+            - 24
+            - 28
+            - 32
+            - 36
+            n_init: 10
+            random_state: 42
+          near_cluster_threshold: 0.7
+          selection:
+            primary_metric: silhouette
+            require_min_clusters: 12
+            require_max_clusters: 28
+            require_max_noise_ratio: 0.6
+        mlflow:
+          experiment_name: tech_clustering_v1
+          tracking_uri: sqlite:///mlruns.db
+          registry_model_name: tech_clusterer
+        snapshot:
+          tag: '2026-05-13'
+          min_tech_degree: 1
+    outs:
+    - path: data/metrics/2026-05-13/best_metrics.json
+      hash: md5
+      md5: 611ca87bb8e54b9e13761f50d292622c
+      size: 246
+    - path: data/models/2026-05-13
+      hash: md5
+      md5: 53f370afcfcb5af7365562450e499d33.dir
+      size: 88828
+      nfiles: 2
+  label:
+    cmd: python -m pipelines.stage_04_label --params params.yaml
+    deps:
+    - path: data/models/2026-05-13
+      hash: md5
+      md5: 53f370afcfcb5af7365562450e499d33.dir
+      size: 88828
+      nfiles: 2
+    - path: data/raw/snapshot_2026-05-13
+      hash: md5
+      md5: 290bb9fc52446841d62965a0545a088e.dir
+      size: 3197255
+      nfiles: 12
+    - path: pipelines/stage_04_label.py
+      hash: md5
+      md5: 31aa11fb459ec6454d7514f9adfa53d7
+      size: 6063
+    - path: src/labeling
+      hash: md5
+      md5: aedc09e34b4dc18499a105bd99208930.dir
+      size: 43508
+      nfiles: 6
+    params:
+      params.yaml:
+        labeling:
+          provider: openai
+          openai_model: gpt-4o-mini
+          gemini_model: gemini-2.5-flash
+          max_members_in_prompt: 25
+          temperature: 0.2
+          cache_dir: data/labels/.llm_cache
+        snapshot:
+          tag: '2026-05-13'
+          min_tech_degree: 1
+    outs:
+    - path: data/labels/2026-05-13
+      hash: md5
+      md5: 34f5dcd259b7502d6b64276d3e82cdd2.dir
+      size: 11808
+      nfiles: 1

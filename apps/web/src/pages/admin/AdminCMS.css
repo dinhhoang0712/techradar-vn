@@ -1,0 +1,113 @@
+.admin-cms {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.cms-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.cms-title h2 { margin: 0; color: #fff; }
+.cms-title p { margin: 5px 0 0; color: #a0aec0; }
+
+.cms-actions {
+    display: flex;
+    gap: 12px;
+}
+.btn-upload, .btn-add {
+    border: none;
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.2s;
+}
+.btn-upload { background: #333333; color: #fff; }
+.btn-add { background: #ffffff; color: #000000; }
+.btn-upload:hover { background: #4a5568; }
+.btn-add:hover { background: #dddddd; }
+
+.cms-card {
+    background: #111111;
+    border: 1px solid #333333;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.cms-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+    color: #e2e8f0;
+}
+.cms-table th {
+    background: #1a1a1a;
+    padding: 16px;
+    font-weight: 600;
+    color: #a0aec0;
+    border-bottom: 1px solid #333333;
+}
+.cms-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid #333333;
+}
+.cms-table tr:hover { background: rgba(255,255,255,0.02); }
+.cms-table tr:last-child td { border-bottom: none; }
+
+.c-id { color: #718096; font-family: monospace; }
+.c-title { font-weight: 500; color: #fff; }
+
+/* Badges */
+.c-type {
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+.type-report { background: rgba(236,201,75,0.15); color: #ecc94b; }
+.type-job { background: rgba(75,196,238,0.15); color: #ffffff; }
+.type-keyword { background: rgba(159,122,234,0.15); color: #9f7aea; }
+
+.c-status { font-weight: bold; font-size: 0.9rem; }
+.status-published { color: #48bb78; }
+.status-analyzed { color: #4299e1; }
+.status-pending { color: #ed8936; }
+.status-archived { color: #a0aec0; }
+
+.c-actions { display: flex; gap: 8px; }
+.c-btn {
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    background: transparent;
+    transition: 0.2s;
+}
+.c-btn.edit { color: #ffffff; background: rgba(75,196,238,0.1); }
+.c-btn.del { color: #fc8181; background: rgba(252,129,129,0.1); }
+.c-btn.edit:hover { background: rgba(75,196,238,0.2); }
+.c-btn.del:hover { background: rgba(252,129,129,0.2); }
+
+.cms-pagination {
+    padding: 16px;
+    border-top: 1px solid #333333;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: #a0aec0;
+    font-size: 0.9rem;
+}
+.page-btns button {
+    background: #333333;
+    color: #fff;
+    border: none;
+    padding: 6px 12px;
+    margin-left: 8px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.page-btns button:disabled { opacity: 0.5; cursor: not-allowed; }

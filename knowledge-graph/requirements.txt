@@ -1,0 +1,12 @@
+# Yêu cầu cho Neo4j Import
+
+# Core dependencies
+neo4j  # Neo4j Python driver
+python-dotenv==1.0.0  # Để quản lý environment variables
+
+# Data processing
+pandas
+numpy
+
+# Logging và utilities
+colorlog==6.7.0

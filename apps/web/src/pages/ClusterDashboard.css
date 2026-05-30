@@ -1,0 +1,316 @@
+.cluster-page {
+    padding: 24px;
+    max-width: 1400px;
+    margin: 0 auto;
+    animation: fadeIn 0.4s ease;
+}
+
+.cluster-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 32px;
+}
+
+@media (max-width: 768px) {
+    .cluster-header {
+        flex-direction: column;
+        gap: 16px;
+    }
+}
+
+.cluster-title {
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: var(--text);
+    background: linear-gradient(135deg, #ffffff, #aab2ff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin: 0;
+}
+
+.cluster-search-wrap {
+    position: relative;
+    width: 350px;
+}
+
+@media (max-width: 768px) {
+    .cluster-search-wrap {
+        width: 100%;
+    }
+}
+
+.btn-back-floating {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    z-index: 100;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(15, 15, 15, 0.8);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.btn-back-floating:hover {
+    background: var(--primary);
+    color: #000;
+    transform: scale(1.1);
+    border-color: var(--primary);
+    box-shadow: 0 0 20px var(--primary-glow);
+}
+
+.btn-back-floating:active {
+    transform: scale(0.95);
+}
+
+.cluster-search-input {
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 14px 20px;
+    border-radius: 12px;
+    outline: none;
+    font-size: 1rem;
+    transition: all 0.2s ease;
+}
+
+.cluster-search-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-glow);
+}
+
+/* --- LƯỚI TỔNG QUAN (GRID VIEW) --- */
+.cluster-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 24px;
+    padding-bottom: 40px;
+}
+
+@media (max-width: 640px) {
+    .cluster-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+    }
+    .cluster-grid-item {
+        padding: 16px;
+    }
+    .cluster-grid-item h3 {
+        font-size: 1rem;
+    }
+    .cluster-desc-short {
+        font-size: 0.8rem;
+        margin-bottom: 12px;
+    }
+}
+
+.cluster-grid-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.cluster-grid-item:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    border-color: var(--primary-light);
+}
+
+.cluster-grid-item h3 {
+    font-size: 1.25rem;
+    margin-bottom: 12px;
+    color: var(--text);
+}
+
+.cluster-desc-short {
+    color: var(--text-2);
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin-bottom: 20px;
+    flex-grow: 1;
+    
+    /* Cắt chữ nếu quá dài (hiện 3 dòng) */
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;  
+    overflow: hidden;
+}
+
+.cluster-stats {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    color: var(--text-3);
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+}
+
+.cluster-stats strong {
+    color: var(--text);
+    font-size: 0.95rem;
+}
+
+/* --- MÀN HÌNH CHI TIẾT (DETAIL VIEW) --- */
+.cluster-detail-container {
+    display: flex;
+    gap: 24px;
+    height: calc(100vh - 180px);
+    min-height: 600px;
+    animation: fadeIn 0.3s ease-out;
+}
+
+@media (max-width: 1024px) {
+    .cluster-detail-container {
+        flex-direction: column;
+        height: auto;
+        min-height: 0;
+    }
+}
+
+.cluster-graph-card {
+    flex: 1;
+    background: #0a0a0a;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    position: relative;
+    overflow: hidden;
+}
+
+@media (max-width: 1024px) {
+    .cluster-graph-card {
+        height: 400px;
+        flex: none;
+    }
+}
+
+.cluster-info-card {
+    width: 400px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    overflow-y: auto;
+}
+
+@media (max-width: 1024px) {
+    .cluster-info-card {
+        width: 100%;
+        overflow-y: visible;
+    }
+}
+
+/* Detail Header */
+.cluster-detail-header {
+    border-left: 4px solid #FF6B6B; /* Pink accent like app */
+    padding-left: 16px;
+    margin-bottom: 24px;
+}
+
+.cluster-detail-title {
+    font-size: 1.8rem;
+    margin: 8px 0 4px;
+    color: var(--text);
+}
+
+.cluster-subtitle {
+    font-size: 0.9rem;
+    color: var(--text-3);
+    font-style: italic;
+}
+
+/* Stats Row (3 columns) */
+.cluster-stats-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+    background: var(--surface-2);
+    padding: 16px;
+    border-radius: 12px;
+}
+
+.cluster-stat-box {
+    text-align: center;
+    border-right: 1px solid var(--border);
+}
+
+.cluster-stat-box:last-child {
+    border-right: none;
+}
+
+.stat-val {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: var(--text);
+}
+
+.stat-label {
+    font-size: 0.7rem;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 4px;
+}
+
+.cluster-description-text {
+    color: var(--text-2);
+    line-height: 1.6;
+    margin-bottom: 24px;
+    font-size: 0.95rem;
+}
+
+/* Tech Tags */
+.cluster-tech-section .section-subtitle {
+    font-size: 1.1rem;
+    margin-bottom: 16px;
+}
+
+.cluster-tech-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.tech-tag {
+    padding: 6px 12px;
+    background: var(--surface-2);
+    border-radius: 20px;
+    font-size: 0.85rem;
+    color: var(--text-2);
+    transition: all 0.2s;
+}
+
+.tech-tag:hover {
+    background: var(--primary-glow);
+    color: var(--primary-light);
+}
+
+.loading-overlay, .loading-text {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    color: var(--text-3);
+}
+
+.graph-wrapper {
+    width: 100%;
+    height: 100%;
+}

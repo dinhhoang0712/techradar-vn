@@ -1,0 +1,19 @@
+# DVC sẽ tự quản lý các thư mục data/* — không commit raw vào git
+data/raw/
+data/features/
+data/models/
+data/labels/
+data/metrics/
+
+# MLflow local
+mlruns/
+# mlruns.db tracked in git for reproducibility
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# DVC artefacts trung gian
+.dvc/tmp/
+.dvc/cache/

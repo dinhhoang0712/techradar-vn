@@ -1,0 +1,9 @@
+data/
+mlruns/
+mlruns.db
+.dvc/cache/
+.dvc/tmp/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/

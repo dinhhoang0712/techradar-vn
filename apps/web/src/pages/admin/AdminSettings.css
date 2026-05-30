@@ -1,0 +1,107 @@
+.admin-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    max-width: 800px;
+}
+
+.settings-header {
+    margin-bottom: 10px;
+}
+.settings-header h2 {
+    margin: 0;
+    color: #fff;
+    font-size: 1.8rem;
+}
+.settings-header p {
+    color: #a0aec0;
+    margin: 5px 0 0 0;
+}
+
+.settings-card {
+    background: var(--bg-card, #111111);
+    border: 1px solid var(--border-color, #333333);
+    border-radius: 12px;
+    padding: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+@media (max-width: 640px) {
+    .settings-card {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+}
+
+.settings-card.danger-zone {
+    border-color: #e53e3e;
+    background: rgba(229, 62, 62, 0.05);
+}
+.settings-card.danger-zone h3 {
+    color: #fc8181;
+}
+
+.setting-info h3 {
+    margin: 0 0 8px 0;
+    color: #fff;
+}
+.setting-info p {
+    margin: 0;
+    color: #a0aec0;
+    font-size: 0.95rem;
+}
+
+/* Biểu tượng Switch siêu đẹp */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 60px;
+    height: 34px;
+    flex-shrink: 0;
+}
+
+.switch input { 
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #4a5568;
+    transition: .4s;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 26px; width: 26px;
+    left: 4px; bottom: 4px;
+    background-color: white;
+    transition: .4s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+input:checked + .slider {
+    background-color: #ffffff;
+}
+.danger-zone input:checked + .slider {
+    background-color: #e53e3e;
+}
+
+input:checked + .slider:before {
+    transform: translateX(26px);
+}
+
+.slider.round {
+    border-radius: 34px;
+}
+
+.slider.round:before {
+    border-radius: 50%;
+}

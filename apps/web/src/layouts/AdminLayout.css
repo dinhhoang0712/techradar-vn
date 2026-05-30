@@ -1,0 +1,58 @@
+.admin-layout {
+    display: flex;
+    min-height: 100vh;
+    background-color: var(--bg-main, #000000);
+    color: var(--text-main, #fff);
+}
+
+.admin-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    margin-left: var(--sidebar-w);
+    transition: margin-left 0.3s ease;
+}
+
+.admin-main.expanded {
+    margin-left: var(--sidebar-w-collapsed);
+}
+
+@media (max-width: 768px) {
+    .admin-main, .admin-main.expanded {
+        margin-left: 0;
+    }
+}
+
+.admin-content {
+    padding: 24px;
+    flex: 1;
+    overflow-y: auto;
+}
+
+.admin-mobile-header {
+    height: var(--header-h);
+    background: var(--bg-2);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 16px;
+}
+
+.admin-mobile-header .logo-text {
+    font-size: 1.1rem;
+    font-weight: 800;
+}
+
+.admin-mobile-header .logo-accent {
+    color: var(--primary);
+}
+
+.admin-mobile-header .mobile-menu-btn {
+    background: transparent;
+    border: none;
+    color: var(--text);
+    padding: 8px;
+    display: flex;
+    align-items: center;
+}

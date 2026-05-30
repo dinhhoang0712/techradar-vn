@@ -1,0 +1,208 @@
+.compare-page {
+    display: flex;
+    flex-direction: column;
+}
+
+.compare-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 16px;
+}
+
+@media (max-width: 768px) {
+    .compare-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
+
+.control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.control-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.pill-group {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.pill {
+    padding: 5px 12px;
+    border-radius: 99px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text-2);
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: all var(--t);
+}
+
+.pill:hover {
+    border-color: var(--primary);
+    color: var(--primary-light);
+}
+
+.pill.active {
+    background: var(--primary-glow);
+    border-color: var(--primary);
+    color: var(--primary-light);
+    font-weight: 600;
+}
+
+.compare-stats-row {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+}
+
+@media (max-width: 1024px) {
+    .compare-stats-row {
+        flex-direction: column;
+        overflow-x: visible;
+    }
+}
+
+.compare-stat-card {
+    background: var(--surface);
+    border: 1px solid;
+    border-radius: var(--radius);
+    padding: 16px;
+    min-width: 180px;
+    flex: 1;
+    transition: box-shadow var(--t);
+}
+
+@media (max-width: 1024px) {
+    .compare-stat-card {
+        min-width: 100%;
+    }
+}
+
+.compare-stat-card:hover {
+    box-shadow: var(--shadow);
+}
+
+.cs-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.cs-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.cs-name {
+    font-weight: 700;
+    font-size: 0.875rem;
+}
+
+.cs-big {
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--primary-light);
+    margin-bottom: 8px;
+}
+
+.cs-meta-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.cs-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.cs-meta span {
+    font-size: 0.68rem;
+    color: var(--text-3);
+    text-transform: uppercase;
+}
+
+.cs-meta strong {
+    font-size: 0.9rem;
+    color: var(--text);
+}
+
+.cs-meta strong.up {
+    color: var(--green);
+}
+
+.cs-meta strong.down {
+    color: var(--accent);
+}
+
+.cs-annotation {
+    font-size: 0.72rem;
+    color: var(--text-3);
+    margin-top: 4px;
+    padding: 4px 8px;
+    background: var(--bg-2);
+    border-radius: var(--radius-sm);
+}
+
+.chart-tooltip {
+    background: var(--bg-2);
+    border: 1px solid var(--border-2);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    box-shadow: var(--shadow-lg);
+    min-width: 180px;
+}
+
+.tooltip-month {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--text-2);
+    margin-bottom: 8px;
+}
+
+.tooltip-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+    font-size: 0.8rem;
+}
+
+.tooltip-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.tooltip-tech {
+    flex: 1;
+    color: var(--text);
+    font-weight: 500;
+}
+
+.tooltip-jobs.up {
+    color: var(--green);
+    font-weight: 600;
+}
+
+.tooltip-jobs.down {
+    color: var(--accent);
+    font-weight: 600;
+}

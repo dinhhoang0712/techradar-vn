@@ -1,0 +1,64 @@
+stages:
+  extract:
+    cmd: python -m pipelines.stage_01_extract --params params.yaml
+    deps:
+      - pipelines/stage_01_extract.py
+      - src/data/neo4j_loader.py
+      - src/data/snapshot.py
+    params:
+      - snapshot
+    outs:
+      - data/raw/snapshot_${snapshot.tag}
+
+  features:
+    cmd: python -m pipelines.stage_02_features --params params.yaml
+    deps:
+      - pipelines/stage_02_features.py
+      - src/features
+      - data/raw/snapshot_${snapshot.tag}
+    params:
+      - snapshot
+      - features
+    outs:
+      - data/features/${snapshot.tag}
+
+  train:
+    cmd: python -m pipelines.stage_03_train --params params.yaml
+    deps:
+      - pipelines/stage_03_train.py
+      - src/clustering
+      - src/tracking/mlflow_logger.py
+      - data/features/${snapshot.tag}
+    params:
+      - snapshot
+      - clustering
+      - mlflow
+    metrics:
+      - data/metrics/${snapshot.tag}/best_metrics.json:
+          cache: false
+    outs:
+      - data/models/${snapshot.tag}
+
+  label:
+    cmd: python -m pipelines.stage_04_label --params params.yaml
+    deps:
+      - pipelines/stage_04_label.py
+      - src/labeling
+      - data/models/${snapshot.tag}
+      - data/raw/snapshot_${snapshot.tag}
+    params:
+      - snapshot
+      - labeling
+    outs:
+      - data/labels/${snapshot.tag}
+
+  writeback:
+    cmd: python -m pipelines.stage_05_writeback --params params.yaml
+    deps:
+      - pipelines/stage_05_writeback.py
+      - src/data/neo4j_loader.py
+      - data/labels/${snapshot.tag}
+    params:
+      - snapshot
+      - writeback
+    frozen: true   # mặc định không tự chạy; bật khi muốn deploy label về Neo4j

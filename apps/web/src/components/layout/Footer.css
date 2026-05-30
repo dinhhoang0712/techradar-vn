@@ -1,0 +1,112 @@
+/* ─── Site Footer ─────────────────────────────────────────────────── */
+.site-footer {
+    background: var(--bg-2);
+    border-top: 1px solid var(--border);
+    margin-top: auto;
+}
+
+.footer-inner {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 48px 32px 32px;
+    display: flex;
+    gap: 64px;
+    align-items: flex-start;
+}
+
+/* ─── Brand ───────────────────────────────────────────────────────── */
+.footer-brand {
+    flex: 0 0 auto;
+    max-width: 220px;
+}
+
+.footer-logo {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: var(--primary-light);
+    display: block;
+    margin-bottom: 10px;
+}
+
+.footer-tagline {
+    font-size: 0.8rem;
+    color: var(--text-3);
+    line-height: 1.6;
+}
+
+/* ─── Links ───────────────────────────────────────────────────────── */
+.footer-links {
+    display: flex;
+    gap: 48px;
+    flex-wrap: wrap;
+}
+
+.footer-col {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 120px;
+}
+
+.footer-col-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-2);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 4px;
+}
+
+.footer-col a {
+    font-size: 0.85rem;
+    color: var(--text-3);
+    text-decoration: none;
+    transition: color var(--t);
+}
+
+.footer-col a:hover {
+    color: var(--primary-light);
+}
+
+/* ─── Bottom Bar ──────────────────────────────────────────────────── */
+.footer-bottom {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 16px 32px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    color: var(--text-3);
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.footer-bottom-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--green);
+}
+
+.footer-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+    animation: pulse 2s infinite;
+}
+
+@media (max-width: 768px) {
+    .footer-inner {
+        flex-direction: column;
+        gap: 32px;
+        padding: 32px 16px 24px;
+    }
+
+    .footer-bottom {
+        padding: 16px;
+    }
+}

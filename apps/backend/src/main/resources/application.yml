@@ -1,0 +1,105 @@
+spring:
+  application:
+    name: tech-radar-api
+
+  profiles:
+    active: ${APP_ENV:dev}
+
+  webflux:
+    base-path: /api/v1
+    cors:
+      allowed-origins: ${ALLOWED_ORIGINS:*}
+      allowed-methods: GET, POST, PUT, DELETE, PATCH, OPTIONS
+      allowed-headers: "*"
+      max-age: 3600
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP:techradar-group}
+      auto-offset-reset: earliest
+      enable-auto-commit: true
+    producer:
+      retries: 3
+
+  r2dbc:
+    url: r2dbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:techradar}
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:password}
+    pool:
+      initial-size: 10
+      max-size: 20
+      validation-query: SELECT 1
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER:http://localhost:8080}
+          jwk-set-uri: ${JWT_JWK_SET_URI:}
+
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+  compression:
+    enabled: true
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:change-this-in-production-with-at-least-256-bits}
+    expiration: ${JWT_EXPIRATION:86400000}
+    refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000}
+
+  python:
+    ai:
+      base-url: ${PYTHON_AI_BASE_URL:http://localhost:8000}
+      timeout: 60000
+    rag:
+      base-url: ${PYTHON_RAG_BASE_URL:http://localhost:8000}
+      timeout: 120000
+    clustering:
+      base-url: ${PYTHON_ML_CLUSTERING_BASE_URL:http://localhost:8001}
+      timeout: 60000
+
+  neo4j:
+    uri: ${NEO4J_URI:bolt://localhost:7687}
+    username: ${NEO4J_USERNAME:neo4j}
+    password: ${NEO4J_PASSWORD:password}
+    database: ${NEO4J_DATABASE:neo4j}
+    pool-size: 50
+    acquisition-timeout: 60000
+
+  storage:
+    export-dir: ${EXPORT_DIR:./exports}
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP:techradar-group}
+      auto-offset-reset: earliest
+      enable-auto-commit: true
+    producer:
+      retries: 3
+
+logging:
+  level:
+    root: ${LOG_LEVEL:INFO}
+    com.techpulse: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %logger{36} - %msg%n"
+
+springdoc:
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always

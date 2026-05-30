@@ -1,0 +1,19 @@
+CONTEXT — Bài viết liên quan:
+{context}
+
+---
+
+CONTEXT — Dữ liệu tuyển dụng:
+{job_context}
+
+---
+
+{user_block}
+
+CÂU HỎI: {query}
+
+Yêu cầu trả lời:
+1. Trả lời TRỰC TIẾP câu hỏi ngay đầu (1–2 câu tóm tắt).
+2. Dùng dữ liệu trong CONTEXT để minh họa — KHÔNG liệt kê tất cả, chỉ chọn thông tin tiêu biểu nhất.
+3. Nếu có thông tin người dùng, cá nhân hóa câu trả lời phù hợp với vai trò và kỹ năng của họ.
+4. Trích dẫn nguồn bài viết bằng [số thứ tự] sau mỗi thông tin sử dụng.

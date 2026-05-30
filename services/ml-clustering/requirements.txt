@@ -1,0 +1,43 @@
+# Core ML
+scikit-learn==1.5.2
+hdbscan==0.8.38.post1
+umap-learn==0.5.6
+kneed==0.8.5
+numpy==1.26.4
+pandas==2.2.2
+scipy==1.13.1
+PyYAML>=6.0.0
+
+# Neo4j + GDS
+neo4j==5.19.0
+graphdatascience==1.12
+
+# Versioning + tracking
+dvc==3.55.2
+dvc-s3==3.2.0          # đổi sang dvc-gs / dvc-azure tuỳ remote
+pathspec==0.12.1       # DVC 3.55 imports pathspec.patterns.gitwildmatch._DIR_MARK
+mlflow==2.16.2
+
+# LLM auto-label
+langchain==0.2.16
+langchain-google-genai==1.0.10
+google-generativeai==0.7.2
+openai>=1.40.0,<2.0.0
+sentence-transformers==3.0.1
+transformers>=4.41.0,<5.0.0
+datasets>=2.19.0,<3.0.0
+
+# API serving
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+
+# Tiện ích
+python-dotenv==1.0.1
+pydantic==2.8.2
+pydantic-settings==2.4.0
+pyarrow==16.1.0        # parquet (graphdatascience 1.12 yêu cầu <17)
+tqdm==4.66.5
+loguru==0.7.2
+typer>=0.13.0          # CLI cho các stage
+boto3==1.34.162
+matplotlib>=3.8.0,<4.0.0

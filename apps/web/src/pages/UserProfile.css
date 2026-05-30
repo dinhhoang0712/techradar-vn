@@ -1,0 +1,259 @@
+/* UserProfile.css - Trang thông tin cá nhân người dùng */
+
+.user-profile-page {
+    min-height: 100vh;
+    background: var(--bg-primary, #0d0d0d);
+    padding: 2.5rem 1.5rem;
+    position: relative;
+}
+
+/* Toast */
+.profile-toast {
+    position: fixed;
+    top: 1.5rem;
+    right: 1.5rem;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.85rem 1.4rem;
+    border-radius: 12px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    backdrop-filter: blur(16px);
+    animation: toastSlideIn 0.3s ease;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+.profile-toast--success {
+    background: rgba(16, 185, 129, 0.18);
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    color: #34d399;
+}
+.profile-toast--error {
+    background: rgba(239, 68, 68, 0.18);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    color: #f87171;
+}
+@keyframes toastSlideIn {
+    from { opacity: 0; transform: translateX(24px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+/* Container */
+.profile-container {
+    max-width: 680px;
+    margin: 0 auto;
+}
+
+@media (max-width: 768px) {
+    .profile-container {
+        max-width: 100%;
+    }
+}
+
+/* Header */
+.profile-header {
+    margin-bottom: 2rem;
+}
+.profile-title {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: #fff;
+    margin: 0 0 0.35rem;
+    letter-spacing: -0.5px;
+}
+.profile-subtitle {
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.45);
+    margin: 0;
+}
+
+/* Skeleton loader */
+.profile-skeleton {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    padding: 2.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+@keyframes shimmer {
+    0% { background-position: -400px 0; }
+    100% { background-position: 400px 0; }
+}
+.skeleton-avatar {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: linear-gradient(90deg, rgba(255,255,255,0.06) 25%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.06) 75%);
+    background-size: 400px 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+    flex-shrink: 0;
+}
+.skeleton-lines { display: flex; flex-direction: column; gap: 0.6rem; flex: 1; }
+.skeleton-line {
+    height: 14px;
+    border-radius: 8px;
+    background: linear-gradient(90deg, rgba(255,255,255,0.06) 25%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.06) 75%);
+    background-size: 400px 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+}
+.skeleton-line--wide   { width: 65%; }
+.skeleton-line--medium { width: 45%; animation-delay: 0.15s; }
+.skeleton-line--narrow { width: 30%; animation-delay: 0.3s; }
+
+/* Main card */
+.profile-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    padding: 2.5rem;
+    backdrop-filter: blur(12px);
+}
+
+@media (max-width: 640px) {
+    .profile-card {
+        padding: 1.5rem;
+    }
+}
+
+/* Avatar section */
+.profile-avatar-section {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    margin-bottom: 2.5rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+.profile-avatar {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: #1a1a1a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.profile-avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.profile-avatar-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    color: #fff;
+}
+.profile-identity {}
+.profile-name {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #fff;
+    margin: 0 0 0.3rem;
+}
+.profile-email {
+    font-size: 0.875rem;
+    color: rgba(255,255,255,0.45);
+    margin: 0;
+}
+
+/* Form */
+.profile-form { display: flex; flex-direction: column; gap: 1.5rem; }
+.form-group { display: flex; flex-direction: column; gap: 0.4rem; }
+.form-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.45);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+}
+.form-input {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+    color: #fff;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    font-family: inherit;
+}
+.form-input:focus {
+    border-color: #fff;
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+}
+.form-input::placeholder { color: rgba(255,255,255,0.25); }
+.form-value {
+    font-size: 0.9rem;
+    color: rgba(255,255,255,0.82);
+    margin: 0;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.form-value--url a {
+    color: #fff;
+    text-decoration: underline;
+    word-break: break-all;
+}
+.form-value--url a:hover { opacity: 0.8; }
+.form-empty { color: rgba(255,255,255,0.25); font-style: italic; }
+
+/* Buttons */
+.profile-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+@media (max-width: 480px) {
+    .profile-actions {
+        flex-direction: column;
+    }
+    .profile-actions .btn {
+        width: 100%;
+    }
+}
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.7rem 1.5rem;
+    border-radius: 10px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+    letter-spacing: 0.2px;
+}
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-primary {
+    background: #fff;
+    color: #000;
+}
+.btn-primary:hover:not(:disabled) {
+    transform: translateY(-1px);
+    background: #e2e2e2;
+}
+.btn-ghost {
+    background: rgba(255, 255, 255, 0.07);
+    color: rgba(255, 255, 255, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.btn-ghost:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+}

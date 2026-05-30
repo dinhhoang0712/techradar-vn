@@ -1,0 +1,163 @@
+# Tham số toàn pipeline — DVC track file này.
+# Đổi giá trị ở đây + `dvc repro` sẽ chạy lại đúng các stage cần thiết.
+
+snapshot:
+  tag: "2026-05-13"          # nhãn snapshot, gắn vào path data/<tag>/
+  min_tech_degree: 1         # lọc Technology có degree < ngưỡng (đã thoả với inspect)
+
+features:
+  # GDS — Graph Embedding
+  fastrp:
+    enabled: false           # AuraDB yêu cầu session-based GDS API riêng
+    embedding_dim: 64
+    iteration_weights: [0.0, 1.0, 1.0, 1.0]
+    normalization_strength: 0.0
+  node2vec:
+    enabled: false
+    embedding_dim: 64
+    walk_length: 10
+    walks_per_node: 10
+  pagerank:
+    enabled: false           # tắt GDS, dùng content + TF-IDF thay thế
+    damping: 0.85
+    max_iter: 20
+  louvain:
+    enabled: false
+    max_levels: 10
+    top_k_communities: 20
+
+  # Noise filter — áp dụng trước khi build feature matrix
+  noise_filter:
+    enabled: true
+    min_job_count: 3           # loại tech xuất hiện trong < N job (quá hiếm → likely noise)
+    blocklist:                 # tên cụ thể cần loại thủ công
+      # Noise / từ không phải tech
+      - "Dau"
+      - "Mau"
+      - "CCCD"
+      - "openclaw"
+      - "enscape"
+      - "emotion"
+      - "fiber"
+      - "lookout"
+      - "Fair"
+      - "NVR"
+      - "Rhino"
+      - "FCC"
+      - "Mô Hình Ngôn Ngữ"
+      # Phần mềm thiết kế kiến trúc / 3D (không phải IT tech, ít job trong DB)
+      - "Cinema4D"
+      - "Substance 3D"
+      - "FCC"
+      - "Mô Hình Ngôn Ngữ"
+      # Phần mềm thiết kế kiến trúc / 3D / game — không phải IT tech
+      - "Revit"
+      - "3ds Max"
+      - "3DS Max"
+      - "3Ds Max"
+      - "3Ds max"
+      - "3ds max"
+      - "Lumion"
+      - "Cinema4D"
+      - "Substance 3D"
+      - "Unity"
+      - "Unreal"
+      # Project management / collaboration tools — không phải tech stack
+      - "Trello"
+      - "Asana"
+      - "Confluence"
+      - "JIRA"
+      - "ServiceNow"
+      # Process / generic terms — quá rộng, không phải technology cụ thể
+      - "Agile"
+      - "Scrum"
+      - "IT"
+      - "vibe coding"
+      # Phần mềm chỉnh sửa video (đã có cluster riêng nếu muốn giữ, xoá nếu không)
+      - "Capcut"
+      # Design / marketing analytics tools — loại khỏi clustering tech stack chính
+      - "Figma"
+      - "Adobe Photoshop"
+      - "Adobe Illustrator"
+      - "Adobe Premiere"
+      - "After Effects"
+      - "InDesign"
+      - "Blender"
+      - "SketchUp"
+      - "Mixpanel"
+      - "Amplitude"
+      - "Google Analytics"
+    heuristic_patterns:        # regex pattern (case-insensitive) — match → loại
+      - "^[a-z]{1,3}$"         # từ viết thường 1-3 ký tự (không phải Go, C, R)
+      - "^(an|theo|trong|bang|quan|ly|co|voi|cac|khi|tai|lam|va|hoac|duoc)$"  # tiếng Việt không dấu
+
+  # Content
+  use_name_embedding: true   # true = luôn dùng name embedding thay vì article
+  name_emb_pca_components: 64  # Giảm name_emb 768d → 64d trước khi concat, để job_tfidf chiếm ưu thế
+  article_embedding_aggregation:
+    enabled: true
+    method: mean             # mean | weighted_by_recency
+    min_articles_per_tech: 1 # tech ít hơn -> zero vector
+
+  # Hand-crafted
+  use_company_tfidf: false   # chỉ 1.2% tech có company usage → noise
+  use_job_tfidf: true        # 98.1% tech có job → signal chính
+  tfidf_min_df: 2
+  tfidf_max_features: 500
+
+  # Feature weights — nhân vào block sau StandardScaler (1.0 = giữ nguyên)
+  feature_weights:
+    graph_stats: 1.0
+    content_emb: 0.5   # giảm ảnh hưởng name embedding
+    job_tfidf: 2.0     # tăng ảnh hưởng job TF-IDF — signal chính
+
+  # Concat + scale
+  scaler: "standard"         # standard | minmax | robust
+  reduce_dim:
+    enabled: true
+    method: "umap"           # umap | pca | none
+    n_components: 32
+
+clustering:
+  algorithm: "hdbscan"       # dbscan | hdbscan | kmeans
+
+  dbscan:
+    eps_grid: [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0]
+    min_samples_grid: [3, 5, 7, 10]
+    metric: "euclidean"
+
+  hdbscan:
+    min_cluster_size_grid: [3, 4, 5, 6, 7, 8]
+    min_samples_grid: [1, 2, 3]
+    cluster_selection_method: "leaf"
+
+  kmeans:
+    n_clusters_grid: [20, 24, 28, 32, 36]
+    n_init: 10
+    random_state: 42
+
+  near_cluster_threshold: 0.70   # score tối thiểu để ghi nhận near cluster
+
+  selection:
+    primary_metric: "silhouette"   # primary để tie-break
+    require_min_clusters: 12
+    require_max_clusters: 28       # tránh quá nhiều cluster nhỏ không có nghĩa
+    require_max_noise_ratio: 0.6   # tối đa 60% noise — 250 techs ít hơn nên noise ratio cao hơn
+
+mlflow:
+  experiment_name: "tech_clustering_v1"
+  tracking_uri: "sqlite:///mlruns.db"
+  registry_model_name: "tech_clusterer"
+
+labeling:
+  provider: "openai"              # "openai" | "gemini"
+  openai_model: "gpt-4o-mini"
+  gemini_model: "gemini-2.5-flash"
+  max_members_in_prompt: 25
+  temperature: 0.2
+  cache_dir: "data/labels/.llm_cache"
+
+writeback:
+  enabled: false             # bật khi đã chốt model & labels
+  apoc_batch_size: 500
+  clean_before_write: false  # xoá :BELONGS_TO|:NEAR_CLUSTER cũ trước khi ghi mới

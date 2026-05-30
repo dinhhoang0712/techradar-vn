@@ -1,0 +1,10 @@
+spring:
+  r2dbc:
+    pool:
+      max-size: 50
+      validation-query: SELECT 1
+
+logging:
+  level:
+    root: WARN
+    com.techpulse: INFO

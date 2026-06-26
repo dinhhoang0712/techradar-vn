@@ -25,6 +25,7 @@ public class CreateUserRequest {
     @Size(min = 8, message = "Password must be at least 8 characters")
     private String password;
 
+    private String fullName;
     private String role;
     private String status;
     private String subscriptionTier;

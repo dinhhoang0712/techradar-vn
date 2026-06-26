@@ -77,7 +77,7 @@ class FakeGenKDriver:
 def test_genk_scrape_all_parts(tmp_path, monkeypatch):
     """Verify GenK parts 1, 2, 3, 4 output filenames and basic content in one test."""
     root = Path(__file__).resolve().parents[2]
-    script_path = root / "src" / "data-pipeline" / "scrape_from_GenK.py"
+    script_path = root / "pipelines" / "data-pipeline" / "scrape_from_GenK.py"
 
     no_such_exc = install_fake_selenium(monkeypatch, fake_driver=None)
     driver = FakeGenKDriver(no_such_exc)
@@ -118,7 +118,7 @@ def test_genk_scrape_all_parts(tmp_path, monkeypatch):
 
 def test_genk_filters_duplicate_links_explicitly(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[2]
-    script = root / "src" / "data-pipeline" / "scrape_from_GenK.py"
+    script = root / "pipelines" / "data-pipeline" / "scrape_from_GenK.py"
 
     class _Driver(FakeGenKDriver):
         def find_elements(self, by, selector):
@@ -156,7 +156,7 @@ def test_genk_filters_duplicate_links_explicitly(tmp_path, monkeypatch):
 
 def test_genk_scrape_stops_when_stuck(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[2]
-    script = root / "src" / "data-pipeline" / "scrape_from_GenK.py"
+    script = root / "pipelines" / "data-pipeline" / "scrape_from_GenK.py"
 
     class _Driver(FakeGenKDriver):
         def execute_script(self, script_str, *args):

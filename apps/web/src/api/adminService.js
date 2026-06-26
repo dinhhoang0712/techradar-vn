@@ -99,3 +99,29 @@ export const deleteAdminUser = async (id) => {
         method: 'DELETE'
     });
 };
+
+// --- CMS Content Management ---
+
+export const fetchCmsContent = async () => {
+    return await apiClient('/admin/cms');
+};
+
+export const createCmsContent = async (content) => {
+    return await apiClient('/admin/cms', {
+        method: 'POST',
+        body: JSON.stringify(content)
+    });
+};
+
+export const updateCmsContent = async (id, content) => {
+    return await apiClient(`/admin/cms/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(content)
+    });
+};
+
+export const deleteCmsContent = async (id) => {
+    return await apiClient(`/admin/cms/${id}`, {
+        method: 'DELETE'
+    });
+};

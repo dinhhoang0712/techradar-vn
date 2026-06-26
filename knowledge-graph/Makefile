@@ -1,16 +1,7 @@
-.PHONY: all build run docker-up docker-down test clean
+.PHONY: all docker-up docker-down docker-infra docker-crawlers docker-build logs clean setup-dirs
 
 # Default target
-all: build
-
-# Build the orchestrator
-build:
-	go mod tidy
-	go build -o bin/orchestrator ./cmd/orchestrator
-
-# Run the orchestrator locally
-run:
-	go run ./cmd/orchestrator
+all: setup-dirs
 
 # Run all services with Docker
 docker-up:
@@ -19,6 +10,7 @@ docker-up:
 # Run infrastructure only (Kafka, Zookeeper)
 docker-infra:
 	docker compose up -d zookeeper kafka
+
 # Run crawlers
 docker-crawlers:
 	docker compose --profile crawlers up -d
@@ -26,22 +18,18 @@ docker-crawlers:
 # Stop all services
 docker-down:
 	docker compose down
+
 # View logs
 logs:
-	docker compose logs -f orchestrator
+	docker compose logs -f
 
 # Build Docker images
 docker-build:
 	docker compose build
+
 # Clean build artifacts
 clean:
 	rm -rf bin/
-	go clean
-
-# Test Go modules
-test-deps:
-	go mod download
-	go mod verify
 
 # Create data directories
 setup-dirs:

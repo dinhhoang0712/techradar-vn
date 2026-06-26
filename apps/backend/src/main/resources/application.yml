@@ -5,6 +5,11 @@ spring:
   profiles:
     active: ${APP_ENV:dev}
 
+  # Match the snake_case contract used by the web/mobile clients and the Python services.
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+    default-property-inclusion: non_null
+
   webflux:
     base-path: /api/v1
     cors:
@@ -31,12 +36,43 @@ spring:
       max-size: 20
       validation-query: SELECT 1
 
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: ${JWT_ISSUER:http://localhost:8080}
-          jwk-set-uri: ${JWT_JWK_SET_URI:}
+  # SMTP for password-reset emails. Dev defaults target MailHog (localhost:1025).
+  # Sending is fire-and-forget, so an unavailable SMTP never breaks /auth/forgot-password.
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USER:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:false}
+          starttls:
+            enable: ${MAIL_SMTP_STARTTLS:false}
+          connectiontimeout: 3000
+          timeout: 3000
+          writetimeout: 3000
+
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+    timeout: 2000ms
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 4
+        min-idle: 1
+
+  # Flyway runs migrations over a dedicated JDBC connection at startup.
+  # The application itself talks to Postgres reactively via R2DBC above.
+  flyway:
+    enabled: true
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:techradar}
+    user: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:password}
+    locations: classpath:db/migration
+    baseline-on-migrate: true
 
 server:
   port: ${PORT:8080}
@@ -51,6 +87,9 @@ app:
     refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000}
 
   python:
+    # Shared secret sent as X-Internal-Auth to ai-rag-core (/chat, /internal/ai/*).
+    # Must match ai-rag-core's INTERNAL_API_TOKEN. Empty = disabled (dev).
+    internal-token: ${PYTHON_INTERNAL_TOKEN:}
     ai:
       base-url: ${PYTHON_AI_BASE_URL:http://localhost:8000}
       timeout: 60000
@@ -72,6 +111,33 @@ app:
   storage:
     export-dir: ${EXPORT_DIR:./exports}
 
+  mail:
+    from: ${MAIL_FROM:no-reply@techradar.vn}
+
+  web:
+    reset-url: ${WEB_RESET_URL:http://localhost:5173/login}
+
+  redis:
+    # TTLs (seconds) for each caching layer.
+    token-blacklist-ttl: ${REDIS_TOKEN_BLACKLIST_TTL:604800}
+    clustering-cache-ttl: ${REDIS_CLUSTERING_CACHE_TTL:900}
+    radar-cache-ttl: ${REDIS_RADAR_CACHE_TTL:3600}
+    chat-rate-limit:
+      max-requests: ${CHAT_RATE_LIMIT_MAX:20}
+      window-seconds: ${CHAT_RATE_LIMIT_WINDOW:60}
+
+  analytics:
+    etl:
+      # Periodic rebuild of tech_analytics from Neo4j. Off by default; trigger manually via
+      # POST /api/v1/admin/analytics/rebuild, or set enabled=true to schedule it.
+      enabled: ${ANALYTICS_ETL_ENABLED:false}
+      cron: ${ANALYTICS_ETL_CRON:0 0 3 * * *}
+
+  notifications:
+    # Min month-over-month growth (%) for a technology to raise a trend alert during the ETL.
+    # Each alert is published to Kafka (trend.alerts) and fanned out to subscribed users.
+    trend-threshold: ${NOTIF_TREND_THRESHOLD:30}
+
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
@@ -81,12 +147,12 @@ app:
     producer:
       retries: 3
 
+# Log appenders/patterns live in logback-spring.xml (console for dev, JSON+file for prod).
+# Only levels are configured here; LOG_DIR (file output dir) is read by logback-spring.xml.
 logging:
   level:
     root: ${LOG_LEVEL:INFO}
     com.techpulse: DEBUG
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} - %logger{36} - %msg%n"
 
 springdoc:
   swagger-ui:

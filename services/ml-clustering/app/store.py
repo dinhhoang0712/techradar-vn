@@ -196,17 +196,19 @@ class AppStore:
             if s3_settings else DATA_DIR / tech_rel
         )
         df_tech = pd.read_parquet(tech_path)
-        # Tạo 2 index: tech_id→name và name_lower→tech_id (để lookup theo tên)
-        self.id_to_name: dict[str, str] = dict(
-            zip(df_tech["tech_id"], df_tech["name"])
-        )
+        # Tạo 2 index: tech_id→name và name_lower→tech_id (để lookup theo tên).
+        # tech_id luôn ép về str để khớp schema (tránh lỗi validate Pydantic
+        # nếu cột parquet là kiểu số) và để join nhất quán với labels_df.
+        self.id_to_name: dict[str, str] = {
+            str(tid): str(name) for tid, name in zip(df_tech["tech_id"], df_tech["name"])
+        }
         self.name_lower_to_id: dict[str, str] = {
             n.lower(): tid for tid, n in self.id_to_name.items()
         }
 
         # --- Merge: tech_id → cluster_id (chỉ techs đã cluster, bỏ noise=-1) ---
         self.tech_to_cluster: dict[str, int] = {
-            row["tech_id"]: int(row["cluster_id"])
+            str(row["tech_id"]): int(row["cluster_id"])
             for _, row in df_labels.iterrows()
         }
 

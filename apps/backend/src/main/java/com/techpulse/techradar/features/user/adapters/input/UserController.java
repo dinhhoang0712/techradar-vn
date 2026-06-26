@@ -10,7 +10,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.security.core.context.SecurityContext;
-import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
@@ -29,10 +28,10 @@ public class UserController {
 
     @Operation(summary = "Get current user profile")
     @GetMapping("/profile")
-    public Mono<ResponseEntity<ApiResponse<UserProfileResponse>>> getProfile() {
+    public Mono<ResponseEntity<ApiResponse<UserProfileView>>> getProfile() {
         return extractCurrentUserId()
-                .flatMap(userService::getProfile)
-                .map(UserProfileResponse::fromUser)
+                .flatMap(userService::getProfileData)
+                .map(data -> UserProfileView.from(data.user(), data.profile()))
                 .map(profile -> ResponseEntity.ok(ApiResponse.success(profile, "Profile retrieved")))
                 .switchIfEmpty(Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                         .body(ApiResponse.error("Unauthorized", "UNAUTHORIZED"))));
@@ -40,14 +39,12 @@ public class UserController {
 
     @Operation(summary = "Update current user profile")
     @PutMapping("/profile")
-    public Mono<ResponseEntity<ApiResponse<UserProfileResponse>>> updateProfile(
+    public Mono<ResponseEntity<ApiResponse<UserProfileView>>> updateProfile(
             @Valid @RequestBody UpdateProfileRequest request
     ) {
         return extractCurrentUserId()
-                .flatMap(userId -> userService.updateProfile(userId,
-                        StringUtils.hasText(request.getEmail()) ? request.getEmail() : null,
-                        StringUtils.hasText(request.getSubscriptionTier()) ? request.getSubscriptionTier() : null))
-                .map(UserProfileResponse::fromUser)
+                .flatMap(userId -> userService.updateProfile(userId, request))
+                .map(data -> UserProfileView.from(data.user(), data.profile()))
                 .map(updated -> ResponseEntity.ok(ApiResponse.success(updated, "Profile updated")))
                 .switchIfEmpty(Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                         .body(ApiResponse.error("Unauthorized", "UNAUTHORIZED"))));

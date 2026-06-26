@@ -2,6 +2,7 @@
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
 sse-starlette==2.1.3
+python-json-logger==2.0.7   # structured (JSON) logging — see app/observability.py
 
 # Database
 neo4j==5.19.0
@@ -23,14 +24,8 @@ langchain-openai==0.1.25
 
 # Evaluation (RAGAS)
 datasets==2.20.0
-# ragas==0.4.3
-mlflow==3.12.0
-tiktoken==0.7.0
-
-# Evaluation (RAGAS)
-datasets==2.20.0
 ragas==0.1.16
-langchain-openai==0.1.25
+mlflow==3.12.0
 tiktoken==0.7.0
 
 # Embedding & reranking models

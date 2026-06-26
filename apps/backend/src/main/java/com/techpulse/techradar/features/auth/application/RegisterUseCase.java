@@ -7,6 +7,7 @@ import com.techpulse.techradar.features.auth.domain.User;
 import com.techpulse.techradar.features.auth.ports.UserRepository;
 import com.techpulse.techradar.shared.exception.AppException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
@@ -14,6 +15,7 @@ import reactor.core.publisher.Mono;
 /**
  * Register use case - orchestrates user registration logic.
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class RegisterUseCase {
@@ -26,6 +28,7 @@ public class RegisterUseCase {
         return userRepository.existsByEmail(request.getEmail())
                 .flatMap(exists -> {
                     if (exists) {
+                        log.warn("Registration rejected: email already registered: {}", request.getEmail());
                         return Mono.error(
                                 new AppException("Email already registered", 409, "EMAIL_ALREADY_EXISTS")
                         );
@@ -37,6 +40,7 @@ public class RegisterUseCase {
     private Mono<LoginResponse> createUser(RegisterRequest request) {
         User newUser = User.builder()
                 .email(request.getEmail())
+                .fullName(request.getFullName())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .role("user")
                 .status("active")
@@ -45,6 +49,8 @@ public class RegisterUseCase {
                 .build();
 
         return userRepository.save(newUser)
+                .doOnNext(user -> log.info("User registered: id={}, email={}, tier={}",
+                        user.getId(), user.getEmail(), user.getSubscriptionTier()))
                 .map(user -> {
                     String accessToken = jwtTokenProvider.generateToken(
                             user.getId().toString(),

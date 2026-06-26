@@ -186,29 +186,27 @@ class EmbeddingService:
         self.connect_kafka()
         
         logger.info("Embedding Service started. Waiting for messages...")
-        
+
+        # Poll both consumers in a single loop so neither topic can starve the
+        # other. (Iterating `for msg in consumer` blocks indefinitely on the
+        # first consumer, so the second would never be served.)
+        consumers = [
+            (self.article_consumer, self.topic_article_vectors, self.process_article, "article"),
+            (self.job_consumer, self.topic_job_vectors, self.process_job, "job"),
+        ]
+
         try:
             while True:
-                # Process articles
-                for message in self.article_consumer:
-                    try:
-                        logger.info(f"Processing article: {message.value.get('data', {}).get('title', 'Unknown')[:50]}...")
-                        vector = self.process_article(message.value)
-                        self.send_vector(self.topic_article_vectors, vector)
-                        logger.info(f"Generated embedding for article: {vector['id'][:16]}...")
-                    except Exception as e:
-                        logger.error(f"Error processing article: {e}")
-                
-                # Process jobs
-                for message in self.job_consumer:
-                    try:
-                        logger.info(f"Processing job: {message.value.get('data', {}).get('job', {}).get('title', 'Unknown')[:50]}...")
-                        vector = self.process_job(message.value)
-                        self.send_vector(self.topic_job_vectors, vector)
-                        logger.info(f"Generated embedding for job: {vector['id'][:16]}...")
-                    except Exception as e:
-                        logger.error(f"Error processing job: {e}")
-                        
+                for consumer, out_topic, processor, kind in consumers:
+                    batches = consumer.poll(timeout_ms=1000)
+                    for _partition, messages in batches.items():
+                        for message in messages:
+                            try:
+                                vector = processor(message.value)
+                                self.send_vector(out_topic, vector)
+                                logger.info(f"Generated embedding for {kind}: {vector['id'][:16]}...")
+                            except Exception as e:
+                                logger.error(f"Error processing {kind}: {e}")
         except KeyboardInterrupt:
             logger.info("Shutting down Embedding Service...")
         finally:

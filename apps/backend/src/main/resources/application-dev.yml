@@ -3,6 +3,10 @@ spring:
     pool:
       validation-query: SELECT 1
 
+  # Dev profile additionally applies the dev-only seed (default admin account).
+  flyway:
+    locations: classpath:db/migration,classpath:db/dev
+
 logging:
   level:
     root: DEBUG

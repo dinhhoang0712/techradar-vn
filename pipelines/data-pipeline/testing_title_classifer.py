@@ -1,3 +1,4 @@
+import os
 import re
 import torch
 from underthesea import word_tokenize, ner
@@ -6,7 +7,13 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 # ============================================================
 # 1. CẤU HÌNH
 # ============================================================
-MODEL_PATH = 'C:\\Users\\Admin\\MyProject\\Final_Data_Mining\\src\\data-pipeline\\phobert_title_classifier_best'  # Đường dẫn thư mục model đã tải từ Drive
+# Mặc định: thư mục model nằm cạnh script. Có thể override bằng biến môi
+# trường TITLE_CLASSIFIER_MODEL (giống filter_data.py).
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.environ.get(
+    "TITLE_CLASSIFIER_MODEL",
+    os.path.join(BASE_DIR, "phobert_title_classifier_best"),
+)
 MAX_LEN = 256
 
 # ============================================================

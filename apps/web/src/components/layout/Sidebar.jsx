@@ -5,6 +5,7 @@ const NAV_ITEMS = [
     { to: '/dashboard', icon: '📊', label: 'Dashboard' },
     { to: '/compare', icon: '⚖️', label: 'So sánh' },
     { to: '/graph', icon: '🕸️', label: 'Graph Explorer' },
+    { to: '/salary', icon: '💰', label: 'Salary Insights' },
     { to: '/chat', icon: '🤖', label: 'AI Chatbot' },
 ];
 

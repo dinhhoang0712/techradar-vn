@@ -44,6 +44,7 @@ public class UserAdminController {
         return userService.createUser(
                         request.getEmail(),
                         request.getPassword(),
+                        request.getFullName(),
                         request.getRole(),
                         request.getStatus(),
                         request.getSubscriptionTier())
@@ -63,6 +64,7 @@ public class UserAdminController {
                         id,
                         request.getEmail(),
                         request.getPassword(),
+                        request.getFullName(),
                         request.getRole(),
                         request.getStatus(),
                         request.getSubscriptionTier())

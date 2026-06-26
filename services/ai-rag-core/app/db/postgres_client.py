@@ -43,10 +43,8 @@ async def get_session() -> AsyncSession:
         yield session
 
 
-async def create_tables() -> None:
-    engine = get_engine()
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+# NOTE: schema (DDL) is owned by the backend's Flyway migrations. Do NOT add create_all() here —
+# the Python SQLAlchemy models are read/write mirrors only and would drift from Flyway.
 
 
 async def close_engine() -> None:

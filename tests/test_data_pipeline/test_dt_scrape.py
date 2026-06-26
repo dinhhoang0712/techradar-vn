@@ -72,7 +72,7 @@ class FakeDTDriver:
 def test_dt_scrape_all_parts(tmp_path, monkeypatch):
     """Combined test for DT scraper covering both part 1 and part 2."""
     root = Path(__file__).resolve().parents[2]
-    script_path = root / "src" / "data-pipeline" / "scrape_from_DT.py"
+    script_path = root / "pipelines" / "data-pipeline" / "scrape_from_DT.py"
 
     no_such_exc = install_fake_selenium(monkeypatch, fake_driver=None)
     driver = FakeDTDriver(no_such_exc)

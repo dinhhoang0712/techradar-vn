@@ -1,28 +1,35 @@
 package com.techpulse.techradar.features.graph.application;
 
-import com.techpulse.techradar.features.graph.domain.GraphNode;
+import com.techpulse.techradar.features.graph.domain.GraphData;
 import com.techpulse.techradar.features.graph.ports.GraphRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
+
 /**
- * Explore graph neighbors use case.
+ * Explore the knowledge graph around one or more named nodes.
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class ExploreGraphUseCase {
 
     private final GraphRepository graphRepository;
 
-    public Flux<GraphNode> execute(String nodeId, int depth) {
-        if (nodeId == null || nodeId.isEmpty()) {
-            return Flux.error(new IllegalArgumentException("Node ID is required"));
+    public Mono<GraphData> execute(List<String> keywords, int depth, String location, Long minSalary) {
+        if (keywords == null || keywords.isEmpty()) {
+            log.warn("Graph explore rejected: no keywords provided");
+            return Mono.error(new IllegalArgumentException("At least one keyword is required"));
         }
-        if (depth < 1 || depth > 5) {
-            depth = 2;
-        }
-        return graphRepository.exploreNeighbors(nodeId, depth);
+        int effectiveDepth = (depth < 1 || depth > 3) ? 2 : depth;
+        log.info("Exploring graph for keywords={} depth={} location={} minSalary={}",
+                keywords, effectiveDepth, location, minSalary);
+        return graphRepository.exploreByKeywords(keywords, effectiveDepth, location, minSalary)
+                .doOnSuccess(data -> log.info("Graph explore for keywords={} found={} nodes={} edges={}",
+                        keywords, data.isFound(), data.getNodes().size(), data.getEdges().size()))
+                .doOnError(e -> log.error("Graph explore failed for keywords={}", keywords, e));
     }
 }

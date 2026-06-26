@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getUserProfile, updateUserProfile } from '../api/userService';
+import { getUserProfile, updateUserProfile, uploadAvatar } from '../api/userService';
 import './UserProfile.css';
 
 /**
@@ -9,11 +9,11 @@ import './UserProfile.css';
  * - Cho phép chỉnh sửa và lưu qua PUT /user/profile
  */
 export default function UserProfile() {
-    const [profile, setProfile] = useState({ full_name: '', email: '', avatar_url: '', bio: '', job_role: '', location: '', technologies: [] });
+    const [profile, setProfile] = useState({ full_name: '', email: '', avatar_url: '', bio: '', job_role: '', location: '', technologies: [], notify_inapp: true, notify_email: true });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [editMode, setEditMode] = useState(false);
-    const [form, setForm] = useState({ full_name: '', email: '', avatar_url: '', bio: '', job_role: '', location: '', password: '', technologies: '' });
+    const [form, setForm] = useState({ full_name: '', email: '', avatar_url: '', bio: '', job_role: '', location: '', password: '', technologies: '', notify_inapp: true, notify_email: true });
     const [toast, setToast] = useState(null); // { type: 'success' | 'error', message: string }
 
     useEffect(() => {
@@ -34,7 +34,9 @@ export default function UserProfile() {
                 bio: data.profile?.bio || data.bio || '',
                 location: data.profile?.location || data.location || '',
                 technologies: data.profile?.technologies || data.technologies || [],
-                avatar_url: data.profile?.avatar_url || data.avatar_url || ''
+                avatar_url: data.profile?.avatar_url || data.avatar_url || '',
+                notify_inapp: (data.profile?.notify_inapp ?? data.notify_inapp) !== false,
+                notify_email: (data.profile?.notify_email ?? data.notify_email) !== false
             };
 
             setProfile(flatData);
@@ -60,7 +62,9 @@ export default function UserProfile() {
                 bio: form.bio,
                 job_role: form.job_role,
                 location: form.location,
-                technologies: form.technologies ? form.technologies.split(',').map(t => t.trim()).filter(Boolean) : []
+                technologies: form.technologies ? form.technologies.split(',').map(t => t.trim()).filter(Boolean) : [],
+                notify_inapp: form.notify_inapp,
+                notify_email: form.notify_email
             };
             if (form.password) {
                 payload.password = form.password;
@@ -93,6 +97,33 @@ export default function UserProfile() {
     const showToast = (type, message) => {
         setToast({ type, message });
         setTimeout(() => setToast(null), 3500);
+    };
+
+    const handleAvatarChange = async (e) => {
+        const file = e.target.files?.[0];
+        e.target.value = ''; // allow re-selecting the same file
+        if (!file) return;
+        if (file.size > 3 * 1024 * 1024) {
+            alert('Ảnh quá lớn (tối đa 3MB).');
+            return;
+        }
+        try {
+            const dataUrl = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+            const res = await uploadAvatar(file.type || 'image/png', dataUrl);
+            const url = res?.data?.avatar_url || res?.avatar_url;
+            if (url) {
+                const busted = `${url}?t=${Date.now()}`;
+                setProfile(p => ({ ...p, avatar_url: busted }));
+                setForm(f => ({ ...f, avatar_url: busted }));
+            }
+        } catch (err) {
+            alert(err.message || 'Tải ảnh thất bại');
+        }
     };
 
     const avatarLetter = profile.full_name
@@ -141,6 +172,15 @@ export default function UserProfile() {
                                         </svg>
                                     </div>
                                 )}
+                                <label className="profile-avatar-edit" title="Đổi ảnh đại diện">
+                                    📷
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        style={{ display: 'none' }}
+                                        onChange={handleAvatarChange}
+                                    />
+                                </label>
                             </div>
                             <div className="profile-identity">
                                 <h2 className="profile-name">{profile.full_name || 'Người dùng'}</h2>
@@ -223,6 +263,26 @@ export default function UserProfile() {
                                     />
                                 </div>
 
+                                <div className="form-group">
+                                    <label className="form-label">Thông báo</label>
+                                    <label className="notif-pref">
+                                        <input
+                                            type="checkbox"
+                                            checked={form.notify_inapp}
+                                            onChange={(e) => setForm(prev => ({ ...prev, notify_inapp: e.target.checked }))}
+                                        />
+                                        <span>Nhận thông báo trong ứng dụng (chuông)</span>
+                                    </label>
+                                    <label className="notif-pref">
+                                        <input
+                                            type="checkbox"
+                                            checked={form.notify_email}
+                                            onChange={(e) => setForm(prev => ({ ...prev, notify_email: e.target.checked }))}
+                                        />
+                                        <span>Nhận thông báo qua email</span>
+                                    </label>
+                                </div>
+
 
 
                                 {/* Action buttons */}
@@ -274,6 +334,14 @@ export default function UserProfile() {
                                         {profile.technologies && profile.technologies.length > 0
                                             ? profile.technologies.join(', ')
                                             : <span className="form-empty">Chưa cập nhật</span>}
+                                    </p>
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label">Thông báo</label>
+                                    <p className="form-value">
+                                        Trong ứng dụng: <strong>{profile.notify_inapp ? 'Bật' : 'Tắt'}</strong>
+                                        {' · '}Email: <strong>{profile.notify_email ? 'Bật' : 'Tắt'}</strong>
                                     </p>
                                 </div>
 

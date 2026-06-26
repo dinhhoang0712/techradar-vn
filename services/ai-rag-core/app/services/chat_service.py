@@ -76,10 +76,13 @@ async def handle_chat(request: ChatRequest, db: AsyncSession) -> ChatResponse:
 
 
 def _create_session(request: ChatRequest) -> ChatSession:
+    # Normally the backend already created this session (it owns chat_session). This is only a
+    # fallback when the session row is missing. user_id stays NULL for anonymous — a phantom
+    # UUID(int=0) would violate the chat_session.user_id -> users(id) FK and 500 the request.
     title = request.query[:80] if request.query else "Cuộc hội thoại mới"
     return ChatSession(
         id=request.session_id or uuid.uuid4(),
-        user_id=request.user_id or uuid.UUID(int=0),
+        user_id=request.user_id or None,
         title=title,
     )
 

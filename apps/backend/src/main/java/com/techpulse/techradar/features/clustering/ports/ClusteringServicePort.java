@@ -1,18 +1,24 @@
 package com.techpulse.techradar.features.clustering.ports;
 
-import com.techpulse.techradar.features.clustering.domain.Cluster;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
+import java.util.Map;
+
 /**
- * Output port for clustering service.
+ * Output port for the Python ml-clustering service.
+ * <p>
+ * The backend is a transparent gateway: it forwards the service's JSON (snake_case) as-is so the
+ * cluster contract stays owned by the Python service and never drifts.
  */
 public interface ClusteringServicePort {
-    Flux<Cluster> getClusters();
 
-    Mono<Cluster> getCluster(String clusterId);
+    Flux<Map<String, Object>> getClusters(Boolean isCoherent);
 
-    Mono<Cluster> predictCluster(String technology);
+    Mono<Map<String, Object>> getCluster(String clusterId);
 
-    Flux<Cluster> predictBatch(java.util.List<String> technologies);
+    Mono<Map<String, Object>> getTechCluster(String techName);
+
+    Mono<Map<String, Object>> predictBatch(List<String> techNames);
 }

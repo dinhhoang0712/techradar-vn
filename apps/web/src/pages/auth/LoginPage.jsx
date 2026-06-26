@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { loginUser, getCurrentUser, getSystemStatus } from '../../api/authService';
+import { loginUser, getCurrentUser, getSystemStatus, forgotPassword, resetPassword } from '../../api/authService';
 import './Auth.css';
 
 export default function LoginPage() {
@@ -9,6 +9,30 @@ export default function LoginPage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const navigate = useNavigate();
+
+    const handleForgot = async () => {
+        const target = window.prompt('Nhập email để nhận mã đặt lại mật khẩu:', email);
+        if (!target) return;
+        try {
+            await forgotPassword(target);
+            alert('Nếu email tồn tại, mã đặt lại đã được gửi. Dùng "Nhập mã đặt lại" để đổi mật khẩu.');
+        } catch (err) {
+            alert(err.message || 'Không gửi được yêu cầu.');
+        }
+    };
+
+    const handleReset = async () => {
+        const token = window.prompt('Nhập mã đặt lại (token):');
+        if (!token) return;
+        const newPassword = window.prompt('Nhập mật khẩu mới (tối thiểu 8 ký tự):');
+        if (!newPassword) return;
+        try {
+            await resetPassword(token, newPassword);
+            alert('Đổi mật khẩu thành công. Vui lòng đăng nhập lại.');
+        } catch (err) {
+            alert(err.message || 'Đặt lại mật khẩu thất bại (mã sai hoặc hết hạn).');
+        }
+    };
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -108,6 +132,15 @@ export default function LoginPage() {
                             />
                         </div>
                         
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginTop: '-0.25rem' }}>
+                            <button type="button" className="auth-link" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} onClick={handleForgot}>
+                                Quên mật khẩu?
+                            </button>
+                            <button type="button" className="auth-link" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} onClick={handleReset}>
+                                Nhập mã đặt lại
+                            </button>
+                        </div>
+
                         <button type="submit" className="auth-btn" disabled={loading}>
                             {loading ? 'Đang xác thực...' : 'Đăng nhập'}
                         </button>

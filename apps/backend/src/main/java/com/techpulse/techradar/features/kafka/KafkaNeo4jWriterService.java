@@ -85,18 +85,18 @@ public class KafkaNeo4jWriterService {
                 }
 
                 if (article.getData().getEntities() != null && article.getData().getEntities().getOrg() != null) {
-                    for (String org : article.getData().getEntities().getOrg()) {
-                        if (org == null || org.isBlank()) {
+                    for (String orgName : article.getData().getEntities().getOrg()) {
+                        if (orgName == null || orgName.isBlank()) {
                             continue;
                         }
-                        String companyId = slugify(org);
+                        String companyId = slugify(orgName);
                         tx.run(
                                 "MERGE (c:Company {id: $company_id}) " +
                                         "SET c.name = $company_name " +
                                         "WITH c MATCH (a:Article {id: $article_id}) MERGE (a)-[:MENTIONS]->(c)",
                                 org.neo4j.driver.Values.parameters(
                                         "company_id", companyId,
-                                        "company_name", org,
+                                        "company_name", orgName,
                                         "article_id", generateId(article.getData().getSourceUrl())
                                 )
                         );

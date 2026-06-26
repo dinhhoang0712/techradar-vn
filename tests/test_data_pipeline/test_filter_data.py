@@ -112,7 +112,7 @@ def _install_fake_classifier_dependencies(monkeypatch):
 
 def _load_filter_data(monkeypatch):
     _install_fake_classifier_dependencies(monkeypatch)
-    file_path = ROOT / "src/data-pipeline/filter_data.py"
+    file_path = ROOT / "pipelines/data-pipeline/filter_data.py"
     spec = importlib.util.spec_from_file_location("filter_data_module", file_path)
     module = importlib.util.module_from_spec(spec)
     assert spec and spec.loader
@@ -366,7 +366,7 @@ def test_filter_json_file_malformed_json(tmp_path, monkeypatch):
     from pathlib import Path
     
     root = Path(__file__).resolve().parents[2]
-    file_path = root / "src/data-pipeline/filter_data.py"
+    file_path = root / "pipelines/data-pipeline/filter_data.py"
     spec = importlib.util.spec_from_file_location("filter_data_malformed", file_path)
     module = importlib.util.module_from_spec(spec)
     _install_fake_classifier_dependencies(monkeypatch)

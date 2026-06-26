@@ -257,3 +257,40 @@
     background: rgba(255, 255, 255, 0.12);
     color: #fff;
 }
+
+/* Avatar upload button (added) */
+.profile-avatar { position: relative; }
+.profile-avatar-edit {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    background: #2563eb;
+    color: #fff;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 15px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+/* Notification preference toggles */
+.notif-pref {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--text, #e5e7eb);
+}
+
+.notif-pref input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary, #6366f1);
+    cursor: pointer;
+}

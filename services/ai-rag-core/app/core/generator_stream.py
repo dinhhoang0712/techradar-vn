@@ -1,7 +1,10 @@
 import asyncio
+import logging
 from typing import AsyncIterator
 
 from app.core.generator import get_llm
+
+logger = logging.getLogger("ai-rag-core.generator")
 
 _MAX_RETRIES = 3
 _RETRY_DELAY = 5  # seconds
@@ -37,7 +40,8 @@ async def generate_stream(messages: list[dict]) -> AsyncIterator[str]:
             last_err = e
             err = str(e).lower()
             if ("503" in err or "service unavailable" in err or "overloaded" in err) and attempt < _MAX_RETRIES:
-                print(f"  [generator_stream] server bận, thử lại sau {_RETRY_DELAY}s (lần {attempt}/{_MAX_RETRIES})...")
+                logger.warning("server bận, thử lại sau %ds (lần %d/%d)...",
+                               _RETRY_DELAY, attempt, _MAX_RETRIES)
                 await asyncio.sleep(_RETRY_DELAY)
             else:
                 raise RuntimeError(f"LLM lỗi: {e}") from e

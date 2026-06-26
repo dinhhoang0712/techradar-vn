@@ -1,6 +1,10 @@
+import logging
+
 from sqlalchemy import text
 
 from app.db.postgres_client import get_session_factory
+
+logger = logging.getLogger("ai-rag-core.retriever")
 
 
 async def get_user_context(user_id: str) -> dict | None:
@@ -39,7 +43,7 @@ async def get_user_context(user_id: str) -> dict | None:
             row = result.mappings().first()
     except Exception as e:
         # user_profile có thể chưa được tạo, hoặc DB lỗi — không fail RAG
-        print(f"[WARN] get_user_context fallback: {e}")
+        logger.warning("get_user_context fallback: %s", e)
         return None
 
     if row is None:

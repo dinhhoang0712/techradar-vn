@@ -1,243 +1,173 @@
-# API Documentation 
+# API Documentation — v1
 
-> Note: Do chưa có dữ liệu cụ thể nên đây chỉ nêu ra các endpoint lớn, các sub-endpoint sẽ được cập nhật sau khi có dữ liệu cụ thể hơn. 
+Tài liệu này phản ánh **API thực tế** do Spring Boot gateway (`apps/backend`) cung cấp.
 
-## 1. Root /api/v1/
+## Quy ước chung
 
-| Method | Endpoint | Description | Auth |
+- **Base path**: mọi endpoint nằm dưới `/api/v1` (đặt bởi `spring.webflux.base-path`). Các path dưới đây đã gồm prefix.
+- **Serialization**: Jackson `SNAKE_CASE` toàn cục → request/response dùng `snake_case` (vd `refresh_token`, `full_name`). Trường `null` được lược bỏ.
+- **Envelope**: phần lớn response bọc trong `ApiResponse`:
+  ```json
+  { "success": true, "data": {}, "message": "string", "error_code": null, "timestamp": 0 }
+  ```
+  **Ngoại lệ (trả object thuần / bare):** `/auth/login`, `/auth/register`, `/auth/refresh`, `/auth/me`, và `/status`.
+  Client nên đọc theo dạng `res?.data ?? res` để xử lý đồng nhất.
+- **Auth**: gửi `Authorization: Bearer <access_token>`. Public/Authenticated/Admin xem mục [Phân quyền](#phân-quyền).
+- **Lỗi**: response lỗi luôn `success:false` kèm `message` + `error_code`. Mã HTTP: `400/401/403/404/409/503`.
+
+---
+
+## 1. Auth — `/api/v1/auth` *(bare cho login/register/refresh/me)*
+
+| Method | Path | Auth | Body | Response |
+| --- | --- | --- | --- | --- |
+| POST | `/auth/register` | Public | `{full_name, email, password, subscription_tier?}` | `{access_token, refresh_token, user_id, email, role, expires_in}` — bare. 409 nếu email tồn tại |
+| POST | `/auth/login` | Public | `{email, password}` | như trên — bare. 401 nếu sai |
+| POST | `/auth/refresh` | Public | `{refresh_token}` | như trên — bare |
+| POST | `/auth/logout` | JWT | — | `ApiResponse` (stateless, client xoá token) |
+| GET | `/auth/me` | JWT | — | `{id, email, role, status, subscription_tier}` — bare |
+| POST | `/auth/forgot-password` | Public | `{email}` | `ApiResponse`. Gửi mail fire-and-forget, luôn 200 (chống dò email) |
+| POST | `/auth/reset-password` | Public | `{token, new_password}` | `ApiResponse` |
+
+## 2. User — `/api/v1/user`
+
+| Method | Path | Auth | Body | Response |
+| --- | --- | --- | --- | --- |
+| GET | `/user/profile` | JWT | — | `ApiResponse<UserProfile>`: `{id, full_name, email, role, status, subscription_tier, avatar_url, bio, job_role, location, technologies[], notify_inapp, notify_email}` |
+| PUT | `/user/profile` | JWT | các field profile (đều optional, gồm `notify_inapp`/`notify_email` để bật/tắt thông báo) | `ApiResponse<UserProfile>` |
+| POST | `/user/avatar` | JWT | `{content_type, data_base64}` | `ApiResponse<{avatar_url}>`. Ảnh lưu ở Postgres (`user_avatar` BYTEA), giới hạn 3 MB, chỉ png/jpeg/jpg/webp/gif |
+| GET | `/user/avatar/{userId}` | **Public** | — | `byte[]` ảnh thô + `X-Content-Type-Options: nosniff`. 404 nếu chưa có |
+
+## 3. Radar — `/api/v1/radar` *(đọc từ `tech_analytics` trong Postgres)*
+
+| Method | Path | Auth | Query | Response |
+| --- | --- | --- | --- | --- |
+| GET | `/radar/top4` | JWT | — | `ApiResponse<[{industry, growth_rate, job_count, mom_rate, jobs_this_month}]>` |
+| GET | `/radar/top10` | JWT | — | `ApiResponse<[{keyword, job_count}]>` |
+| GET | `/radar/search` | JWT | `keywords[]`, `months=6` | `ApiResponse<[{month, year, keywords{tech: count}}]>` |
+| GET | `/radar/export-png` | JWT | `limit=20` | `byte[]` PNG (attachment `radar.png`) |
+| GET | `/radar/export-csv` | JWT | `limit=50` | `byte[]` CSV (attachment `radar.csv`) |
+
+## 4. Compare — `/api/v1/compare`
+
+| Method | Path | Auth | Body / Query | Response |
+| --- | --- | --- | --- | --- |
+| GET | `/compare/search` | JWT | `keywords[]`, `months=12` | `ApiResponse<[{keyword, yoy_rate, mom_rate, growth_rate, monthly[]}]>` |
+| POST | `/compare/llm-summary` | JWT | `{technology1, technology2, growth_rate1, growth_rate2, job_count1, job_count2, article_count1, article_count2, comparison_score}` | `ApiResponse<{summary}>` — **proxy ai-rag-core**, 503 nếu service lỗi |
+
+## 5. Graph — `/api/v1/graph` *(Neo4j)*
+
+| Method | Path | Auth | Body / Query | Response |
+| --- | --- | --- | --- | --- |
+| GET | `/graph/explore` | JWT | `keywords[]` (bắt buộc), `depth=2`, `location?`, `min_salary?` | `ApiResponse<{nodes[], edges[], found}>` |
+| GET | `/graph/road_analysis` | JWT | `from`, `to` | `ApiResponse<{nodes[], edges[], found}>` — đường đi ngắn nhất |
+| POST | `/graph/filter` | JWT | `{locations[]?, node_types[]?, min_salary?, max_salary?, sentiment?}` | `ApiResponse<GraphNode[]>` |
+
+## 6. Chat — `/api/v1/chat` *(proxy ai-rag-core; session ở Postgres)*
+
+| Method | Path | Auth | Body | Response |
+| --- | --- | --- | --- | --- |
+| GET | `/chat` | JWT | — | `ApiResponse<{status, neo4j, version}>` — health của RAG |
+| POST | `/chat/session` | JWT | — | `ApiResponse<{session_id, created_at}>` |
+| GET | `/chat/sessions` | JWT | — | `ApiResponse<[{session_id, title, created_at}]>` |
+| DELETE | `/chat/session/{sessionId}` | JWT | — | `ApiResponse` (kiểm tra ownership) |
+| GET | `/chat/session/{sessionId}/messages` | JWT | — | `ApiResponse<[{id, role, content}]>` |
+| POST | `/chat/session/{sessionId}/messages` | JWT | `{query}` | `ApiResponse<{answer, session_id, sources[], entities[], job_titles[], query}>` |
+| POST | `/chat/session/{sessionId}/messages/stream` | JWT | `{query}` | **SSE** `text/event-stream` — stream câu trả lời theo token |
+
+## 7. Clustering — `/api/v1/clustering` *(proxy ml-clustering, 503 nếu service lỗi)*
+
+| Method | Path | Auth | Body / Query | Response |
+| --- | --- | --- | --- | --- |
+| GET | `/clustering/clusters` | JWT | `is_coherent?` | `ApiResponse<[...]>` |
+| GET | `/clustering/clusters/{clusterId}` | JWT | — | `ApiResponse<{...}>` |
+| GET | `/clustering/tech/{techName}/cluster` | JWT | — | `ApiResponse<{...}>` |
+| POST | `/clustering/predict/batch` | JWT | `{tech_names[]}` | `ApiResponse<{...}>`. 400 nếu rỗng |
+
+> Response của clustering được trả **verbatim** từ Python (gateway không reshape).
+
+## 7b. Notifications — `/api/v1/notifications` *(in-app, JWT; scope theo user)*
+
+| Method | Path | Auth | Response |
 | --- | --- | --- | --- |
-| GET | `/radar` | Vào trang radar xu hướng công nghệ | No |
-| GET | `/compare` | So sánh chi tiết xu hướng công nghệ | No |
-| GET | `/graph` | Xem đồ thị xu hướng công nghệ | No |
-| GET | `/chat` | Tương tác với chatbot tư vấn xu hướng công nghệ | Yes |
+| GET | `/notifications` | JWT | `ApiResponse<[{id, type, title, body, link, read, created_at}]>` (50 mới nhất) |
+| GET | `/notifications/unread-count` | JWT | `ApiResponse<Long>` |
+| POST | `/notifications/{id}/read` | JWT | `ApiResponse` — đánh dấu đã đọc |
+| POST | `/notifications/read-all` | JWT | `ApiResponse` |
+| GET | `/notifications/stream` | JWT | **SSE** `text/event-stream` — đẩy notification realtime (event `notification`, heartbeat mỗi 25s) |
 
-## 2. Radar /api/v1/radar
+Nguồn sự kiện đầu tiên: **trend alert**. ETL radar phát event `trend.alerts` lên Kafka khi một công nghệ
+tăng ≥ `app.notifications.trend-threshold`% MoM; `TrendAlertDispatcher` fan-out tới user có công nghệ đó
+trong `user_profile.technologies` (kênh in-app + email theo `notify_inapp`/`notify_email`).
 
-Phần API cho nội dung trang radar chia làm 3 layer:
-- Layer 1: List 4 công nghệ có tăng trưởng nhanh nhất trong 3 tháng gần nhất
-- Layer 2: Thanh tìm kiếm và biểu đồ xu hướng
-- Layer 3: Top 10 công nghệ
+> SSE `/notifications/stream` yêu cầu JWT qua header → client nên dùng fetch-based SSE (như chat stream),
+> không dùng `EventSource` thuần (không gắn được header `Authorization`).
 
+## 8. Admin — `/api/v1/admin` *(yêu cầu role ADMIN)*
 
+**Users**
 
-#### Layer 1 
+| Method | Path | Body |
+| --- | --- | --- |
+| GET | `/admin/users` | — |
+| POST | `/admin/users` | `{email, password, full_name?, role?, status?, subscription_tier?}` |
+| PUT | `/admin/users/{id}` | các field (optional) |
+| DELETE | `/admin/users/{id}` | — |
 
-| Method | Endpoint | Description | Auth |
-| --- | --- | --- | --- |
-| GET | `/radar/top4` | Lấy danh sách 4 công nghệ có tăng trưởng nhanh nhất trong 3 tháng gần nhất + các chỉ số | No |
+**Settings**
 
-`Response mẫu`:
+| Method | Path | Body |
+| --- | --- | --- |
+| GET | `/admin/settings` · `/admin/settings/{key}` | — |
+| PUT | `/admin/settings/{key}` | `{value, description?}` |
+| DELETE | `/admin/settings/{key}` | — |
 
-```json
-{
-  "data": [
-    {
-      "technology": "React",
-      "Sentiment": 1,
-      "job_count": 1500,
-      "YoY": 66,
-      "growth_rate": 171
-    },
-    {
-      "technology": "Node.js",
-      "Sentiment": 1,
-      "job_count": 1200,
-      "YoY": 50,
-      "growth_rate": 120
-    },
-    {
-      "technology": "Python",
-      "Sentiment": 1,
-      "job_count": 2000,
-      "YoY": 40,
-      "growth_rate": 100
-    },
-    {
-      "technology": "Docker",
-      "Sentiment": 1,
-      "job_count": 800,
-      "YoY": 30,
-      "growth_rate": 80
-    }
-  ]
-}
-```
+**Dashboard** *(đọc `activity_log` / `users`)*
 
-#### Layer 2
+| Method | Path | Response data |
+| --- | --- | --- |
+| GET | `/admin/dashboard/user-count` | số user |
+| GET | `/admin/dashboard/visits-today` | số lượt truy cập hôm nay |
+| GET | `/admin/dashboard/searches-today` | số lượt tìm kiếm hôm nay |
+| GET | `/admin/dashboard/monthly-visits` | `[{month, year, visit_count}]` 12 tháng |
+| GET | `/admin/dashboard/top-keywords` | `[string]` top 10 |
 
-| Method | Endpoint | Description | Auth |
-| --- | --- | --- | --- |
-| GET | `/radar/search` | Truy vấn dữ liệu cho biểu đồ xu hướng theo form search đã nhập | No |
+**CMS** *(bảng `cms_content`)*
 
+| Method | Path | Body |
+| --- | --- | --- |
+| GET | `/admin/cms` | — |
+| POST | `/admin/cms` | `{title, type?, content_date?, status?}` |
+| PUT | `/admin/cms/{id}` | như trên |
+| DELETE | `/admin/cms/{id}` | — |
 
-`Request mẫu`:
+**Analytics ETL**
 
-```json
-{
-  "technology": ["React", "Node.js", "Python"],
-  "time_range": 6,  // 6 tháng gần nhất
-  "plot_type": "line"  // loại biểu đồ: line, bar, growth%
-}
-```
+| Method | Path | Response |
+| --- | --- | --- |
+| POST | `/admin/analytics/rebuild` | `ApiResponse<{rows_upserted}>` — dựng lại `tech_analytics` từ Neo4j. 503 nếu Neo4j lỗi |
 
-`Response mẫu`:
+## 9. Health & Status — Public
 
-```json
-{
-  "data": {
-    "React": {
-      "months": ["2023-01", "2023-02", "2023-03", "2023-04", "2023-05", "2023-06"],
-      "job_counts": [1000, 1100, 1200, 1300, 1400, 1500]
-    },
-    "Node.js": {
-      "months": ["2023-01", "2023-02", "2023-03", "2023-04", "2023-05", "2023-06"],
-      "job_counts": [800, 900, 1000, 1100, 1150, 1200]
-    },
-    "Python": {
-      "months": ["2023-01", "2023-02", "2023-03", "2023-04", "2023-05", "2023-06"],
-      "job_counts": [1500, 1600, 1700, 1800, 1900, 2000]
-    }
-  }
-}
-```
+| Method | Path | Response |
+| --- | --- | --- |
+| GET | `/health` | `ApiResponse<{status, version, timestamp}>` |
+| GET | `/status` | **bare** `{maintenance_web, maintenance_mobile, feature_graph, feature_chat, feature_rag, ...}` — feature flags từ bảng `settings` |
 
-| Method | Endpoint | Description | Auth |
-| --- | --- | --- | --- |
-| GET | `/radar/export-png` | Xuất biểu đồ xu hướng thành file PNG | No |
-| GET | `/radar/export-csv` | Xuất dữ liệu biểu đồ xu hướng thành file CSV | No |
+---
 
-#### Layer 3
+## Phân quyền
 
-| Method | Endpoint | Description | Auth |
-| --- | --- | --- | --- |
-| GET | `/radar/top10` | Lấy danh sách top 10 công nghệ kèm số lượng jobs | No |
+- **Public** (không cần JWT): `/auth/login`, `/auth/register`, `/auth/refresh`, `/auth/logout`, `/auth/forgot-password`, `/auth/reset-password`, `/health`, `/status`, `GET /user/avatar/{userId}`, `/actuator/**`, Swagger (`/swagger-ui/**`, `/v3/api-docs/**`).
+- **Admin** (`hasRole('ADMIN')`): toàn bộ `/admin/**`.
+- **Authenticated** (JWT hợp lệ): tất cả endpoint còn lại.
 
-`Response mẫu`:
+> Lưu ý security: `spring.webflux.base-path` bị strip **trước** security filter, nên matcher trong
+> `SecurityConfig.PUBLIC_PATHS` được khai báo **không** kèm `/api/v1`.
 
-```json
-{
-  "data": [
-    {"technology": "React", "job_count": 1500},
-    {"technology": "Node.js", "job_count": 1200},
-    {"technology": "Python", "job_count": 2000},
-    {"technology": "Docker", "job_count": 800},
-    {"technology": "AWS", "job_count": 900},
-    {"technology": "Kubernetes", "job_count": 700},
-    {"technology": "Java", "job_count": 1800},
-    {"technology": "C#", "job_count": 1600},
-    {"technology": "Go", "job_count": 600},
-    {"technology": "Ruby", "job_count": 500}
-  ]
-}
-```
+## Proxy sang Python
 
-## 3. Compare /api/v1/compare
-
-| Method | Endpoint | Description | Auth |
-| --- | --- | --- | --- |
-| GET | `/compare/search` | Truy vấn dữ liệu so sánh chi tiết xu hướng công nghệ theo form search đã nhập | No |
-
-`Request mẫu`:
-
-```json
-{
-  "technology": ["React", "Node.js"],
-  "time_range": 6,  // 6 tháng gần nhất
-  "show_peak": true  // có hiển thị điểm tăng trưởng cao nhất không
-}
-```
-
-
-`Response mẫu`:
-
-```json
-{
-  "data": {
-    "React": {
-      "growth_rate": 171,
-      "YoY": 66,
-      "MoM": 7.14,
-      "jobs": 1500,
-      "peak_month": "2023-06",
-      "baohoa": "2023-07"
-    },
-    "Node.js": {
-      "growth_rate": 120,
-      "YoY": 50,
-      "MoM": 5.26,
-      "jobs": 1200,
-      "peak_month": "2023-06",
-      "baohoa": "2023-07"
-    }
-  }
-}
-
-```
-
-
-| Method | Endpoint | Description | Auth |
-| --- | --- | --- | --- |
-| GET | `/compare/llm-summary` | Tóm tắt so sánh chi tiết xu hướng công nghệ bằng LLM | No |
-
-`Response mẫu`:
-
-```json
-{
-  "data": {
-    "summary": "React có tốc độ tăng trưởng nhanh hơn Node.js trong 6 tháng gần nhất với YoY 66% so với 50%. React cũng có số lượng jobs cao hơn (1500 vs 1200). Điểm tăng trưởng cao nhất của React là vào tháng 06/2023, trong khi Node.js cũng đạt đỉnh vào cùng tháng. Cả hai công nghệ đều có xu hướng tăng trưởng tích cực, nhưng React đang dẫn đầu về mức độ phổ biến và tốc độ tăng trưởng."
-  }
-}
-```
-
-## 4. Graph /api/v1/graph
-
-| Method | Endpoint | Description | Auth |
-| --- | --- | --- | --- |
-| GET | `/graph/explore` | Truy vấn dữ liệu để khám phá đồ thị xu hướng công nghệ theo form search đã nhập | No |
-
-`Request mẫu`:
-
-```json
-
-{
-    "nodes": ["React", "Node.js"], // danh sách công nghệ muốn hiển thị trên đồ thị
-    "depth": 1, // độ sâu của đồ thị: 1 hop, 2 hops
-    "filter": true, // có hiển thị filter không
-    "focus": false, // quay về trung tâm đồ thị
-    "reset": false // reset đồ thị về trạng thái ban đầu
-}
-```
-
-Nếu request có `filter: true` -> hiện thị tab để lọc sâu.
-
-| Method | Endpoint | Description | Auth |
-| --- | --- | --- | --- |
-| GET | `/graph/filter` | Truy vấn dữ liệu để lọc sâu trên đồ thị xu hướng công nghệ theo form search đã nhập | No |
-
-Request mẫu:
-
-```json
-{
-    "min_salary": 500, // mức lương tối thiểu
-    "min_sentiment": 0.5, // mức độ tích cực tối thiểu
-    "location": "Hà Nội", // vị trí địa lý
-}
-```
-
-## 5. Authentication /api/v1/auth
-
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| POST | `/register` | Đăng ký tài khoản | No |
-| POST | `/login` | Đăng nhập | No |
-| POST | `/refresh` | Refresh token | No |
-| POST | `/logout` | Đăng xuất | Optional |
-| GET | `/me` | Thông tin user hiện tại | Yes |
-
-## 6. Chatbot /api/v1/chat
-
-| Method | Endpoint | Description | Auth |
-| --- | --- | --- | --- |
-| POST | `/chat/session` | Tạo phiên chat trả về ID phiên | Yes |
-| GET | `/chat/session/{session_id}/messages` | Lấy lịch sử trò chuyện của phiên hiện tại  (khi có reload/quay lại) | Yes |
-| POST | `/chat/session/{session_id}/messages` | Gửi tin nhắn mới đến chatbot và nhận phản hồi (trả về SSE) | Yes |
+| Nhóm | Service | Base URL (env) | Header bảo mật | Timeout |
+| --- | --- | --- | --- | --- |
+| `/chat/**`, `/compare/llm-summary` | ai-rag-core | `PYTHON_RAG_BASE_URL` (`:8000`) | `X-Internal-Auth: <PYTHON_INTERNAL_TOKEN>` | 120s |
+| `/clustering/**` | ml-clustering | `PYTHON_ML_CLUSTERING_BASE_URL` (`:8001`) | — (service không yêu cầu) | 60s |

@@ -1,8 +1,12 @@
 import asyncio
+import logging
+
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException
 from pydantic import BaseModel
 
 from app.config import get_settings
+
+logger = logging.getLogger("ai-rag-core.embed")
 
 router = APIRouter(prefix="/embed", tags=["embed"])
 
@@ -40,11 +44,11 @@ async def _run_embed_job() -> None:
             articles = await result.data()
 
         if not articles:
-            print("[embed-job] Không có Article mới cần embed.")
+            logger.info("Không có Article mới cần embed.")
             await driver.close()
             return
 
-        print(f"[embed-job] Tìm thấy {len(articles)} Article cần embed...")
+        logger.info("Tìm thấy %d Article cần embed...", len(articles))
 
         # 2. Embed
         texts = [f"{a.get('title') or ''} {a.get('content') or ''}".strip() for a in articles]
@@ -64,10 +68,10 @@ async def _run_embed_job() -> None:
                     {"rows": rows[i : i + WRITE_BATCH]},
                 )
         await driver.close()
-        print(f"[embed-job] Đã embed và ghi {len(articles)} Article lên Neo4j.")
+        logger.info("Đã embed và ghi %d Article lên Neo4j.", len(articles))
 
     except Exception as e:
-        print(f"[embed-job] Lỗi: {e}")
+        logger.exception("Embed job lỗi: %s", e)
     finally:
         _embed_running = False
 

@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 
-ML_ROOT = Path(__file__).resolve().parents[2] / "src" / "ml-clustering"
+ML_ROOT = Path(__file__).resolve().parents[2] / "services" / "ml-clustering"
 
 def _force_import(module_name: str, file_path: Path):
     if module_name in sys.modules: del sys.modules[module_name]

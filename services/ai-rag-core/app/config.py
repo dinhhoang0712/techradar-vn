@@ -51,6 +51,13 @@ class Settings(BaseSettings):
     # Secret để crawler gọi trigger embed (đặt giá trị ngẫu nhiên trong .env)
     embed_secret: str = "changeme"
 
+    # Shared secret để CHỈ Spring gateway gọi được /chat, /chat/stream, /internal/ai/*.
+    # Để TRỐNG (mặc định) = tắt kiểm tra (tiện dev/test). Đặt giá trị trong .env để bật.
+    internal_api_token: str = ""
+
+    # CORS: danh sách origin (phân tách bằng dấu phẩy). "*" = mở (chỉ nên dùng khi đứng sau gateway).
+    cors_origins: str = "*"
+
     model_config = SettingsConfigDict(
         env_file=str(_ENV_FILE),
         env_file_encoding="utf-8",

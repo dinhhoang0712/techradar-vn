@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 # Tự động thêm đường dẫn module clustering vào PYTHONPATH
 ROOT = Path(__file__).resolve().parents[2]
-ML_CLUSTERING_ROOT = ROOT / "src" / "ml-clustering"
+ML_CLUSTERING_ROOT = ROOT / "services" / "ml-clustering"
 for p in [str(ML_CLUSTERING_ROOT), str(ML_CLUSTERING_ROOT / "src")]:
     if p not in sys.path:
         sys.path.insert(0, p)

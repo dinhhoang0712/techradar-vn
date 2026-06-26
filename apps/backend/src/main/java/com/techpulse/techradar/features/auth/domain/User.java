@@ -20,6 +20,7 @@ public class User {
     private UUID id;
     private String email;
     private String passwordHash;
+    private String fullName;
     private String role;
     private String status;
     private String subscriptionTier;

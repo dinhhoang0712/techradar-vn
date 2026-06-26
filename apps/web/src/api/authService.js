@@ -39,6 +39,20 @@ export const getSystemStatus = async () => {
     });
 };
 
+export const forgotPassword = async (email) => {
+    return await apiClient('/auth/forgot-password', {
+        method: 'POST',
+        body: JSON.stringify({ email })
+    });
+};
+
+export const resetPassword = async (token, newPassword) => {
+    return await apiClient('/auth/reset-password', {
+        method: 'POST',
+        body: JSON.stringify({ token, new_password: newPassword })
+    });
+};
+
 // Export tên hàm mock cũ để duy trì tương thích tạm thời
 export const loginMock = loginUser;
 export const registerMock = registerUser;

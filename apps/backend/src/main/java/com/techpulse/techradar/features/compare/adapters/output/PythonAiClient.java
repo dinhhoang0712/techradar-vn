@@ -32,6 +32,9 @@ public class PythonAiClient implements LlmSummaryPort {
     @Value("${app.python.ai.timeout:60000}")
     private long timeout;
 
+    @Value("${app.python.internal-token:}")
+    private String internalToken;
+
     @Override
     public Mono<String> generateSummary(TechComparison comparison) {
         Map<String, Object> request = new HashMap<>();
@@ -47,6 +50,11 @@ public class PythonAiClient implements LlmSummaryPort {
         return webClientBuilder.build()
                 .post()
                 .uri(pythonAiBaseUrl + "/internal/ai/llm-summary")
+                .headers(h -> {
+                    if (internalToken != null && !internalToken.isBlank()) {
+                        h.set("X-Internal-Auth", internalToken);
+                    }
+                })
                 .bodyValue(request)
                 .retrieve()
                 .bodyToMono(Map.class)

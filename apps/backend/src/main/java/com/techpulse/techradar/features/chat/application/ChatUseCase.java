@@ -4,12 +4,16 @@ import com.techpulse.techradar.features.chat.adapters.input.dto.ChatHealthRespon
 import com.techpulse.techradar.features.chat.adapters.input.dto.ChatRequest;
 import com.techpulse.techradar.features.chat.adapters.input.dto.ChatResponse;
 import com.techpulse.techradar.features.chat.adapters.input.dto.CreateSessionResponse;
-import com.techpulse.techradar.features.chat.domain.ChatMessage;
 import com.techpulse.techradar.features.chat.domain.ChatSession;
 import com.techpulse.techradar.features.chat.adapters.input.dto.ChatMessageItem;
+import com.techpulse.techradar.features.chat.adapters.input.dto.ChatSessionItem;
 import com.techpulse.techradar.features.chat.ports.ChatPort;
 import com.techpulse.techradar.features.chat.ports.ChatRepository;
+import com.techpulse.techradar.shared.exception.ForbiddenException;
+import com.techpulse.techradar.shared.exception.RateLimitExceededException;
+import com.techpulse.techradar.shared.redis.ChatRateLimiterService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
@@ -21,69 +25,111 @@ import java.util.UUID;
 /**
  * Chat use case orchestration.
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class ChatUseCase {
 
     private final ChatPort chatPort;
     private final ChatRepository chatRepository;
+    private final ChatRateLimiterService rateLimiter;
 
     public Mono<ChatHealthResponse> getHealth() {
         return chatPort.getHealth();
     }
 
     public Mono<CreateSessionResponse> createSession(String userId) {
+        log.info("Creating chat session for userId={}", userId);
         return initializeSession(null, userId)
-                .map(session -> new CreateSessionResponse(session.getId().toString(), session.getCreatedAt()));
+                .map(session -> new CreateSessionResponse(session.getId().toString(), session.getCreatedAt()))
+                .doOnSuccess(r -> log.info("Created chat session sessionId={} for userId={}", r.getSessionId(), userId));
     }
 
     public Mono<ChatResponse> chat(ChatRequest request) {
-        return initializeSession(request.getSessionId(), request.getUserId())
-                .flatMap(session -> {
-                    ChatMessage userMessage = ChatMessage.builder()
-                            .sessionId(session.getId())
-                            .role("user")
-                            .content(request.getQuery())
-                            .createdAt(Instant.now())
-                            .build();
-
-                    return persistMessage(session, userMessage)
-                            .then(chatPort.chat(request))
-                            .flatMap(response -> persistMessage(session, ChatMessage.builder()
-                                    .sessionId(session.getId())
-                                    .role("assistant")
-                                    .content(response.getAnswer())
-                                    .createdAt(Instant.now())
-                                    .build())
-                            .thenReturn(response);
-                });
+        // Backend owns the session lifecycle (create + auth); chat MESSAGES
+        // (user + assistant) are persisted by ai-rag-core to avoid double-writes.
+        // See apps/backend/src/main/resources/db/README.md.
+        log.info("Handling chat request sessionId={} userId={}", request.getSessionId(), request.getUserId());
+        return checkRateLimit(request.getUserId())
+                .then(initializeSession(request.getSessionId(), request.getUserId()))
+                .then(chatPort.chat(request))
+                .doOnSuccess(r -> log.info("Completed chat request sessionId={} userId={}",
+                        request.getSessionId(), request.getUserId()));
     }
 
-    public Flux<ChatMessageItem> listMessages(String sessionId) {
-        return chatRepository.listMessages(sessionId);
+    public Flux<ChatSessionItem> listSessions(String userId) {
+        log.info("Listing chat sessions for userId={}", userId);
+        return chatRepository.listSessionsByUser(userId);
+    }
+
+    public Mono<Void> deleteSession(String sessionId, String userId) {
+        log.info("Deleting chat session sessionId={} userId={}", sessionId, userId);
+        return chatRepository.findSessionById(sessionId)
+                .flatMap(session -> {
+                    if (!isOwner(session, userId)) {
+                        log.warn("Forbidden delete: userId={} is not owner of sessionId={}", userId, sessionId);
+                        return Mono.error(new ForbiddenException("You do not have access to this chat session"));
+                    }
+                    return chatRepository.deleteSession(sessionId);
+                })
+                // No persisted session (anonymous/in-memory) -> nothing to delete.
+                .switchIfEmpty(Mono.just(0L))
+                .then();
+    }
+
+    public Flux<ChatMessageItem> listMessages(String sessionId, String userId) {
+        log.info("Listing messages for sessionId={} userId={}", sessionId, userId);
+        return chatRepository.findSessionById(sessionId)
+                .flatMapMany(session -> {
+                    if (!isOwner(session, userId)) {
+                        log.warn("Forbidden message access: userId={} is not owner of sessionId={}", userId, sessionId);
+                        return Flux.error(new ForbiddenException("You do not have access to this chat session"));
+                    }
+                    return chatRepository.listMessages(sessionId);
+                })
+                // Session row may not exist yet (e.g. anonymous/in-memory session) -> no history.
+                .switchIfEmpty(chatRepository.listMessages(sessionId));
     }
 
     public Flux<ServerSentEvent<String>> streamChat(ChatRequest request) {
-        return initializeSession(request.getSessionId(), request.getUserId())
-                .flatMapMany(session -> {
-                    ChatMessage userMessage = ChatMessage.builder()
-                            .sessionId(session.getId())
-                            .role("user")
-                            .content(request.getQuery())
-                            .createdAt(Instant.now())
-                            .build();
+        // Same as chat(): ensure the session exists, then stream. ai-rag-core
+        // persists the user + assistant messages (it accumulates the streamed
+        // answer), so the gateway does not write them here.
+        log.info("Streaming chat request sessionId={} userId={}", request.getSessionId(), request.getUserId());
+        return checkRateLimit(request.getUserId())
+                .thenMany(initializeSession(request.getSessionId(), request.getUserId()))
+                .thenMany(chatPort.streamChat(request));
+    }
 
-                    return persistMessage(session, userMessage)
-                            .thenMany(chatPort.streamChat(request));
-                });
+    private Mono<Void> checkRateLimit(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return Mono.empty();
+        }
+        return rateLimiter.isAllowed(userId)
+                .flatMap(allowed -> allowed
+                        ? Mono.empty()
+                        : Mono.error(new RateLimitExceededException("Chat rate limit exceeded. Please slow down.")));
     }
 
     private Mono<ChatSession> initializeSession(String sessionId, String userId) {
         if (sessionId != null && !sessionId.isBlank()) {
             return chatRepository.findSessionById(sessionId)
+                    .flatMap(session -> isOwner(session, userId)
+                            ? Mono.just(session)
+                            : Mono.error(new ForbiddenException("You do not have access to this chat session")))
                     .switchIfEmpty(createChatSession(sessionId, userId));
         }
         return createChatSession(null, userId);
+    }
+
+    /**
+     * A session is accessible when it has no owner (anonymous) or its owner matches the caller.
+     */
+    private boolean isOwner(ChatSession session, String userId) {
+        if (session.getUserId() == null) {
+            return true;
+        }
+        return userId != null && session.getUserId().toString().equals(userId);
     }
 
     private Mono<ChatSession> createChatSession(String sessionId, String userId) {
@@ -111,12 +157,5 @@ public class ChatUseCase {
         } catch (IllegalArgumentException e) {
             return false;
         }
-    }
-
-    private Mono<ChatMessage> persistMessage(ChatSession session, ChatMessage message) {
-        if (session.getUserId() == null) {
-            return Mono.empty();
-        }
-        return chatRepository.saveMessage(message);
     }
 }

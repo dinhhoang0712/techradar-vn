@@ -140,6 +140,8 @@ vite.config.ts.timestamp-*
 
 phobert_title_classifier_best/
 
-src/data-pipeline/extracted_data/
-src/data-pipeline/filtered_data/
-src/data-pipeline/raw_data/
+# Data-pipeline working data (relative to this .gitignore)
+raw_data/
+filtered_data/
+extracted_data/
+vietnamese_job_descriptions*.json

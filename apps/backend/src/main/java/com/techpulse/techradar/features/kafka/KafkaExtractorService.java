@@ -13,9 +13,8 @@ import com.techpulse.techradar.features.kafka.model.JobInfo;
 import com.techpulse.techradar.features.kafka.model.JobData;
 import com.techpulse.techradar.features.kafka.model.RawArticle;
 import com.techpulse.techradar.features.kafka.model.RawJob;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
@@ -26,10 +25,9 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
 @Service
 public class KafkaExtractorService {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(KafkaExtractorService.class);
 
     private final ObjectMapper objectMapper;
     private final KafkaTemplate<String, String> kafkaTemplate;
@@ -47,10 +45,12 @@ public class KafkaExtractorService {
     public void consumeRawArticle(ConsumerRecord<String, String> record) {
         try {
             RawArticle raw = objectMapper.readValue(record.value(), RawArticle.class);
+            log.info("Consuming raw article from platform {} url={}", raw.getSourcePlatform(),
+                    raw.getData() != null ? raw.getData().getSourceUrl() : null);
             ExtractedArticle extracted = buildExtractedArticle(raw);
             sendExtractedArticle(extracted);
         } catch (Exception e) {
-            LOGGER.error("Failed to process raw article message", e);
+            log.error("Failed to process raw article message", e);
         }
     }
 
@@ -58,16 +58,20 @@ public class KafkaExtractorService {
     public void consumeRawJob(ConsumerRecord<String, String> record) {
         try {
             RawJob raw = objectMapper.readValue(record.value(), RawJob.class);
+            log.info("Consuming raw job from platform {} url={}", raw.getSourcePlatform(),
+                    raw.getData() != null ? raw.getData().getSourceUrl() : null);
             ExtractedJob extracted = buildExtractedJob(raw);
             sendExtractedJob(extracted);
         } catch (Exception e) {
-            LOGGER.error("Failed to process raw job message", e);
+            log.error("Failed to process raw job message", e);
         }
     }
 
     private ExtractedArticle buildExtractedArticle(RawArticle raw) {
         String text = raw.getData().getTitle() + " " + raw.getData().getContent();
         Entities entities = extractionService.extractEntities(text, null);
+        log.info("Extracted {} tech entities from article '{}'",
+                entities.getTech() != null ? entities.getTech().size() : 0, raw.getData().getTitle());
 
         ArticleData data = raw.getData();
         ExtractedArticleData extractedData = new ExtractedArticleData(
@@ -128,14 +132,14 @@ public class KafkaExtractorService {
         String payload = objectMapper.writeValueAsString(extracted);
         String key = md5(extracted.getData().getSourceUrl());
         kafkaTemplate.send(KafkaTopicConstants.EXTRACTED_ARTICLES, key, payload);
-        LOGGER.info("Published extracted article to Kafka: {}", extracted.getData().getSourceUrl());
+        log.info("Published extracted article to Kafka: {}", extracted.getData().getSourceUrl());
     }
 
     private void sendExtractedJob(ExtractedJob extracted) throws JsonProcessingException {
         String payload = objectMapper.writeValueAsString(extracted);
         String key = md5(extracted.getData().getJob().getSourceUrl());
         kafkaTemplate.send(KafkaTopicConstants.EXTRACTED_JOBS, key, payload);
-        LOGGER.info("Published extracted job to Kafka: {}", extracted.getData().getJob().getSourceUrl());
+        log.info("Published extracted job to Kafka: {}", extracted.getData().getJob().getSourceUrl());
     }
 
     private String md5(String value) {

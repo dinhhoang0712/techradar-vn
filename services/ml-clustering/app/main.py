@@ -14,8 +14,12 @@ Chạy:
 """
 from __future__ import annotations
 
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException, Query
 
+from app.observability import RequestContextMiddleware, configure_logging
 from app.schemas import (
     BatchPredictRequest,
     BatchPredictResponse,
@@ -25,20 +29,34 @@ from app.schemas import (
 )
 from app.store import get_store
 
+# Configure JSON logging before anything else emits logs.
+configure_logging()
+logger = logging.getLogger("ml-clustering")
+
+
+# ---------------------------------------------------------------------------
+# Lifespan: warm up store (load artifacts) on startup
+# ---------------------------------------------------------------------------
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    store = get_store()  # trigger load + cache
+    logger.info(
+        "Store ready: snapshot_tag=%s source=%s n_techs=%d n_clusters=%d",
+        store.tag, store.source, len(store.tech_to_cluster), len(store.cluster_labels),
+    )
+    yield
+
+
 app = FastAPI(
     title="TechPulse ML Clustering API",
     description="Serve kết quả phân cụm công nghệ từ pipeline HDBSCAN + GPT-4o labeling.",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
-
-# ---------------------------------------------------------------------------
-# Startup: warm up store (load artifacts)
-# ---------------------------------------------------------------------------
-
-@app.on_event("startup")
-async def _startup() -> None:
-    get_store()  # trigger load + cache
+# Trace-id binding + access logging (outermost middleware → every request gets a trace id).
+app.add_middleware(RequestContextMiddleware)
 
 
 # ---------------------------------------------------------------------------

@@ -55,6 +55,13 @@ export const getChatSessions = async () => {
 };
 
 // ─────────────────────────────────────────────
+// DELETE /chat/session/{session_id} — Xoá session (và message) của user
+// ─────────────────────────────────────────────
+export const deleteChatSession = async (sessionId) => {
+    return await apiClient(`/chat/session/${sessionId}`, { method: 'DELETE' });
+};
+
+// ─────────────────────────────────────────────
 // POST /chat/session/{session_id}/messages — Gửi message (non-stream)
 // Body:    { query: string }
 // Returns: { answer, entities, job_titles, query, session_id, sources }

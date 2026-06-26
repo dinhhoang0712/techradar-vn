@@ -1,5 +1,5 @@
 import { DM } from '@/constants/theme';
-import { createChatSession, getChatHistory, streamChatMessage, getChatSessions } from '@/services/chatService';
+import { createChatSession, getChatHistory, streamChatMessage, getChatSessions, deleteChatSession } from '@/services/chatService';
 import { getSystemStatus } from '../../api/authService';
 import MaintenanceOverlay from '../../components/MaintenanceOverlay';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -281,13 +281,15 @@ export default function ChatScreen() {
     };
 
     const deleteSession = async (sid: string) => {
-        // Lưu ý: Hiện tại API chưa có endpoint DELETE session nên chỉ xóa ở local UI
-        setSessions(prev => {
-            const updated = prev.filter(s => s.id !== sid);
-            return updated;
-        });
+        // Optimistic: remove locally, then delete on the server (ignore failure for local-only sessions).
+        setSessions(prev => prev.filter(s => (s.id || s.session_id) !== sid));
         if (sid === sessionId) {
             clearSession();
+        }
+        try {
+            await deleteChatSession(sid);
+        } catch (e) {
+            console.warn('[chat] deleteChatSession failed', e);
         }
     };
 

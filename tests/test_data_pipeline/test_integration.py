@@ -20,7 +20,7 @@ def test_full_pipeline_flow(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[2]
     
     # --- 1. SCRAPE ---
-    scrape_script = root / "src" / "data-pipeline" / "scrape_from_DT.py"
+    scrape_script = root / "pipelines" / "data-pipeline" / "scrape_from_DT.py"
     
     class Driver:
         def __init__(self, exc): self.no_such_exc = exc
@@ -107,7 +107,7 @@ def test_full_pipeline_flow(tmp_path, monkeypatch):
     monkeypatch.setitem(sys.modules, "transformers", transformers_mod)
     monkeypatch.setitem(sys.modules, "underthesea", uts_mod)
     
-    filter_script = root / "src" / "data-pipeline" / "filter_data.py"
+    filter_script = root / "pipelines" / "data-pipeline" / "filter_data.py"
     spec = importlib.util.spec_from_file_location("filter_module", filter_script)
     filter_mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(filter_mod)
@@ -121,7 +121,7 @@ def test_full_pipeline_flow(tmp_path, monkeypatch):
     assert filtered_file.exists()
     
     # --- 3. EXTRACT ---
-    extract_script = root / "src" / "data-pipeline" / "extract_data.py"
+    extract_script = root / "pipelines" / "data-pipeline" / "extract_data.py"
     spec = importlib.util.spec_from_file_location("extract_module", extract_script)
     extract_mod = importlib.util.module_from_spec(spec)
     
@@ -179,7 +179,7 @@ def test_full_pipeline_array_flow(tmp_path, monkeypatch):
     # For this test, we need to ensure the mocks are active
     
     # --- 1. FILTER ---
-    filter_script = root / "src" / "data-pipeline" / "filter_data.py"
+    filter_script = root / "pipelines" / "data-pipeline" / "filter_data.py"
     
     # Mock PhoBERT loading in filter_data
     transformers_mod = types.ModuleType("transformers")
@@ -221,7 +221,7 @@ def test_full_pipeline_array_flow(tmp_path, monkeypatch):
     assert filtered_data[0]["is_relevant"] is True
     
     # --- 2. EXTRACT ---
-    extract_script = root / "src" / "data-pipeline" / "extract_data.py"
+    extract_script = root / "pipelines" / "data-pipeline" / "extract_data.py"
     
     # Mock NER loading in extract_data
     transformers_mod.pipeline = lambda *a, **k: lambda text: []

@@ -102,23 +102,23 @@ export default function ProfileScreen() {
             <Text style={styles.itemText}>Thông tin cá nhân</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.item}>
+          <TouchableOpacity style={styles.item} onPress={() => Alert.alert('Cài đặt thông báo', 'Tính năng đang được phát triển.')}>
             <Text style={styles.itemText}>Cài đặt thông báo</Text>
           </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.item}>
+
+          <TouchableOpacity style={styles.item} onPress={() => Alert.alert('Bảo mật & Quyền riêng tư', 'Tính năng đang được phát triển.')}>
             <Text style={styles.itemText}>Bảo mật & Quyền riêng tư</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>HỖ TRỢ</Text>
-          
-          <TouchableOpacity style={styles.item}>
+
+          <TouchableOpacity style={styles.item} onPress={() => Alert.alert('Trợ giúp & Phản hồi', 'Liên hệ: support@techradar.vn')}>
             <Text style={styles.itemText}>Trợ giúp & Phản hồi</Text>
           </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.item}>
+
+          <TouchableOpacity style={styles.item} onPress={() => Alert.alert('Về chúng tôi', 'TechRadar VN — Phân tích xu hướng công nghệ & tuyển dụng IT.\nPhiên bản 2.0.0')}>
             <Text style={styles.itemText}>Về chúng tôi</Text>
           </TouchableOpacity>
         </View>

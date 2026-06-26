@@ -7,6 +7,7 @@ import com.techpulse.techradar.features.auth.domain.User;
 import com.techpulse.techradar.features.auth.ports.UserRepository;
 import com.techpulse.techradar.shared.exception.InvalidCredentialsException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
@@ -16,6 +17,7 @@ import reactor.core.publisher.Mono;
  * Pure application layer with no HTTP concerns.
  */
 @Component
+@Slf4j
 @RequiredArgsConstructor
 public class LoginUseCase {
 
@@ -25,10 +27,15 @@ public class LoginUseCase {
 
     public Mono<LoginResponse> execute(LoginRequest request) {
         return userRepository.findByEmail(request.getEmail())
-                .switchIfEmpty(Mono.error(
-                        new InvalidCredentialsException("Invalid email or password")
-                ))
-                .flatMap(user -> validateAndGenerateTokens(user, request.getPassword()));
+                .switchIfEmpty(Mono.defer(() -> {
+                    log.warn("Login failed: no account for email={}", request.getEmail());
+                    return Mono.error(new InvalidCredentialsException("Invalid email or password"));
+                }))
+                .flatMap(user -> validateAndGenerateTokens(user, request.getPassword()))
+                .doOnSuccess(response -> log.info("Login successful for email={} userId={}",
+                        response.getEmail(), response.getUserId()))
+                .doOnError(InvalidCredentialsException.class,
+                        e -> log.warn("Login failed for email={}: {}", request.getEmail(), e.getMessage()));
     }
 
     private Mono<LoginResponse> validateAndGenerateTokens(User user, String rawPassword) {

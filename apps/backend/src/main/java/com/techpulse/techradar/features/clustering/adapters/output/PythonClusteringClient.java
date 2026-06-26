@@ -1,13 +1,14 @@
 package com.techpulse.techradar.features.clustering.adapters.output;
 
-import com.techpulse.techradar.features.clustering.domain.Cluster;
 import com.techpulse.techradar.features.clustering.ports.ClusteringServicePort;
 import com.techpulse.techradar.shared.exception.DatabaseUnavailableException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
@@ -17,12 +18,17 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Python clustering service client adapter.
+ * Transparent client for the Python ml-clustering service.
+ * Returns the service JSON (snake_case) verbatim so the gateway never reshapes the contract.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class PythonClusteringClient implements ClusteringServicePort {
+
+    private static final ParameterizedTypeReference<Map<String, Object>> MAP_TYPE =
+            new ParameterizedTypeReference<>() {
+            };
 
     private final WebClient.Builder webClientBuilder;
 
@@ -33,89 +39,68 @@ public class PythonClusteringClient implements ClusteringServicePort {
     private long timeout;
 
     @Override
-    public Flux<Cluster> getClusters() {
+    public Flux<Map<String, Object>> getClusters(Boolean isCoherent) {
+        String uri = UriComponentsBuilder.fromHttpUrl(clusteringBaseUrl + "/clusters")
+                .queryParamIfPresent("is_coherent", java.util.Optional.ofNullable(isCoherent))
+                .build()
+                .toUriString();
         return webClientBuilder.build()
                 .get()
-                .uri(clusteringBaseUrl + "/clusters")
+                .uri(uri)
                 .retrieve()
-                .bodyToFlux(Map.class)
-                .map(this::mapToCluster)
+                .bodyToFlux(MAP_TYPE)
                 .retryWhen(Retry.backoff(3, Duration.ofSeconds(1)))
                 .timeout(Duration.ofMillis(timeout))
                 .onErrorResume(ex -> {
                     log.error("Failed to get clusters", ex);
-                    return Flux.error(
-                            new DatabaseUnavailableException("Clustering service unavailable")
-                    );
+                    return Flux.error(new DatabaseUnavailableException("Clustering service unavailable"));
                 });
     }
 
     @Override
-    public Mono<Cluster> getCluster(String clusterId) {
+    public Mono<Map<String, Object>> getCluster(String clusterId) {
         return webClientBuilder.build()
                 .get()
                 .uri(clusteringBaseUrl + "/clusters/" + clusterId)
                 .retrieve()
-                .bodyToMono(Map.class)
-                .map(this::mapToCluster)
+                .bodyToMono(MAP_TYPE)
                 .retryWhen(Retry.backoff(3, Duration.ofSeconds(1)))
                 .timeout(Duration.ofMillis(timeout))
                 .onErrorResume(ex -> {
                     log.error("Failed to get cluster {}", clusterId, ex);
-                    return Mono.error(
-                            new DatabaseUnavailableException("Clustering service unavailable")
-                    );
+                    return Mono.error(new DatabaseUnavailableException("Clustering service unavailable"));
                 });
     }
 
     @Override
-    public Mono<Cluster> predictCluster(String technology) {
+    public Mono<Map<String, Object>> getTechCluster(String techName) {
         return webClientBuilder.build()
                 .get()
-                .uri(clusteringBaseUrl + "/tech/" + technology + "/cluster")
+                .uri(clusteringBaseUrl + "/tech/{name}/cluster", techName)
                 .retrieve()
-                .bodyToMono(Map.class)
-                .map(this::mapToCluster)
+                .bodyToMono(MAP_TYPE)
                 .retryWhen(Retry.backoff(3, Duration.ofSeconds(1)))
                 .timeout(Duration.ofMillis(timeout))
                 .onErrorResume(ex -> {
-                    log.error("Failed to predict cluster for technology {}", technology, ex);
-                    return Mono.error(
-                            new DatabaseUnavailableException("Clustering service unavailable")
-                    );
+                    log.error("Failed to get cluster for technology {}", techName, ex);
+                    return Mono.error(new DatabaseUnavailableException("Clustering service unavailable"));
                 });
     }
 
     @Override
-    public Flux<Cluster> predictBatch(List<String> technologies) {
-        Map<String, Object> request = Map.of("technologies", technologies);
-
+    public Mono<Map<String, Object>> predictBatch(List<String> techNames) {
+        Map<String, Object> request = Map.of("tech_names", techNames);
         return webClientBuilder.build()
                 .post()
                 .uri(clusteringBaseUrl + "/predict/batch")
                 .bodyValue(request)
                 .retrieve()
-                .bodyToFlux(Map.class)
-                .map(this::mapToCluster)
+                .bodyToMono(MAP_TYPE)
                 .retryWhen(Retry.backoff(3, Duration.ofSeconds(1)))
                 .timeout(Duration.ofMillis(timeout))
                 .onErrorResume(ex -> {
                     log.error("Failed to batch predict clusters", ex);
-                    return Flux.error(
-                            new DatabaseUnavailableException("Clustering service unavailable")
-                    );
+                    return Mono.error(new DatabaseUnavailableException("Clustering service unavailable"));
                 });
-    }
-
-    @SuppressWarnings("unchecked")
-    private Cluster mapToCluster(Map<String, Object> response) {
-        return Cluster.builder()
-                .clusterId((String) response.get("cluster_id"))
-                .name((String) response.getOrDefault("name", ""))
-                .description((String) response.getOrDefault("description", ""))
-                .technologies((List<String>) response.getOrDefault("technologies", List.of()))
-                .size(((Number) response.getOrDefault("size", 0)).intValue())
-                .score(((Number) response.getOrDefault("score", 0.0)).doubleValue())
-                .build();
     }
 }

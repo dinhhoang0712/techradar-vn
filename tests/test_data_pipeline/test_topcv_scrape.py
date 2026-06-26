@@ -58,7 +58,7 @@ class FakeTopCVDriver:
 
 def test_topcv_scrape_integration(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[2]
-    script_path = root / "src" / "data-pipeline" / "scrape_from_topCV.py"
+    script_path = root / "pipelines" / "data-pipeline" / "scrape_from_topCV.py"
 
     driver_obj = FakeTopCVDriver(Exception) # Placeholder for no_such_exc
     no_such_exc = install_fake_selenium(monkeypatch, fake_driver=driver_obj)
@@ -103,7 +103,7 @@ def test_topcv_scrape_integration(tmp_path, monkeypatch):
 def test_topcv_scrape_whitespace_stripping(tmp_path, monkeypatch):
     """Test that TopCV scraper strips whitespace-only paragraphs/items."""
     root = Path(__file__).resolve().parents[2]
-    script_path = root / "src" / "data-pipeline" / "scrape_from_topCV.py"
+    script_path = root / "pipelines" / "data-pipeline" / "scrape_from_topCV.py"
 
     no_such_exc = install_fake_selenium(monkeypatch, fake_driver=None)
     
@@ -147,7 +147,7 @@ def test_topcv_scrape_whitespace_stripping(tmp_path, monkeypatch):
 def test_topcv_scrape_exception_handling(tmp_path, monkeypatch):
     """Test TopCV handles general exceptions during article processing."""
     root = Path(__file__).resolve().parents[2]
-    script_path = root / "src" / "data-pipeline" / "scrape_from_topCV.py"
+    script_path = root / "pipelines" / "data-pipeline" / "scrape_from_topCV.py"
 
     class ExceptionDriver(FakeTopCVDriver):
         def get(self, url):

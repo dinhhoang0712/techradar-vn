@@ -33,10 +33,15 @@ public class PythonChatClient implements ChatPort {
     @Value("${app.python.rag.timeout:120000}")
     private long timeout;
 
+    @Value("${app.python.internal-token:}")
+    private String internalToken;
+
     private WebClient webClient() {
-        return webClientBuilder
-                .baseUrl(pythonRagBaseUrl)
-                .build();
+        WebClient.Builder builder = webClientBuilder.baseUrl(pythonRagBaseUrl);
+        if (internalToken != null && !internalToken.isBlank()) {
+            builder = builder.defaultHeader("X-Internal-Auth", internalToken);
+        }
+        return builder.build();
     }
 
     @Override

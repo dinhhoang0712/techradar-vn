@@ -11,6 +11,7 @@ import ComparePage from './pages/ComparePage';
 import GraphExplorer from './pages/GraphExplorer';
 import ChatbotPage from './pages/ChatbotPage';
 import ClusterDashboard from './pages/ClusterDashboard';
+import SalaryPage from './pages/SalaryPage';
 import UserProfile from './pages/UserProfile';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="/compare" element={<ComparePage />} />
           <Route path="/graph" element={<GraphExplorer />} />
           <Route path="/clusters" element={<ClusterDashboard />} />
+          <Route path="/salary" element={<SalaryPage />} />
           <Route path="/chat" element={<ChatbotPage />} />
           <Route path="/profile" element={<UserProfile />} />
         </Route>

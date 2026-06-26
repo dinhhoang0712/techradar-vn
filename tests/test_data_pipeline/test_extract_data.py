@@ -61,7 +61,7 @@ def _install_fake_ner_dependencies(monkeypatch):
 
 def _load_extract_data(monkeypatch, module_name):
     _install_fake_ner_dependencies(monkeypatch)
-    file_path = ROOT / "src/data-pipeline/extract_data.py"
+    file_path = ROOT / "pipelines/data-pipeline/extract_data.py"
     spec = importlib.util.spec_from_file_location(module_name, file_path)
     module = importlib.util.module_from_spec(spec)
     

@@ -7,11 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
 from app.api.schemas import ChatMessageItem, ChatRequest, ChatResponse
+from app.api.security import require_internal_auth
 from app.db.postgres_client import get_session
 from app.models.chat import ChatMessage
 from app.services.chat_service import handle_chat, handle_chat_stream
 
-router = APIRouter(prefix="/chat", tags=["chat"])
+router = APIRouter(prefix="/chat", tags=["chat"], dependencies=[Depends(require_internal_auth)])
 
 
 @router.post("", response_model=ChatResponse)

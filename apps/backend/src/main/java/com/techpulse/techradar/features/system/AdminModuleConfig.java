@@ -7,6 +7,6 @@ import org.springframework.context.annotation.Configuration;
  * Admin module configuration.
  */
 @Configuration
-@ComponentScan(basePackages = "com.techpulse.techradar.features.admin")
+@ComponentScan(basePackages = "com.techpulse.techradar.features.system")
 public class AdminModuleConfig {
 }

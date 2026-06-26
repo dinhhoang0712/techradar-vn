@@ -2,6 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useState, useRef, useEffect } from 'react';
 import { logoutUser } from '../../api/authService';
 import { getUserProfile } from '../../api/userService';
+import NotificationBell from '../notifications/NotificationBell';
 import './Header.css';
 
 const navItems = [
@@ -111,6 +112,7 @@ export default function Header() {
                             )}
                         </svg>
                     </button>
+                    <NotificationBell />
                     <div className="avatar-wrap" ref={menuRef}>
                         <div
                             className={`header-avatar${menuOpen ? ' active' : ''}`}

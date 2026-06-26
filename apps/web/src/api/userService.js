@@ -31,3 +31,14 @@ export const updateUserProfile = async (profileData) => {
         body: JSON.stringify(profileData),
     });
 };
+
+/**
+ * Upload avatar (base64). Trả về { data: { avatar_url } }.
+ * Endpoint: POST /user/avatar
+ */
+export const uploadAvatar = async (contentType, dataBase64) => {
+    return await apiClient('/user/avatar', {
+        method: 'POST',
+        body: JSON.stringify({ content_type: contentType, data_base64: dataBase64 }),
+    });
+};

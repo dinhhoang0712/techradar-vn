@@ -174,42 +174,48 @@ def main():
         print(f"⚠ Kafka connection failed: {e}")
         kafka_enabled = False
     
-    # Configure Chrome options with anti-detection
-    options = uc.ChromeOptions()
-    
-    # Basic options
-    options.add_argument("--headless=new")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--window-size=1920,1080")
-    
-    # Anti-detection options
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_argument("--disable-infobars")
-    options.add_argument("--disable-extensions")
-    options.add_argument("--disable-popup-blocking")
-    options.add_argument("--disable-notifications")
-    
+    # Configure Chrome options with anti-detection.
+    chrome_args = [
+        # Basic options
+        "--headless=new",
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--window-size=1920,1080",
+        # Anti-detection options
+        "--disable-blink-features=AutomationControlled",
+        "--disable-infobars",
+        "--disable-extensions",
+        "--disable-popup-blocking",
+        "--disable-notifications",
+    ]
     # Random user agent
     user_agent = random.choice(USER_AGENTS)
-    options.add_argument(f"--user-agent={user_agent}")
     logger.info(f"Using User-Agent: {user_agent[:50]}...")
-    
     # Disable images for faster loading (simplified prefs)
     prefs = {
         "profile.managed_default_content_settings.images": 2,
     }
-    options.add_experimental_option("prefs", prefs)
-    
+
+    def _build_options(factory):
+        """Build a fresh Options object — an Options instance can only be
+        consumed by one driver, so each attempt needs its own."""
+        opts = factory()
+        for arg in chrome_args:
+            opts.add_argument(arg)
+        opts.add_argument(f"--user-agent={user_agent}")
+        opts.add_experimental_option("prefs", prefs)
+        return opts
+
     try:
-        driver = uc.Chrome(options=options, version_main=None)
+        driver = uc.Chrome(options=_build_options(uc.ChromeOptions), version_main=None)
         logger.info("✓ Undetected ChromeDriver initialized successfully")
     except Exception as e:
         logger.warning(f"⚠ Undetected ChromeDriver failed: {e}, trying regular Chrome")
-        # Fallback to regular Chrome with stealth options
+        # Fallback to regular Chrome with a fresh selenium Options object.
         from selenium import webdriver
-        driver = webdriver.Chrome(options=options)
+        from selenium.webdriver.chrome.options import Options as ChromeOptions
+        driver = webdriver.Chrome(options=_build_options(ChromeOptions))
     
     # Execute stealth scripts
     stealth_js = """

@@ -1,50 +1,23 @@
-# Welcome to your Expo app 👋
+# TechRadar VN — Mobile
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Ứng dụng di động (Expo / React Native, file-based routing) cho nền tảng TechRadar VN:
+Trend Radar, Knowledge Graph, Compare và Graph RAG Chat.
 
-## Get started
-
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Phát triển
 
 ```bash
-npm run reset-project
+npm install
+npx expo start        # mở trên Android emulator / iOS simulator / Expo Go
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Code chính nằm trong thư mục `app/` (Expo Router).
 
-## Learn more
+## Kết nối API
 
-To learn more about developing your project with Expo, look at the following resources:
+- Gọi qua Spring gateway `/api/v1` — đặt base URL backend trong cấu hình môi trường của app
+  (vd `http://<LAN_IP>:8080/api/v1` khi test trên thiết bị thật).
+- API client refresh access token khi gặp 401 (xem [utils/apiClient.js](utils/apiClient.js)).
+- Dữ liệu theo **snake_case**; response bọc `ApiResponse{success, data, message}` trừ auth & `/status`
+  (object thuần). Chi tiết: [docs/API_DOCs_v1.md](../../docs/API_DOCs_v1.md).
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+> Lưu ý: upload avatar trên mobile cần `expo-image-picker` (chưa tích hợp).

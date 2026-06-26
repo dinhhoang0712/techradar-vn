@@ -10,8 +10,9 @@ import sys
 from pathlib import Path
 from dataclasses import dataclass
 
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+# Add this script's own directory (utils/) to the path so the sibling modules
+# `neo4j_config` / `database_connection` resolve regardless of the cwd.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from neo4j_config import NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD, NEO4J_DATABASE, BATCH_SIZE
 from database_connection import Neo4jJobImporter, TechNode, CompanyNode, JobNode, SkillNode, Person
@@ -215,9 +216,10 @@ class RelationshipBuilder:
                 # Extract entities
                 entities = raw_article.get('entities', {})
 
-                # Process Technology entities (TECH or SKILL/TECH)
+                # Process Technology entities. The NER pipeline (extract_data.py
+                # → group_entities) only emits a TECH key; there is no SKILL/TECH
+                # group for news, so skills are sourced from TopCV postings only.
                 tech_names = entities.get('TECH', [])
-                skill_names = entities.get('SKILL/TECH', [])
 
                 for tech_name in tech_names:
                     tech = TechNode(
@@ -227,22 +229,6 @@ class RelationshipBuilder:
                         trend_score=1.0
                     )
                     self._add_if_not_exists(self.technologies, tech)
-
-                for skill_name in skill_names:
-                    if not any(t.name == skill_name for t in self.technologies):
-                        tech = TechNode(
-                            name=skill_name,
-                            category=self._detect_tech_category(skill_name),
-                            description=f"Mentioned in {source_platform}",
-                            trend_score=1.0
-                        )
-                        self.technologies.append(tech)
-                    skill = SkillNode(
-                        name=skill_name,
-                        category=self._detect_tech_category(skill_name),
-                        demand_score=0.7
-                    )
-                    self._add_if_not_exists(self.skills, skill)
 
                 # Process Organization entities (ORG)
                 org_names = entities.get('ORG', [])
@@ -271,15 +257,9 @@ class RelationshipBuilder:
                 for job_name in job_roles:
                     job_role_key = (job_name.lower(), "")
                     if job_role_key not in self._job_role_cache:
-                        job = JobNode(
-                            title=job_name,
-                            salary_min=0,
-                            salary_max=0,
-                            level=self._extract_job_level(job_name),
-                            source_url="",
-                            company_name="",
-                            posted_date=published_date
-                        )
+                        # Job roles mentioned in news only carry a title; the rich
+                        # fields (salary/requirement/...) come from TopCV postings.
+                        job = JobNode(title=job_name)
                         self.jobs.append(job)
                         self._job_role_cache.add(job_role_key)
 
@@ -493,6 +473,14 @@ class RelationshipBuilder:
         self.create_job_company_relationships(importer)
         self.create_job_tech_relationships(importer)
         self.create_job_skill_relationships(importer)
+
+        # Step 8b: Derived relationships (co-mention heuristics + authorship/employment).
+        # These were implemented but never wired in; they complete the graph schema.
+        print("\n📂 STEP 7b: Creating Derived Relationships\n")
+        importer.create_company_uses_technology_relationships()    # (Company)-[:USES]->(Technology)
+        importer.create_technology_related_to_relationships()      # (Technology)-[:RELATED_TO]->(Technology)
+        importer.create_person_works_at_relationships()            # (Person)-[:WORKS_AT]->(Company)
+        importer.create_person_wrote_article_relationships()       # (Person)-[:WROTE]->(Article)
 
         # Step 9: Print Final Statistics
         print("\n📊 FINAL IMPORT STATISTICS\n")
@@ -717,10 +705,9 @@ def main():
         ]
     )
 
-    # Define data paths
-    base_path = Path(__file__).parent.parent.parent.parent
-
-    data_dir = base_path / "src" / "data-pipeline"
+    # Define data paths: <repo_root>/pipelines/data-pipeline/extracted_data
+    repo_root = Path(__file__).resolve().parents[2]
+    data_dir = repo_root / "pipelines" / "data-pipeline"
     extracted_dir = data_dir / "extracted_data"
 
     # Find latest data files (prioritize today's files)

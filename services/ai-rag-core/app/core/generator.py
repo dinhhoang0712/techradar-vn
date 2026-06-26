@@ -1,7 +1,10 @@
 import asyncio
+import logging
 from functools import lru_cache
 
 from app.config import get_settings
+
+logger = logging.getLogger("ai-rag-core.generator")
 
 _MAX_RETRIES = 3
 _RETRY_DELAY = 5  # seconds
@@ -57,7 +60,8 @@ async def generate(messages: list[dict]) -> str:
             err = str(e).lower()
             is_retryable = any(x in err for x in ["503", "429", "service unavailable", "overloaded", "rate limit"])
             if is_retryable and attempt < _MAX_RETRIES:
-                print(f"  [generator] {settings.llm_provider} bận/rate limit, thử lại sau {_RETRY_DELAY}s (lần {attempt}/{_MAX_RETRIES})...")
+                logger.warning("%s bận/rate limit, thử lại sau %ds (lần %d/%d)...",
+                               settings.llm_provider, _RETRY_DELAY, attempt, _MAX_RETRIES)
                 await asyncio.sleep(_RETRY_DELAY)
             else:
                 raise RuntimeError(f"LLM ({settings.llm_provider}) lỗi: {e}") from e

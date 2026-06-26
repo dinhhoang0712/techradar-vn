@@ -26,7 +26,7 @@ public class PostgresSettingsRepository implements SettingsRepository {
                 "SELECT key, value, description, updated_at FROM settings WHERE key = :key"
         )
                 .bind("key", key)
-                .map(row -> mapRowToSettings(row))
+                .map((row, meta) -> mapRowToSettings(row))
                 .one();
     }
 
@@ -35,7 +35,7 @@ public class PostgresSettingsRepository implements SettingsRepository {
         return dbClient.sql(
                 "SELECT key, value, description, updated_at FROM settings ORDER BY key"
         )
-                .map(row -> mapRowToSettings(row))
+                .map((row, meta) -> mapRowToSettings(row))
                 .all();
     }
 

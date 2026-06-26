@@ -55,3 +55,20 @@ class HealthResponse(BaseModel):
     status:  str
     neo4j:   bool
     version: str = "1.0.0"
+
+
+# ── Internal: LLM compare summary (gọi từ Spring gateway) ─────────────────────
+
+class LlmSummaryRequest(BaseModel):
+    tech1: str
+    tech2: str
+    growth_rate_1:   float | None = None
+    growth_rate_2:   float | None = None
+    job_count_1:     int | None = None
+    job_count_2:     int | None = None
+    article_count_1: int | None = None
+    article_count_2: int | None = None
+
+
+class LlmSummaryResponse(BaseModel):
+    summary: str

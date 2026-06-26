@@ -17,6 +17,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class UserProfileResponse {
     private String id;
+    private String fullName;
     private String email;
     private String role;
     private String status;
@@ -27,6 +28,7 @@ public class UserProfileResponse {
     public static UserProfileResponse fromUser(User user) {
         return UserProfileResponse.builder()
                 .id(user.getId() != null ? user.getId().toString() : null)
+                .fullName(user.getFullName())
                 .email(user.getEmail())
                 .role(user.getRole())
                 .status(user.getStatus())

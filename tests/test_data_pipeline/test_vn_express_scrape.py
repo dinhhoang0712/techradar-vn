@@ -70,7 +70,7 @@ class FakeVNEPDriver:
 
 def test_vn_express_scrape_end_to_end_basic_output(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[2]
-    script = root / "src" / "data-pipeline" / "scrape_from_VN-EP.py"
+    script = root / "pipelines" / "data-pipeline" / "scrape_from_VN-EP.py"
 
     driver = FakeVNEPDriver(with_noise=False)
     install_fake_selenium(monkeypatch, driver)
@@ -92,7 +92,7 @@ def test_vn_express_scrape_end_to_end_basic_output(tmp_path, monkeypatch):
 
 def test_vn_express_scrape_noise_and_missing_metadata_scenario(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[2]
-    script = root / "src" / "data-pipeline" / "scrape_from_VN-EP.py"
+    script = root / "pipelines" / "data-pipeline" / "scrape_from_VN-EP.py"
 
     driver = FakeVNEPDriver(with_noise=True, missing_meta=True)
     install_fake_selenium(monkeypatch, driver)
@@ -123,7 +123,7 @@ class _FakeParagraphContainer:
 
 def test_vn_express_all_missing_content_returns_empty_post_detail(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[2]
-    script = root / "src" / "data-pipeline" / "scrape_from_VN-EP.py"
+    script = root / "pipelines" / "data-pipeline" / "scrape_from_VN-EP.py"
     no_such_exc = install_fake_selenium(monkeypatch, fake_driver=None)
 
     class _Driver(FakeVNEPDriver):
@@ -148,7 +148,7 @@ def test_vn_express_all_missing_content_returns_empty_post_detail(tmp_path, monk
 
 def test_vn_express_metadata_and_datetime_format(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[2]
-    script = root / "src" / "data-pipeline" / "scrape_from_VN-EP.py"
+    script = root / "pipelines" / "data-pipeline" / "scrape_from_VN-EP.py"
 
     driver = FakeVNEPDriver(with_noise=False)
     install_fake_selenium(monkeypatch, driver)
@@ -167,7 +167,7 @@ def test_vn_express_metadata_and_datetime_format(tmp_path, monkeypatch):
 
 def test_vn_express_joins_paragraphs_with_double_newline(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[2]
-    script = root / "src" / "data-pipeline" / "scrape_from_VN-EP.py"
+    script = root / "pipelines" / "data-pipeline" / "scrape_from_VN-EP.py"
 
     class _Driver(FakeVNEPDriver):
         def find_element(self, by, selector):
@@ -191,7 +191,7 @@ def test_vn_express_joins_paragraphs_with_double_newline(tmp_path, monkeypatch):
 
 def test_vn_express_builds_pagination_urls_correctly(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[2]
-    script = root / "src" / "data-pipeline" / "scrape_from_VN-EP.py"
+    script = root / "pipelines" / "data-pipeline" / "scrape_from_VN-EP.py"
 
     class _Driver(FakeVNEPDriver):
         def __init__(self):
@@ -225,7 +225,7 @@ def test_vn_express_builds_pagination_urls_correctly(tmp_path, monkeypatch):
 def test_vn_express_whitespace_stripping(tmp_path, monkeypatch):
     """Test that VN-Express scraper strips whitespace-only paragraphs."""
     root = Path(__file__).resolve().parents[2]
-    script = root / "src" / "data-pipeline" / "scrape_from_VN-EP.py"
+    script = root / "pipelines" / "data-pipeline" / "scrape_from_VN-EP.py"
 
     class _Driver(FakeVNEPDriver):
         def find_element(self, by, selector):

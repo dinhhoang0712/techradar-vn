@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logging configuration for tech-radar-api.
+
+  Log format is chosen by profile:
+    JSON  when 'prod' OR 'json' profile is active -> structured JSON to console AND a rolling
+          JSON file under ${LOG_DIR}. Promtail scrapes the JSON stdout into Loki (see
+          infrastructure/promtail). In the bundled docker-compose stack APP_ENV=dev,json keeps
+          the dev seed while still emitting JSON.
+    console  otherwise (plain local dev) -> human-readable colored console with [traceId].
+
+  The [traceId] (MDC key "traceId") is populated per request by RequestTracingFilter and
+  propagated across the reactive chain via MdcThreadLocalAccessor. Logs emitted outside a
+  request (startup, schedulers) simply have an empty traceId.
+-->
+<configuration>
+    <springProperty scope="context" name="appName" source="spring.application.name" defaultValue="tech-radar-api"/>
+
+    <!-- Directory for log files; override with LOG_DIR env var in containers. -->
+    <property name="LOG_DIR" value="${LOG_DIR:-logs}"/>
+
+    <property name="CONSOLE_PATTERN"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) [%X{traceId:-no-trace}] %cyan(%logger{36}) - %msg%n"/>
+
+    <!-- ===================== plain local dev: pretty console ===================== -->
+    <springProfile name="!prod &amp; !json">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>${CONSOLE_PATTERN}</pattern>
+            </encoder>
+        </appender>
+
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+
+    <!-- ===================== prod or json: structured JSON ===================== -->
+    <springProfile name="prod | json">
+        <appender name="JSON_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <includeMdcKeyName>traceId</includeMdcKeyName>
+                <customFields>{"service":"${appName}"}</customFields>
+                <fieldNames>
+                    <timestamp>timestamp</timestamp>
+                    <message>message</message>
+                    <logger>logger</logger>
+                    <thread>thread</thread>
+                    <levelValue>[ignore]</levelValue>
+                </fieldNames>
+            </encoder>
+        </appender>
+
+        <appender name="JSON_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>${LOG_DIR}/${appName}.json</file>
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <fileNamePattern>${LOG_DIR}/${appName}-%d{yyyy-MM-dd}.%i.json.gz</fileNamePattern>
+                <maxFileSize>50MB</maxFileSize>
+                <maxHistory>14</maxHistory>
+                <totalSizeCap>2GB</totalSizeCap>
+            </rollingPolicy>
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <includeMdcKeyName>traceId</includeMdcKeyName>
+                <customFields>{"service":"${appName}"}</customFields>
+            </encoder>
+        </appender>
+
+        <root level="INFO">
+            <appender-ref ref="JSON_CONSOLE"/>
+            <appender-ref ref="JSON_FILE"/>
+        </root>
+    </springProfile>
+</configuration>

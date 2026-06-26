@@ -30,6 +30,7 @@ datasets>=2.19.0,<3.0.0
 # API serving
 fastapi>=0.111.0
 uvicorn[standard]>=0.30.0
+python-json-logger==2.0.7   # structured (JSON) logging — see app/observability.py
 
 # Tiện ích
 python-dotenv==1.0.1

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createChatSession, streamChatMessage, getChatHistory, getChatSessions } from '../api/chatService';
+import { createChatSession, streamChatMessage, getChatHistory, getChatSessions, deleteChatSession } from '../api/chatService';
 import { useAppContext } from '../contexts/AppContext';
 import MaintenancePage from './MaintenancePage';
 import './ChatbotPage.css';
@@ -238,6 +238,21 @@ export default function ChatbotPage() {
         setSessions(normalizeSessions(updatedList));
         
         return sid;
+    };
+
+    // ── Delete a session ─────────────────────────────────────────────────────
+
+    const handleDeleteSession = async (sid, e) => {
+        e.stopPropagation();
+        if (isStreaming) return;
+        if (!window.confirm('Xoá cuộc trò chuyện này?')) return;
+        setSessions(prev => prev.filter(s => s.id !== sid));
+        if (sid === sessionId) clearSession();
+        try {
+            await deleteChatSession(sid);
+        } catch (err) {
+            console.warn('[chat] deleteChatSession failed', err);
+        }
     };
 
     // ── Switch to an existing session ────────────────────────────────────────
@@ -480,6 +495,13 @@ export default function ChatbotPage() {
                                         <span className="history-item-title">{s.title}</span>
                                         <span className="history-item-time">{formatTime(s.created_at)}</span>
                                     </div>
+                                    <button
+                                        className="history-item-del"
+                                        title="Xoá cuộc trò chuyện"
+                                        onClick={(e) => handleDeleteSession(s.id, e)}
+                                    >
+                                        🗑
+                                    </button>
                                 </div>
                             ))}
                         </div>

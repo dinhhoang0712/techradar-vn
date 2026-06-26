@@ -126,6 +126,27 @@ class Neo4jJobImporter:
                     session.run(constraint)
                     logger.info(f"✅ {constraint.split('FOR')[1][:30]}...")
 
+                # Property indexes for common filters
+                indexes = [
+                    "CREATE INDEX article_published_date IF NOT EXISTS FOR (a:Article) ON (a.published_date)",
+                    "CREATE INDEX article_source IF NOT EXISTS FOR (a:Article) ON (a.source)",
+                    "CREATE INDEX technology_category IF NOT EXISTS FOR (t:Technology) ON (t.category)",
+                    "CREATE INDEX skill_category IF NOT EXISTS FOR (s:Skill) ON (s.category)",
+                    "CREATE INDEX company_location IF NOT EXISTS FOR (c:Company) ON (c.location)",
+                ]
+                for index in indexes:
+                    session.run(index)
+
+                # Vector index used by ai-rag-core RAG retrieval (768-dim, cosine).
+                # Mirrors services/ai-rag-core/scripts/create_vector_index.py.
+                session.run(
+                    "CREATE VECTOR INDEX article_embedding_index IF NOT EXISTS "
+                    "FOR (a:Article) ON (a.embedding) "
+                    "OPTIONS {indexConfig: {`vector.dimensions`: 768, "
+                    "`vector.similarity_function`: 'cosine'}}"
+                )
+                logger.info("✅ Property + vector indexes created")
+
             logger.info("✅ All constraints and indexes created")
             return True
         except Exception as e:
@@ -436,106 +457,6 @@ class Neo4jJobImporter:
             logger.error(f"✗ Error importing skills: {e}")
             return 0
 
-    def import_jobs(self, jobs: List[JobNode]) -> int:
-        """Import Job nodes"""
-        try:
-            with self.driver.session(database=self.database) as session:
-                for job in jobs:
-                    session.run(
-                        """
-                        MERGE (j:Job {title: $title})
-                        ON CREATE SET
-                            j.salary_min = $salary_min,
-                            j.salary_max = $salary_max,
-                            j.level = $level,
-                            j.source_url = $source_url,
-                            j.company_name = $company_name,
-                            j.posted_date = $posted_date
-                        """,
-                        parameters={
-                            'title': job.title,
-                            'salary_min': job.salary_min,
-                            'salary_max': job.salary_max,
-                            'level': job.level,
-                            'source_url': job.source_url,
-                            'company_name': job.company_name,
-                            'posted_date': job.posted_date.isoformat() if job.posted_date else None
-                        }
-                    )
-
-            logger.info(f"✅ Imported {len(jobs)} jobs")
-            return len(jobs)
-        except Exception as e:
-            logger.error(f"✗ Error importing jobs: {e}")
-            return 0
-
-    def create_job_requires_relationships(self) -> int:
-        """
-        Create REQUIRES relationships: Job → Technology
-        Based on job postings and technology requirements
-        """
-        try:
-            with self.driver.session(database=self.database) as session:
-                # Jobs that require specific technologies mentioned in their title or description
-                tech_list = list(self.technologies)
-                rel_count = 0
-
-                for job in self.jobs:
-                    job_title_lower = job.title.lower()
-                    for tech in tech_list:
-                        if tech.name.lower() in job_title_lower:
-                            session.run(
-                                """
-                                MATCH (j:Job {title: $title})
-                                MATCH (t:Technology {name: $name})
-                                MERGE (j)-[:REQUIRES {is_mandatory: true, frequency: 1}]->(t)
-                                """,
-                                parameters={
-                                    'title': job.title,
-                                    'name': tech.name
-                                }
-                            )
-                            rel_count += 1
-
-                logger.info(f"✅ Created {rel_count} REQUIRES (Job→Technology) relationships")
-                return rel_count
-        except Exception as e:
-            logger.error(f"✗ Error creating job-technology relationships: {e}")
-            return 0
-
-    def create_job_requires_skill_relationships(self) -> int:
-        """
-        Create REQUIRES relationships: Job → Skill
-        Based on job posting requirements
-        """
-        try:
-            with self.driver.session(database=self.database) as session:
-                skill_list = list(self.skills)
-                rel_count = 0
-
-                for job in self.jobs:
-                    job_title_lower = job.title.lower()
-                    for skill in skill_list:
-                        if skill.name.lower() in job_title_lower:
-                            session.run(
-                                """
-                                MATCH (j:Job {title: $title})
-                                MATCH (s:Skill {name: $name})
-                                MERGE (j)-[:REQUIRES {is_mandatory: true, frequency: 1}]->(s)
-                                """,
-                                parameters={
-                                    'title': job.title,
-                                    'name': skill.name
-                                }
-                            )
-                            rel_count += 1
-
-                logger.info(f"✅ Created {rel_count} REQUIRES (Job→Skill) relationships")
-                return rel_count
-        except Exception as e:
-            logger.error(f"✗ Error creating job-skill relationships: {e}")
-            return 0
-    
     def verify_relationships(self) -> Dict[str, int]:
         """
         Verify all relationship types exist
@@ -569,53 +490,6 @@ class Neo4jJobImporter:
             logger.error(f"✗ Error verifying relationships: {e}")
             return {}
 
-    def create_article_mentions_relationships(self, data_transformer) -> int:
-        """Create MENTIONS relationships: Article -> Technology/Company"""
-        try:
-            with self.driver.session(database=self.database) as session:
-                rel_count = 0
-                
-                for article in data_transformer.articles:
-                    # Article mentions Technologies
-                    for tech in data_transformer.technologies:
-                        if tech.name.lower() in article.content.lower() or \
-                           tech.name.lower() in article.title.lower():
-                            session.run(
-                                """
-                                MATCH (a:Article {title: $article_title})
-                                MATCH (t:Technology {name: $tech_name})
-                                MERGE (a)-[:MENTIONS]->(t)
-                                """,
-                                parameters={
-                                    'article_title': article.title,
-                                    'tech_name': tech.name
-                                }
-                            )
-                            rel_count += 1
-                    
-                    # Article mentions Companies
-                    for company in data_transformer.companies:
-                        if company.name.lower() in article.content.lower() or \
-                           company.name.lower() in article.title.lower():
-                            session.run(
-                                """
-                                MATCH (a:Article {title: $article_title})
-                                MATCH (c:Company {name: $company_name})
-                                MERGE (a)-[:MENTIONS]->(c)
-                                """,
-                                parameters={
-                                    'article_title': article.title,
-                                    'company_name': company.name
-                                }
-                            )
-                            rel_count += 1
-            
-            logger.info(f"✅ Created {rel_count} MENTIONS relationships")
-            return rel_count
-        except Exception as e:
-            logger.error(f"✗ Error creating relationships: {e}")
-            return 0
-    
     def create_company_uses_technology_relationships(self) -> int:
         """
         Create USES relationships: Company -> Technology
@@ -775,97 +649,4 @@ class Neo4jJobImporter:
         except Exception as e:
             logger.error(f"✗ Error getting statistics: {e}")
             return {}
-    def create_job_company_relationships(self) -> int:
-        """Create HIRES_FOR relationships: Job → Company"""
-        try:
-            with self.driver.session(database=self.database) as session:
-                # Jobs that are hired by companies
-                result = session.run(
-                    """
-                    MATCH (j:Job)
-                    WHERE j.company_name IS NOT NULL AND j.company_name <> ''
-                    MATCH (c:Company {name: j.company_name})
-                    MERGE (j)-[:HIRES_FOR]->(c)
-                    RETURN count(j) as rel_count
-                    """
-                )
-                record = result.single()
-                rel_count = record['rel_count'] if record else 0
-
-                logger.info(f"✅ Created {rel_count} HIRES_FOR (Job→Company) relationships")
-                return rel_count
-        except Exception as e:
-            logger.error(f"✗ Error creating job-company relationships: {e}")
-            return 0
-
-    def create_job_tech_relationships(self) -> int:
-        """Create REQUIRES relationships: Job → Technology"""
-        try:
-            with self.driver.session(database=self.database) as session:
-                # Jobs that require technologies
-                result = session.run(
-                    """
-                    MATCH (j:Job)
-                    WHERE j.title IS NOT NULL
-                    MATCH (t:Technology)
-                    WHERE t.name IN ['Python', 'Java', 'React', 'Node.js', 'Go', 'C#', 'SQL', 'MongoDB']
-                    MERGE (j)-[:REQUIRES {is_mandatory: true, frequency: 1}]->(t)
-                    RETURN count(j) as rel_count
-                    """
-                )
-                record = result.single()
-                rel_count = record['rel_count'] if record else 0
-
-                logger.info(f"✅ Created {rel_count} REQUIRES (Job→Technology) relationships")
-                return rel_count
-        except Exception as e:
-            logger.error(f"✗ Error creating job-technology relationships: {e}")
-            return 0
-
-    def create_job_skill_relationships(self) -> int:
-        """Create REQUIRES relationships: Job → Skill"""
-        try:
-            with self.driver.session(database=self.database) as session:
-                # Jobs that require skills
-                result = session.run(
-                    """
-                    MATCH (j:Job)
-                    WHERE j.title IS NOT NULL
-                    MATCH (s:Skill)
-                    WHERE s.name IN ['Python', 'Java', 'React', 'JavaScript', 'SQL', 'Git']
-                    MERGE (j)-[:REQUIRES {is_mandatory: true, frequency: 1}]->(s)
-                    RETURN count(j) as rel_count
-                    """
-                )
-                record = result.single()
-                rel_count = record['rel_count'] if record else 0
-
-                logger.info(f"✅ Created {rel_count} REQUIRES (Job→Skill) relationships")
-                return rel_count
-        except Exception as e:
-            logger.error(f"✗ Error creating job-skill relationships: {e}")
-            return 0
-
-    def create_company_uses_tech_relationships(self) -> int:
-        """Create USES relationships: Company → Technology"""
-        try:
-            with self.driver.session(database=self.database) as session:
-                # Companies use technologies mentioned in articles
-                result = session.run(
-                    """
-                    MATCH (c:Company)
-                    MATCH (t:Technology)
-                    WHERE t.name IN ['Python', 'Java', 'React', 'Node.js', 'AWS', 'Azure']
-                    MERGE (c)-[:USES {frequency: 1}]->(t)
-                    RETURN count(c) as rel_count
-                    """
-                )
-                record = result.single()
-                rel_count = record['rel_count'] if record else 0
-
-                logger.info(f"✅ Created {rel_count} USES (Company→Technology) relationships")
-                return rel_count
-        except Exception as e:
-            logger.error(f"✗ Error creating company-technology relationships: {e}")
-            return 0
 

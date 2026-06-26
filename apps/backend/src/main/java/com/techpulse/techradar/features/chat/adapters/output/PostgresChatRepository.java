@@ -3,9 +3,11 @@ package com.techpulse.techradar.features.chat.adapters.output;
 import com.techpulse.techradar.features.chat.domain.ChatMessage;
 import com.techpulse.techradar.features.chat.domain.ChatSession;
 import com.techpulse.techradar.features.chat.adapters.input.dto.ChatMessageItem;
+import com.techpulse.techradar.features.chat.adapters.input.dto.ChatSessionItem;
 import com.techpulse.techradar.features.chat.ports.ChatRepository;
 import io.r2dbc.spi.Row;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
@@ -17,6 +19,7 @@ import java.util.UUID;
 /**
  * PostgreSQL adapter for chat session and message persistence.
  */
+@Slf4j
 @Repository
 @RequiredArgsConstructor
 public class PostgresChatRepository implements ChatRepository {
@@ -33,7 +36,7 @@ public class PostgresChatRepository implements ChatRepository {
         session.setCreatedAt(session.getCreatedAt() != null ? session.getCreatedAt() : now);
         session.setUpdatedAt(now);
 
-        return dbClient.sql(
+        DatabaseClient.GenericExecuteSpec spec = dbClient.sql(
                 "INSERT INTO chat_session (id, user_id, title, model_used, system_prompt, created_at, updated_at) " +
                         "VALUES (:id, :user_id, :title, :model_used, :system_prompt, :created_at, :updated_at) " +
                         "ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, model_used = EXCLUDED.model_used, " +
@@ -41,14 +44,28 @@ public class PostgresChatRepository implements ChatRepository {
         )
                 .bind("id", session.getId())
                 .bind("user_id", session.getUserId())
-                .bind("title", session.getTitle())
-                .bind("model_used", session.getModelUsed())
-                .bind("system_prompt", session.getSystemPrompt())
                 .bind("created_at", session.getCreatedAt())
-                .bind("updated_at", session.getUpdatedAt())
+                .bind("updated_at", session.getUpdatedAt());
+        spec = bindNullable(spec, "title", session.getTitle());
+        spec = bindNullable(spec, "model_used", session.getModelUsed());
+        spec = bindNullable(spec, "system_prompt", session.getSystemPrompt());
+
+        return spec.fetch().rowsUpdated().thenReturn(session)
+                .doOnSuccess(s -> log.debug("Saved chat session id={} user_id={}", s.getId(), s.getUserId()));
+    }
+
+    @Override
+    public Mono<Long> deleteSession(String sessionId) {
+        return dbClient.sql("DELETE FROM chat_session WHERE id = :id")
+                .bind("id", UUID.fromString(sessionId))
                 .fetch()
                 .rowsUpdated()
-                .thenReturn(session);
+                .doOnNext(rows -> log.info("Deleted chat session id={} (rows={})", sessionId, rows));
+    }
+
+    private static DatabaseClient.GenericExecuteSpec bindNullable(
+            DatabaseClient.GenericExecuteSpec spec, String name, String value) {
+        return value != null ? spec.bind(name, value) : spec.bindNull(name, String.class);
     }
 
     @Override
@@ -58,7 +75,7 @@ public class PostgresChatRepository implements ChatRepository {
                         "FROM chat_session WHERE id = :id"
         )
                 .bind("id", UUID.fromString(sessionId))
-                .map(this::mapRowToSession)
+                .map((row, meta) -> mapRowToSession(row))
                 .one();
     }
 
@@ -70,7 +87,7 @@ public class PostgresChatRepository implements ChatRepository {
 
         message.setCreatedAt(message.getCreatedAt() != null ? message.getCreatedAt() : Instant.now());
 
-        return dbClient.sql(
+        DatabaseClient.GenericExecuteSpec spec = dbClient.sql(
                 "INSERT INTO chat_message (id, session_id, role, content, prompt_tokens, completion_tokens, finish_reason, created_at) " +
                         "VALUES (:id, :session_id, :role, :content, :prompt_tokens, :completion_tokens, :finish_reason, :created_at)"
         )
@@ -80,11 +97,12 @@ public class PostgresChatRepository implements ChatRepository {
                 .bind("content", message.getContent())
                 .bind("prompt_tokens", message.getPromptTokens() != null ? message.getPromptTokens() : 0)
                 .bind("completion_tokens", message.getCompletionTokens() != null ? message.getCompletionTokens() : 0)
-                .bind("finish_reason", message.getFinishReason())
-                .bind("created_at", message.getCreatedAt())
-                .fetch()
-                .rowsUpdated()
-                .thenReturn(message);
+                .bind("created_at", message.getCreatedAt());
+        spec = bindNullable(spec, "finish_reason", message.getFinishReason());
+
+        return spec.fetch().rowsUpdated().thenReturn(message)
+                .doOnSuccess(m -> log.debug("Saved chat message id={} session_id={} role={}",
+                        m.getId(), m.getSessionId(), m.getRole()));
     }
 
     @Override
@@ -94,7 +112,21 @@ public class PostgresChatRepository implements ChatRepository {
                         "WHERE session_id = :session_id ORDER BY created_at ASC"
         )
                 .bind("session_id", UUID.fromString(sessionId))
-                .map(this::mapRowToMessageItem)
+                .map((row, meta) -> mapRowToMessageItem(row))
+                .all();
+    }
+
+    @Override
+    public Flux<ChatSessionItem> listSessionsByUser(String userId) {
+        return dbClient.sql(
+                "SELECT id, title, created_at FROM chat_session " +
+                        "WHERE user_id = :user_id ORDER BY created_at DESC"
+        )
+                .bind("user_id", UUID.fromString(userId))
+                .map((row, meta) -> new ChatSessionItem(
+                        row.get("id", UUID.class),
+                        row.get("title", String.class),
+                        row.get("created_at", Instant.class)))
                 .all();
     }
 

@@ -6,8 +6,10 @@ import com.techpulse.techradar.features.chat.adapters.input.dto.ChatMessageReque
 import com.techpulse.techradar.features.chat.adapters.input.dto.ChatRequest;
 import com.techpulse.techradar.features.chat.adapters.input.dto.ChatResponse;
 import com.techpulse.techradar.features.chat.adapters.input.dto.ChatHealthResponse;
+import com.techpulse.techradar.features.chat.adapters.input.dto.ChatSessionItem;
 import com.techpulse.techradar.features.chat.adapters.input.dto.CreateSessionResponse;
 import com.techpulse.techradar.shared.dto.ApiResponse;
+import com.techpulse.techradar.shared.security.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -42,11 +44,27 @@ public class ChatController {
 
     @Operation(summary = "Create a new chat session")
     @PostMapping("/session")
-    public Mono<ResponseEntity<ApiResponse<CreateSessionResponse>>> createSession(
-            @RequestHeader(value = "X-User-Id", required = false) String userId
-    ) {
-        return chatUseCase.createSession(userId)
+    public Mono<ResponseEntity<ApiResponse<CreateSessionResponse>>> createSession() {
+        return SecurityUtils.currentUserId()
+                .flatMap(chatUseCase::createSession)
                 .map(response -> ResponseEntity.ok(ApiResponse.success(response, "Session created")));
+    }
+
+    @Operation(summary = "List the current user's chat sessions")
+    @GetMapping("/sessions")
+    public Mono<ResponseEntity<ApiResponse<List<ChatSessionItem>>>> listSessions() {
+        return SecurityUtils.currentUserId()
+                .flatMapMany(chatUseCase::listSessions)
+                .collectList()
+                .map(sessions -> ResponseEntity.ok(ApiResponse.success(sessions, "Sessions retrieved")));
+    }
+
+    @Operation(summary = "Delete a chat session (and its messages)")
+    @DeleteMapping("/session/{sessionId}")
+    public Mono<ResponseEntity<ApiResponse<Void>>> deleteSession(@PathVariable String sessionId) {
+        return SecurityUtils.currentUserId()
+                .flatMap(userId -> chatUseCase.deleteSession(sessionId, userId))
+                .thenReturn(ResponseEntity.ok(ApiResponse.<Void>success(null, "Session deleted")));
     }
 
     @Operation(summary = "List chat messages for a specific session")
@@ -54,7 +72,8 @@ public class ChatController {
     public Mono<ResponseEntity<ApiResponse<List<ChatMessageItem>>>> listMessages(
             @PathVariable String sessionId
     ) {
-        return chatUseCase.listMessages(sessionId)
+        return SecurityUtils.currentUserId()
+                .flatMapMany(userId -> chatUseCase.listMessages(sessionId, userId))
                 .collectList()
                 .map(messages -> ResponseEntity.ok(ApiResponse.success(messages, "Message history retrieved")));
     }
@@ -63,11 +82,10 @@ public class ChatController {
     @PostMapping("/session/{sessionId}/messages")
     public Mono<ResponseEntity<ApiResponse<ChatResponse>>> postMessage(
             @PathVariable String sessionId,
-            @RequestHeader(value = "X-User-Id", required = false) String userId,
             @Valid @RequestBody ChatMessageRequest request
     ) {
-        ChatRequest chatRequest = new ChatRequest(request.getQuery(), sessionId, userId);
-        return chatUseCase.chat(chatRequest)
+        return SecurityUtils.currentUserId()
+                .flatMap(userId -> chatUseCase.chat(new ChatRequest(request.getQuery(), sessionId, userId)))
                 .map(response -> ResponseEntity.ok(ApiResponse.success(response, "Chat response returned")));
     }
 
@@ -75,10 +93,9 @@ public class ChatController {
     @PostMapping(value = "/session/{sessionId}/messages/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<String>> postMessageStream(
             @PathVariable String sessionId,
-            @RequestHeader(value = "X-User-Id", required = false) String userId,
             @Valid @RequestBody ChatMessageRequest request
     ) {
-        ChatRequest chatRequest = new ChatRequest(request.getQuery(), sessionId, userId);
-        return chatUseCase.streamChat(chatRequest);
+        return SecurityUtils.currentUserId()
+                .flatMapMany(userId -> chatUseCase.streamChat(new ChatRequest(request.getQuery(), sessionId, userId)));
     }
 }

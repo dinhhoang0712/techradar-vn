@@ -58,6 +58,18 @@ class Settings(BaseSettings):
     # CORS: danh sách origin (phân tách bằng dấu phẩy). "*" = mở (chỉ nên dùng khi đứng sau gateway).
     cors_origins: str = "*"
 
+    # Evaluation — RAGAS-style LLM judge (tắt mặc định để không tăng latency)
+    eval_enabled: bool = False
+
+    # SQL Analytics
+    sql_analytics_months: int = 6
+
+    # Recommendation
+    recommend_top_k: int = 10
+
+    # Forecast
+    forecast_min_data_points: int = 3
+
     model_config = SettingsConfigDict(
         env_file=str(_ENV_FILE),
         env_file_encoding="utf-8",

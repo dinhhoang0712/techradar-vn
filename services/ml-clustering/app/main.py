@@ -20,6 +20,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query
 
 from app.observability import RequestContextMiddleware, configure_logging
+from app.routes_pipeline import router as pipeline_router
 from app.schemas import (
     BatchPredictRequest,
     BatchPredictResponse,
@@ -57,6 +58,7 @@ app = FastAPI(
 
 # Trace-id binding + access logging (outermost middleware → every request gets a trace id).
 app.add_middleware(RequestContextMiddleware)
+app.include_router(pipeline_router)
 
 
 # ---------------------------------------------------------------------------

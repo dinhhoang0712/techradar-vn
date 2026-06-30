@@ -9,7 +9,10 @@ const navItems = [
     { path: '/dashboard', label: 'Radar' },
     { path: '/compare', label: 'So sánh' },
     { path: '/graph', label: 'Đồ thị' },
-    { path: '/clusters', label: 'Cụm Công Nghệ' },
+    { path: '/clusters', label: 'Cụm CN' },
+    { path: '/salary', label: 'Lương' },
+    { path: '/career', label: 'Career' },
+    { path: '/report', label: 'Báo cáo' },
     { path: '/chat', label: 'AI Chat' },
 ];
 

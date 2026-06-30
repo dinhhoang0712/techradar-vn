@@ -1,0 +1,20 @@
+Phân tích xu hướng và dự báo cho công nghệ: {technology}
+
+Dự báo cho {horizon_months} tháng tới dựa trên dữ liệu thực tế:
+
+Trạng thái hiện tại: {current_status}
+
+Các tín hiệu phân tích:
+{signals}
+
+Lịch sử 6 tháng gần nhất:
+{trend_data}
+
+Dựa vào các tín hiệu trên, hãy:
+1. Xác định xu hướng: growing (đang tăng trưởng), stable (ổn định), declining (suy giảm)
+2. Ước tính độ tin cậy dự báo (0.0 = không chắc, 1.0 = rất chắc)
+3. Giải thích ngắn gọn lý do (2-3 câu tiếng Việt)
+
+QUAN TRỌNG: Chỉ dùng dữ liệu được cung cấp, không tự bịa thêm số liệu.
+
+Trả về JSON: {"direction": "growing|stable|declining", "confidence": 0.0-1.0, "reasoning": "..."}

@@ -7,38 +7,82 @@ def _load(filename: str) -> str:
     return (_PROMPTS_DIR / filename).read_text(encoding="utf-8").strip()
 
 
+def _build_analytics_block(sql_data: list[dict]) -> str:
+    """
+    Format dữ liệu tech_analytics thành text cho LLM.
+    Nhóm theo technology_name, lấy tháng gần nhất + xu hướng.
+    """
+    if not sql_data:
+        return "(Không có dữ liệu analytics.)"
+
+    by_tech: dict[str, list[dict]] = {}
+    for row in sql_data:
+        name = row.get("technology_name") or "Unknown"
+        by_tech.setdefault(name, []).append(row)
+
+    lines = []
+    for tech, rows in by_tech.items():
+        rows_sorted = sorted(rows, key=lambda r: str(r.get("month") or ""), reverse=True)
+        latest = rows_sorted[0]
+        job_count = latest.get("job_count") or 0
+        article_count = latest.get("article_count") or 0
+        mom = latest.get("mom_growth")
+        yoy = latest.get("yoy_growth")
+        growth = latest.get("growth_rate")
+        month = str(latest.get("month") or "")[:7]
+
+        parts = [f"{tech} ({month}): {job_count} việc làm, {article_count} bài viết"]
+        if mom is not None:
+            parts.append(f"MoM {mom:+.1f}%")
+        if yoy is not None:
+            parts.append(f"YoY {yoy:+.1f}%")
+        if growth is not None and mom is None:
+            parts.append(f"tăng trưởng {growth:+.1f}%")
+        lines.append(", ".join(parts))
+
+    return "\n".join(lines)
+
+
 def build_messages(
     query: str,
     articles: list[dict],
     graph_data: dict | None = None,
     user_block: str = "",
     low_confidence: bool = False,
+    sql_data: list[dict] | None = None,
+    history: list[dict] | None = None,
 ) -> list[dict]:
     """
-    Ghép context từ article + graph data + user profile thành messages cho LLM.
+    Ghép context từ article + graph data + user profile + lịch sử hội thoại thành messages cho LLM.
 
     articles:        list[dict] — top-5 article sau rerank
     graph_data:      dict       — kết quả từ graph_search() (jobs, companies, related_tech)
     user_block:      str        — output của retriever_user.build_user_block() (rỗng nếu anonymous)
     low_confidence:  bool       — True khi articles dưới threshold (query mơ hồ, không có entity)
                                   → thêm cảnh báo vào prompt để LLM không suy diễn bừa
-    Trả về: [{"role": "system", ...}, {"role": "user", ...}]
+    sql_data:        list[dict] — kết quả từ retriever_sql.sql_analytics_search()
+    history:         list[dict] — lịch sử hội thoại [{"role": "user"|"assistant", "content": ...}]
+                                  inject làm multi-turn context trước câu hỏi hiện tại
+    Trả về: [system, ...history_turns..., user_with_rag_context]
     """
-    context_block     = _build_context_block(articles, low_confidence=low_confidence)
-    job_context_block = _build_job_context_block(graph_data or {})
+    context_block      = _build_context_block(articles, low_confidence=low_confidence)
+    job_context_block  = _build_job_context_block(graph_data or {})
+    analytics_block    = _build_analytics_block(sql_data or [])
 
     rag_template = _load("rag_template.txt")
     user_content = rag_template.format(
         context=context_block,
         job_context=job_context_block,
+        analytics_block=analytics_block,
         user_block=user_block,
         query=query,
     )
 
-    return [
-        {"role": "system", "content": _load("system_prompt.txt")},
-        {"role": "user",   "content": user_content},
-    ]
+    messages: list[dict] = [{"role": "system", "content": _load("system_prompt.txt")}]
+    for turn in (history or []):
+        messages.append({"role": turn["role"], "content": turn["content"]})
+    messages.append({"role": "user", "content": user_content})
+    return messages
 
 
 def _build_context_block(articles: list[dict], low_confidence: bool = False) -> str:

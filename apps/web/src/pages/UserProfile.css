@@ -294,3 +294,95 @@
     accent-color: var(--primary, #6366f1);
     cursor: pointer;
 }
+
+/* ── Recommendations ─────────────────────────────────────────────────────── */
+.profile-recommendations {
+    max-width: 760px;
+    margin: 28px auto 0;
+    padding: 0 1rem;
+}
+
+.profile-recs-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text, #e5e7eb);
+    margin: 0 0 14px;
+}
+
+.recs-loading {
+    color: var(--text-3, #6b7280);
+    font-size: 0.88rem;
+    padding: 12px 0;
+}
+
+.recs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 12px;
+}
+
+.rec-card {
+    background: var(--surface-2, #1a1a2e);
+    border: 1px solid var(--border, #2a2a3e);
+    border-radius: 10px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: border-color 0.15s;
+}
+
+.rec-card:hover { border-color: var(--primary, #6c63ff); }
+
+.rec-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.rec-name {
+    font-weight: 600;
+    color: var(--text, #e5e7eb);
+    font-size: 0.9rem;
+}
+
+.rec-ring {
+    font-size: 0.68rem;
+    font-weight: 600;
+    border-radius: 10px;
+    padding: 2px 8px;
+    white-space: nowrap;
+}
+
+.rec-ring--adopt   { background: rgba(0,214,143,0.12); color: #00d68f; border: 1px solid rgba(0,214,143,0.3); }
+.rec-ring--trial   { background: rgba(84,197,248,0.12); color: #54c5f8; border: 1px solid rgba(84,197,248,0.3); }
+.rec-ring--assess  { background: rgba(255,201,77,0.12); color: #ffc94d; border: 1px solid rgba(255,201,77,0.3); }
+.rec-ring--hold    { background: rgba(255,82,82,0.10);  color: #ff5252; border: 1px solid rgba(255,82,82,0.25); }
+
+.rec-reason {
+    font-size: 0.78rem;
+    color: var(--text-3, #6b7280);
+    margin: 0;
+    line-height: 1.4;
+}
+
+.rec-meta {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-top: 2px;
+}
+
+.rec-growth {
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.rec-growth.up  { color: #00d68f; }
+.rec-growth.down { color: #ff5252; }
+
+.rec-cooc {
+    font-size: 0.75rem;
+    color: var(--text-3, #6b7280);
+}

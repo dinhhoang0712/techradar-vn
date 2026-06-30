@@ -1,0 +1,204 @@
+{
+  "tech_aliases": {
+    "k8s": "Kubernetes",
+    "kube": "Kubernetes",
+
+    "reactjs": "React",
+    "react.js": "React",
+
+    "vuejs": "Vue",
+    "vue.js": "Vue",
+
+    "angularjs": "Angular",
+    "angular.js": "Angular",
+
+    "nodejs": "Node.js",
+    "node js": "Node.js",
+
+    "postgres": "PostgreSQL",
+    "postgresql": "PostgreSQL",
+    "postgre": "PostgreSQL",
+
+    "mongo": "MongoDB",
+    "mongodb": "MongoDB",
+
+    "springboot": "Spring Boot",
+    "spring-boot": "Spring Boot",
+    "spring boot": "Spring Boot",
+
+    "elasticsearch": "Elasticsearch",
+    "elastic search": "Elasticsearch",
+    "elastic": "Elasticsearch",
+
+    "tensorflow": "TensorFlow",
+    "tf": "TensorFlow",
+
+    "pytorch": "PyTorch",
+
+    "huggingface": "Hugging Face",
+    "hf": "Hugging Face",
+
+    "fastapi": "FastAPI",
+    "fast api": "FastAPI",
+
+    "scikit-learn": "Scikit-learn",
+    "sklearn": "Scikit-learn",
+
+    "langchain": "LangChain",
+    "lang chain": "LangChain",
+
+    "llamaindex": "LlamaIndex",
+    "llama index": "LlamaIndex",
+    "llama-index": "LlamaIndex",
+
+    "openai": "OpenAI",
+    "open ai": "OpenAI",
+
+    "genai": "Generative AI",
+    "generative ai": "Generative AI",
+
+    "nlp": "NLP",
+    "natural language processing": "NLP",
+    "xử lý ngôn ngữ tự nhiên": "NLP",
+
+    "ml": "Machine Learning",
+    "machine learning": "Machine Learning",
+    "học máy": "Machine Learning",
+
+    "dl": "Deep Learning",
+    "deep learning": "Deep Learning",
+    "học sâu": "Deep Learning",
+
+    "ai": "AI",
+    "artificial intelligence": "AI",
+    "trí tuệ nhân tạo": "AI",
+
+    "llm": "LLM",
+    "large language model": "LLM",
+    "mô hình ngôn ngữ lớn": "LLM",
+
+    "rag": "RAG",
+    "retrieval augmented generation": "RAG",
+
+    "gcp": "Google Cloud Platform",
+    "google cloud": "Google Cloud Platform",
+
+    "aws": "AWS",
+    "amazon web services": "AWS",
+
+    "azure": "Microsoft Azure",
+    "ms azure": "Microsoft Azure",
+
+    "ci/cd": "CI/CD",
+    "cicd": "CI/CD",
+
+    "devops": "DevOps",
+    "mlops": "MLOps",
+
+    "docker": "Docker",
+
+    "graphql": "GraphQL",
+    "graph ql": "GraphQL",
+
+    "nestjs": "NestJS",
+    "nest.js": "NestJS",
+
+    "nextjs": "Next.js",
+    "next.js": "Next.js",
+
+    "expressjs": "Express.js",
+    "express.js": "Express.js",
+    "express js": "Express.js",
+
+    "nuxtjs": "Nuxt.js",
+    "nuxt.js": "Nuxt.js",
+
+    "tailwindcss": "Tailwind CSS",
+    "tailwind css": "Tailwind CSS",
+    "tailwind": "Tailwind CSS",
+
+    "typescript": "TypeScript",
+    "ts": "TypeScript",
+
+    "javascript": "JavaScript",
+    "js": "JavaScript",
+
+    "python": "Python",
+    "py": "Python",
+
+    "golang": "Go",
+    "go lang": "Go",
+
+    "c++": "C++",
+    "c plus plus": "C++",
+
+    "c#": "C#",
+    "csharp": "C#",
+
+    "dotnet": ".NET",
+    ".net": ".NET",
+
+    "kafka": "Apache Kafka",
+    "apache kafka": "Apache Kafka",
+
+    "spark": "Apache Spark",
+    "apache spark": "Apache Spark",
+
+    "airflow": "Apache Airflow",
+    "apache airflow": "Apache Airflow",
+
+    "redis": "Redis",
+    "neo4j": "Neo4j",
+    "qdrant": "Qdrant",
+    "pinecone": "Pinecone",
+    "weaviate": "Weaviate",
+
+    "terraform": "Terraform",
+    "ansible": "Ansible",
+    "jenkins": "Jenkins",
+    "github actions": "GitHub Actions",
+    "gitlab ci": "GitLab CI"
+  },
+  "company_aliases": {
+    "fpt corp": "FPT",
+    "fpt corporation": "FPT",
+    "tập đoàn fpt": "FPT",
+    "fpt software": "FPT Software",
+    "fpt information system": "FPT IS",
+    "fpt is": "FPT IS",
+
+    "vng corp": "VNG",
+    "vng corporation": "VNG",
+
+    "momo": "MoMo",
+    "ví momo": "MoMo",
+    "mo mo": "MoMo",
+
+    "tiki": "Tiki",
+    "tiki corporation": "Tiki",
+
+    "shopee vietnam": "Shopee",
+    "shopee viet nam": "Shopee",
+
+    "grab vietnam": "Grab",
+    "grab viet nam": "Grab",
+
+    "viettel": "Viettel",
+    "tập đoàn viettel": "Viettel",
+    "viettel group": "Viettel",
+
+    "vnpt": "VNPT",
+    "tập đoàn vnpt": "VNPT",
+
+    "tiki corp": "Tiki",
+
+    "zalo": "Zalo",
+    "zalo app": "Zalo",
+
+    "topcv": "TopCV",
+    "top cv": "TopCV",
+
+    "itviec": "ITviec",
+    "it viec": "ITviec"
+  }
+}

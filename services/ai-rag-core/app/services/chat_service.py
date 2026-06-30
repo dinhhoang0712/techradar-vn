@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from typing import AsyncIterator
 
@@ -8,6 +9,16 @@ from app.core.pipeline import answer
 from app.core.pipeline_stream import answer_stream
 from app.models.chat import ChatSession, ChatMessage
 from app.api.schemas import ChatRequest, ChatResponse, SourceItem
+from app.memory.user_context import increment_tech_interaction
+
+
+async def _track_interactions(user_id: uuid.UUID, entities: list[str]) -> None:
+    """Fire-and-forget: tăng bộ đếm tech_interactions với fresh session."""
+    from app.db.postgres_client import get_session_factory
+    factory = get_session_factory()
+    async with factory() as session:
+        for tech in entities[:5]:
+            await increment_tech_interaction(user_id, tech, session)
 
 
 async def handle_chat(request: ChatRequest, db: AsyncSession) -> ChatResponse:
@@ -39,10 +50,12 @@ async def handle_chat(request: ChatRequest, db: AsyncSession) -> ChatResponse:
     )
     db.add(user_msg)
 
-    # 3. Gọi pipeline
+    # 3. Gọi pipeline (kèm session_id để load conversation history)
     result = await answer(
         query=request.query,
         user_id=str(request.user_id) if request.user_id else None,
+        session_id=str(session_id),
+        db=db,
     )
 
     # 4. Lưu assistant message
@@ -54,7 +67,11 @@ async def handle_chat(request: ChatRequest, db: AsyncSession) -> ChatResponse:
     db.add(assistant_msg)
     await db.commit()
 
-    # 5. Build response
+    # 5. Cập nhật tech interaction counter (fire-and-forget)
+    if request.user_id and result.get("entities"):
+        asyncio.create_task(_track_interactions(request.user_id, result["entities"]))
+
+    # 6. Build response
     sources = [
         SourceItem(
             title=s.get("title"),
@@ -123,6 +140,8 @@ async def handle_chat_stream(
     async for ev in answer_stream(
         query=request.query,
         user_id=str(request.user_id) if request.user_id else None,
+        session_id=str(session_id),
+        db=db,
     ):
         if ev["event"] == "token":
             yield ev

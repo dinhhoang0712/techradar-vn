@@ -13,6 +13,8 @@ import ChatbotPage from './pages/ChatbotPage';
 import ClusterDashboard from './pages/ClusterDashboard';
 import SalaryPage from './pages/SalaryPage';
 import UserProfile from './pages/UserProfile';
+import CareerPage from './pages/CareerPage';
+import ReportPage from './pages/ReportPage';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
 import './styles/global.css';
@@ -36,6 +38,8 @@ export default function App() {
           <Route path="/salary" element={<SalaryPage />} />
           <Route path="/chat" element={<ChatbotPage />} />
           <Route path="/profile" element={<UserProfile />} />
+          <Route path="/career" element={<CareerPage />} />
+          <Route path="/report" element={<ReportPage />} />
         </Route>
 
           <Route path="/admin" element={<AdminLayout />}>

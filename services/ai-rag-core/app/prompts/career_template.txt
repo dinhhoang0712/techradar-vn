@@ -1,0 +1,19 @@
+Tư vấn lộ trình career cho người dùng.
+
+Thông tin hiện tại:
+- Kỹ năng đang có: {current_skills}
+- Vai trò mục tiêu: {target_role}
+
+Dữ liệu thị trường (skill gap từ Neo4j):
+{skill_gap_data}
+
+Dữ liệu nhu cầu tuyển dụng (từ tech_analytics):
+{analytics_data}
+
+Hãy tạo lộ trình học tập cụ thể bằng tiếng Việt:
+1. Liệt kê 3-5 kỹ năng cần học theo thứ tự ưu tiên
+2. Ước tính thời gian cho mỗi kỹ năng
+3. Đưa ra lý do dựa trên nhu cầu thị trường thực tế
+4. Tổng kết thời gian ước tính để đạt mục tiêu
+
+Chỉ dựa vào dữ liệu được cung cấp.

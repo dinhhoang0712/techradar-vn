@@ -14,6 +14,11 @@ from dataclasses import dataclass
 # `neo4j_config` / `database_connection` resolve regardless of the cwd.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+# Entity resolution: normalize names before ingestion
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from entity_resolution import resolve_tech, resolve_tech_list, resolve_company, resolve_company_list
+from ontology import classify_tech
+
 from neo4j_config import NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD, NEO4J_DATABASE, BATCH_SIZE
 from database_connection import Neo4jJobImporter, TechNode, CompanyNode, JobNode, SkillNode, Person
 
@@ -79,20 +84,11 @@ class RelationshipBuilder:
         self.persons = set()
         self.jobs = []
         self._job_role_cache = set()
-        self._tech_category_map = {}
         self._job_company_map = {}
         self._job_tech_map = {}
         self._job_skills_map = {}
         self._article_company_map = {}
         self._article_tech_map = {}
-
-    def _detect_tech_category(self, tech_name: str) -> str:
-        """Detect technology category"""
-        tech_lower = tech_name.lower()
-        for category, keywords in self._tech_category_map.items():
-            if any(kw.lower() in tech_lower for kw in keywords):
-                return category
-        return "Other"
 
     COMPANY_BLACKLIST = {
         'Việt Nam', 'Hà Nội', 'TPHCM', 'TP.HCM', 'Mỹ', 'Mỹ.', 'Nhật Bản', 'Trung Quốc',
@@ -219,12 +215,15 @@ class RelationshipBuilder:
                 # Process Technology entities. The NER pipeline (extract_data.py
                 # → group_entities) only emits a TECH key; there is no SKILL/TECH
                 # group for news, so skills are sourced from TopCV postings only.
-                tech_names = entities.get('TECH', [])
+                raw_tech_names = entities.get('TECH', [])
+                tech_names = resolve_tech_list(raw_tech_names)
 
                 for tech_name in tech_names:
+                    category, subcategory = classify_tech(tech_name)
                     tech = TechNode(
                         name=tech_name,
-                        category=self._detect_tech_category(tech_name),
+                        category=category,
+                        subcategory=subcategory,
                         description=f"Mentioned in {source_platform}",
                         trend_score=1.0
                     )
@@ -235,13 +234,13 @@ class RelationshipBuilder:
                 loc_names = entities.get('LOC', [])
                 primary_location = loc_names[0] if loc_names else "Unknown"
 
-                # Filter organization names
-                valid_org_names = [
-                    name for name in org_names 
-                    if name not in self.COMPANY_BLACKLIST and len(name) > 2
-                ]
+                # Resolve + filter organization names
+                resolved_org_names = resolve_company_list([
+                    n for n in org_names
+                    if n not in self.COMPANY_BLACKLIST and len(n) > 2
+                ])
 
-                for org_name in valid_org_names:
+                for org_name in resolved_org_names:
                     company = CompanyNode(
                         name=org_name,
                         field="Technology",
@@ -349,9 +348,9 @@ class RelationshipBuilder:
                     self.jobs.append(job)
                     self._job_role_cache.add(job_role_key)
 
-                # Process Company
+                # Process Company (resolve alias before ingestion)
                 if company_data and 'name' in company_data:
-                    company_name = company_data.get('name', '')
+                    company_name = resolve_company(company_data.get('name', '')) or ''
                     if company_name and company_name not in self.COMPANY_BLACKLIST:
                         company = CompanyNode(
                             name=company_name,
@@ -375,17 +374,19 @@ class RelationshipBuilder:
                         self._add_if_not_exists(self.skills, skill)
                         self._job_skills_map[job_title] = self._job_skills_map.get(job_title, []) + [skill_name]
 
-                # Process Technologies
-                for tech_name in technologies_list:
-                    if tech_name:
-                        tech = TechNode(
-                            name=tech_name,
-                            category=self._detect_tech_category(tech_name),
-                            description=f"Required in {source_platform}",
-                            trend_score=1.0
-                        )
-                        self._add_if_not_exists(self.technologies, tech)
-                        self._job_tech_map[job_title] = self._job_tech_map.get(job_title, []) + [tech_name]
+                # Process Technologies (resolve aliases before ingestion)
+                resolved_techs = resolve_tech_list([t for t in technologies_list if t])
+                for tech_name in resolved_techs:
+                    category, subcategory = classify_tech(tech_name)
+                    tech = TechNode(
+                        name=tech_name,
+                        category=category,
+                        subcategory=subcategory,
+                        description=f"Required in {source_platform}",
+                        trend_score=1.0
+                    )
+                    self._add_if_not_exists(self.technologies, tech)
+                    self._job_tech_map[job_title] = self._job_tech_map.get(job_title, []) + [tech_name]
 
                 stats['job_postings'] += 1
 

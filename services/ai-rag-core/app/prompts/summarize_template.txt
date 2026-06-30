@@ -1,0 +1,12 @@
+Tóm tắt xu hướng công nghệ: {tech_name}
+Kỳ: {period}
+
+Các bài viết liên quan ({article_count} bài):
+{articles_text}
+
+Hãy tóm tắt theo định dạng {format}:
+- Tóm tắt tổng quan (2-3 câu)
+- 3-5 điểm nổi bật nhất
+- Xu hướng chung được đề cập nhiều nhất
+
+Chỉ dùng thông tin từ các bài viết trên, không bịa thêm.

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getUserProfile, updateUserProfile, uploadAvatar } from '../api/userService';
+import { getRecommendations } from '../api/recommendService';
 import './UserProfile.css';
 
 /**
@@ -15,10 +16,24 @@ export default function UserProfile() {
     const [editMode, setEditMode] = useState(false);
     const [form, setForm] = useState({ full_name: '', email: '', avatar_url: '', bio: '', job_role: '', location: '', password: '', technologies: '', notify_inapp: true, notify_email: true });
     const [toast, setToast] = useState(null); // { type: 'success' | 'error', message: string }
+    const [recommendations, setRecommendations] = useState([]);
+    const [loadingRecs, setLoadingRecs] = useState(false);
 
     useEffect(() => {
         loadProfile();
     }, []);
+
+    const loadRecommendations = async (techs) => {
+        setLoadingRecs(true);
+        try {
+            const res = await getRecommendations(techs, 8);
+            setRecommendations(res?.data?.recommendations ?? res?.recommendations ?? []);
+        } catch {
+            setRecommendations([]);
+        } finally {
+            setLoadingRecs(false);
+        }
+    };
 
     const loadProfile = async () => {
         setLoading(true);
@@ -45,6 +60,10 @@ export default function UserProfile() {
                 password: '',
                 technologies: flatData.technologies && flatData.technologies.length > 0 ? flatData.technologies.join(', ') : ''
             });
+            // Tải recommendations dựa trên tech trong profile
+            if (flatData.technologies?.length > 0) {
+                loadRecommendations(flatData.technologies);
+            }
         } catch (err) {
             showToast('error', 'Không thể tải thông tin người dùng. Vui lòng thử lại.');
             console.error('[UserProfile] Load error:', err);
@@ -362,6 +381,44 @@ export default function UserProfile() {
                     </div>
                 )}
             </div>
+
+            {/* Recommendations section */}
+            {(loadingRecs || recommendations.length > 0) && (
+                <div className="profile-recommendations">
+                    <h2 className="profile-recs-title">Công nghệ được gợi ý cho bạn</h2>
+                    {loadingRecs ? (
+                        <div className="recs-loading">Đang tải gợi ý...</div>
+                    ) : (
+                        <div className="recs-grid">
+                            {recommendations.map((rec) => (
+                                <div key={rec.tech_name} className="rec-card">
+                                    <div className="rec-header">
+                                        <span className="rec-name">{rec.tech_name}</span>
+                                        {rec.ring && (
+                                            <span className={`rec-ring rec-ring--${rec.ring.toLowerCase()}`}>
+                                                {rec.ring}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {rec.reason && (
+                                        <p className="rec-reason">{rec.reason}</p>
+                                    )}
+                                    <div className="rec-meta">
+                                        {rec.growth_rate != null && (
+                                            <span className={`rec-growth ${rec.growth_rate >= 0 ? 'up' : 'down'}`}>
+                                                {rec.growth_rate >= 0 ? '+' : ''}{Number(rec.growth_rate).toFixed(1)}%
+                                            </span>
+                                        )}
+                                        {rec.co_occurrence > 0 && (
+                                            <span className="rec-cooc">Co-use: {rec.co_occurrence}</span>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

@@ -1,0 +1,8 @@
+kafka-python-ng==2.2.3
+minio==7.2.7
+psycopg2-binary==2.9.9
+neo4j==5.20.0
+apscheduler==3.10.4
+pydantic-settings==2.2.1
+requests==2.32.3
+loguru==0.7.2

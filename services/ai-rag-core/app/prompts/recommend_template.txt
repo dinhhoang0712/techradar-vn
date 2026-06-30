@@ -1,0 +1,9 @@
+User hiện đang sử dụng các công nghệ: {user_techs}
+
+Dựa trên graph co-occurrence và dữ liệu thị trường, các công nghệ được đề xuất:
+{recommendations}
+
+Với mỗi công nghệ trên, hãy viết 1 câu lý giải ngắn (tối đa 20 từ) tại sao user nên học/dùng nó,
+dựa vào mối liên hệ với tech họ đang dùng và xu hướng thị trường.
+
+Trả về JSON array: [{"tech": "tên công nghệ", "reason": "lý giải ngắn bằng tiếng Việt"}]

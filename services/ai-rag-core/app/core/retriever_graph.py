@@ -2,6 +2,75 @@ import asyncio
 
 from app.core.entity_extractor import extract_query_entities
 from app.db.neo4j_client import run_query
+from app.db.graph_queries import (
+    JOBS_BY_TECH_AND_TITLE,
+    JOBS_BY_TECH,
+    JOBS_BY_TITLE,
+    JOBS_BY_COMPANY,
+    JOBS_BY_LOCATION,
+    COMPANIES_USING_TECH,
+    TECH_RELATED,
+)
+
+# ---------------------------------------------------------------------------
+# Query-time alias normalization
+# Maps tech names as extracted by entity_extractor to canonical graph forms.
+# Must mirror knowledge-graph/entity_resolution/aliases.json for variants
+# that actually appear in TECH_KEYWORDS / TECH_ABBREVS.
+# ---------------------------------------------------------------------------
+_QUERY_TECH_ALIASES: dict[str, str] = {
+    "k8s": "Kubernetes",
+    "reactjs": "React",
+    "react.js": "React",
+    "vuejs": "Vue",
+    "vue.js": "Vue",
+    "angularjs": "Angular",
+    "angular.js": "Angular",
+    "nodejs": "Node.js",
+    "node js": "Node.js",
+    "springboot": "Spring Boot",
+    "spring-boot": "Spring Boot",
+    "elasticsearch": "Elasticsearch",
+    "huggingface": "Hugging Face",
+    "scikit-learn": "Scikit-learn",
+    "sklearn": "Scikit-learn",
+    "langchain": "LangChain",
+    "llamaindex": "LlamaIndex",
+    "llama-index": "LlamaIndex",
+    "tensorflow": "TensorFlow",
+    "pytorch": "PyTorch",
+    "postgres": "PostgreSQL",
+    "nestjs": "NestJS",
+    "nest.js": "NestJS",
+    "nextjs": "Next.js",
+    "next.js": "Next.js",
+    "expressjs": "Express.js",
+    "express.js": "Express.js",
+    "tailwindcss": "Tailwind CSS",
+    "tailwind": "Tailwind CSS",
+    "golang": "Go",
+    "dotnet": ".NET",
+    "cicd": "CI/CD",
+    "genai": "Generative AI",
+    "github actions": "GitHub Actions",
+    "gitlab ci": "GitLab CI",
+    "apache kafka": "Apache Kafka",
+    "apache spark": "Apache Spark",
+    "apache airflow": "Apache Airflow",
+}
+
+
+def _normalize_tech_entities(entities: list[str]) -> list[str]:
+    """Resolve query-time tech aliases to canonical graph names and deduplicate."""
+    seen: dict[str, bool] = {}
+    result: list[str] = []
+    for name in entities:
+        canonical = _QUERY_TECH_ALIASES.get(name.lower(), name)
+        key = canonical.lower()
+        if key not in seen:
+            seen[key] = True
+            result.append(canonical)
+    return result
 
 
 async def graph_search(query: str) -> dict:
@@ -20,7 +89,7 @@ async def graph_search(query: str) -> dict:
     loop = asyncio.get_event_loop()
     extracted = await loop.run_in_executor(None, extract_query_entities, query)
 
-    tech_entities = extracted["technologies"]
+    tech_entities = _normalize_tech_entities(extracted["technologies"])
     job_title_kws = extracted["job_titles"]
     company_names = extracted["companies"]
     locations     = extracted["locations"]
@@ -35,112 +104,31 @@ async def graph_search(query: str) -> dict:
 
     # --- Job khớp CẢ title lẫn tech (ưu tiên cao nhất) ---
     jobs_by_tech_and_title = await run_query(
-        """
-        UNWIND $keywords AS kw
-        MATCH (j:Job)-[:REQUIRES]->(t)
-        WHERE toLower(j.title) CONTAINS kw
-          AND (t:Technology OR t:Skill) AND toLower(t.name) IN $names
-        OPTIONAL MATCH (j)-[:HIRES_FOR]->(c:Company)
-        WITH DISTINCT j, c, collect(DISTINCT t.name)[..5] AS techs
-        RETURN
-            j.title       AS title,
-            j.salary      AS salary,
-            j.description AS description,
-            j.benefit     AS benefit,
-            j.requirement AS requirement,
-            techs         AS technology,
-            c.name        AS company,
-            c.location    AS location
-        LIMIT 20
-        """,
+        JOBS_BY_TECH_AND_TITLE,
         {"keywords": titles_lower, "names": names_lower},
     ) if names_lower and titles_lower else []
 
     # --- Job theo tech/skill (REQUIRES relationship) ---
     jobs_by_tech = await run_query(
-        """
-        MATCH (j:Job)-[:REQUIRES]->(t)
-        WHERE (t:Technology OR t:Skill) AND toLower(t.name) IN $names
-        OPTIONAL MATCH (j)-[:HIRES_FOR]->(c:Company)
-        WITH DISTINCT j, t, c
-        RETURN
-            j.title       AS title,
-            j.salary      AS salary,
-            j.description AS description,
-            j.benefit     AS benefit,
-            j.requirement AS requirement,
-            t.name        AS technology,
-            c.name        AS company,
-            c.location    AS location
-        LIMIT 20
-        """,
+        JOBS_BY_TECH,
         {"names": names_lower},
     ) if names_lower else []
 
     # --- Job theo title keyword (CONTAINS matching) ---
     jobs_by_title = await run_query(
-        """
-        UNWIND $keywords AS kw
-        MATCH (j:Job)
-        WHERE toLower(j.title) CONTAINS kw
-        OPTIONAL MATCH (j)-[:HIRES_FOR]->(c:Company)
-        OPTIONAL MATCH (j)-[:REQUIRES]->(t:Technology)
-        WITH DISTINCT j, c, collect(DISTINCT t.name)[..3] AS techs
-        RETURN
-            j.title       AS title,
-            j.salary      AS salary,
-            j.description AS description,
-            j.benefit     AS benefit,
-            j.requirement AS requirement,
-            techs         AS technology,
-            c.name        AS company,
-            c.location    AS location
-        LIMIT 20
-        """,
+        JOBS_BY_TITLE,
         {"keywords": titles_lower},
     ) if titles_lower else []
 
     # --- Job theo tên công ty (NER ORG) ---
     jobs_by_company = await run_query(
-        """
-        UNWIND $company_names AS cname
-        MATCH (j:Job)-[:HIRES_FOR]->(c:Company)
-        WHERE toLower(c.name) CONTAINS cname
-        OPTIONAL MATCH (j)-[:REQUIRES]->(t:Technology)
-        WITH DISTINCT j, c, collect(DISTINCT t.name)[..3] AS techs
-        RETURN
-            j.title       AS title,
-            j.salary      AS salary,
-            j.description AS description,
-            j.benefit     AS benefit,
-            j.requirement AS requirement,
-            techs         AS technology,
-            c.name        AS company,
-            c.location    AS location
-        LIMIT 15
-        """,
+        JOBS_BY_COMPANY,
         {"company_names": companies_lower},
     ) if companies_lower else []
 
     # --- Job theo địa điểm (NER LOC) ---
     jobs_by_location = await run_query(
-        """
-        UNWIND $locations AS loc
-        MATCH (j:Job)-[:HIRES_FOR]->(c:Company)
-        WHERE toLower(c.location) CONTAINS loc
-        OPTIONAL MATCH (j)-[:REQUIRES]->(t:Technology)
-        WITH DISTINCT j, c, collect(DISTINCT t.name)[..3] AS techs
-        RETURN
-            j.title       AS title,
-            j.salary      AS salary,
-            j.description AS description,
-            j.benefit     AS benefit,
-            j.requirement AS requirement,
-            techs         AS technology,
-            c.name        AS company,
-            c.location    AS location
-        LIMIT 15
-        """,
+        JOBS_BY_LOCATION,
         {"locations": locations_lower},
     ) if locations_lower else []
 
@@ -155,29 +143,13 @@ async def graph_search(query: str) -> dict:
 
     # Công ty đang dùng các tech này
     companies = await run_query(
-        """
-        MATCH (c:Company)-[:USES]->(t:Technology)
-        WHERE toLower(t.name) IN $names
-        RETURN DISTINCT
-            c.name      AS name,
-            c.industry  AS industry,
-            c.location  AS location,
-            c.size      AS size,
-            c.rating    AS rating,
-            t.name      AS technology
-        LIMIT 15
-        """,
+        COMPANIES_USING_TECH,
         {"names": names_lower},
     )
 
     # Tech liên quan (RELATED_TO — 2 chiều)
     related = await run_query(
-        """
-        MATCH (t:Technology)-[:RELATED_TO]-(t2:Technology)
-        WHERE toLower(t.name) IN $names
-        RETURN DISTINCT t.name AS from_tech, t2.name AS related_tech
-        LIMIT 20
-        """,
+        TECH_RELATED,
         {"names": names_lower},
     )
 

@@ -159,7 +159,18 @@ class AppStore:
     def __init__(self) -> None:
         params = load_params()
         s3_settings = _get_s3_settings()
-        self.requested_tag, self.tag = _resolve_snapshot_tag(params, s3_settings)
+        self.data_available: bool = False
+
+        try:
+            self.requested_tag, self.tag = _resolve_snapshot_tag(params, s3_settings)
+        except (RuntimeError, FileNotFoundError, ValueError) as exc:
+            logger.warning("Could not resolve snapshot tag: %s. Starting with empty store.", exc)
+            self.requested_tag = "latest"
+            self.tag = "none"
+            self.source = "local"
+            self._init_empty()
+            return
+
         self.source = "s3" if s3_settings else "local"
 
         labels_rel = f"models/{self.tag}/best_labels.parquet"
@@ -171,7 +182,17 @@ class AppStore:
             _ensure_s3_file(s3_settings, labels_rel)
             if s3_settings else DATA_DIR / labels_rel
         )
+        if not Path(labels_path).exists():
+            logger.warning(
+                "ML clustering artifacts not found at %s. "
+                "Run the DVC pipeline to generate data. Starting with empty store.",
+                labels_path,
+            )
+            self._init_empty()
+            return
+
         df_labels = pd.read_parquet(labels_path)
+        self.data_available = True
         # cluster_id = -1 → noise
         self.labels_df: pd.DataFrame = df_labels  # cols: tech_id, cluster_id
 
@@ -217,6 +238,16 @@ class AppStore:
         for tech_id, cid in self.tech_to_cluster.items():
             name = self.id_to_name.get(tech_id, tech_id)
             self.cluster_to_techs.setdefault(cid, []).append(name)
+
+    def _init_empty(self) -> None:
+        """Set empty data structures when artifacts are not available."""
+        import pandas as _pd
+        self.labels_df = _pd.DataFrame(columns=["tech_id", "cluster_id"])
+        self.cluster_labels: dict[int, dict] = {}
+        self.id_to_name: dict[str, str] = {}
+        self.name_lower_to_id: dict[str, str] = {}
+        self.tech_to_cluster: dict[str, int] = {}
+        self.cluster_to_techs: dict[int, list[str]] = {}
 
     def lookup_tech(self, name: str) -> tuple[str | None, int | None]:
         """

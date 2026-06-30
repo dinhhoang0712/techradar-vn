@@ -2,13 +2,20 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from app.api.routes_chat import router as chat_router
 from app.api.routes_embed import router as embed_router
 from app.api.routes_health import router as health_router
 from app.api.routes_internal import router as internal_router
+from app.api.routes_agent import router as agent_router
+from app.api.routes_career import router as career_router
+from app.api.routes_forecast import router as forecast_router
+from app.api.routes_recommend import router as recommend_router
+from app.api.routes_report import router as report_router
+from app.api.routes_summarize import router as summarize_router
 from app.config import get_settings
 from app.db.neo4j_client import close_driver
 from app.db.postgres_client import close_engine
@@ -92,3 +99,14 @@ app.include_router(health_router)
 app.include_router(chat_router)
 app.include_router(embed_router)
 app.include_router(internal_router)
+app.include_router(recommend_router)
+app.include_router(forecast_router)
+app.include_router(career_router)
+app.include_router(summarize_router)
+app.include_router(report_router)
+app.include_router(agent_router)
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics():
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)

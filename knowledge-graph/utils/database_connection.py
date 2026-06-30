@@ -19,6 +19,7 @@ class TechNode:
     """Helper Technology Node"""
     name: str
     category: str = ""
+    subcategory: str = ""
     description: str = ""
     trend_score: float = 0.5
     aliases: List[str] = field(default_factory=list)
@@ -111,43 +112,15 @@ class Neo4jJobImporter:
     
     def create_constraints_and_indexes(self) -> bool:
         """Create constraints and indexes for all node types"""
+        from cypher_repo.repository import SCHEMA_CONSTRAINTS, SCHEMA_INDEXES, SCHEMA_VECTOR_INDEX
         try:
             with self.driver.session(database=self.database) as session:
-                constraints = [
-                    "CREATE CONSTRAINT IF NOT EXISTS FOR (a:Article) REQUIRE a.title IS UNIQUE",
-                    "CREATE CONSTRAINT IF NOT EXISTS FOR (t:Technology) REQUIRE t.name IS UNIQUE",
-                    "CREATE CONSTRAINT IF NOT EXISTS FOR (c:Company) REQUIRE c.name IS UNIQUE",
-                    "CREATE CONSTRAINT IF NOT EXISTS FOR (j:Job) REQUIRE j.title IS UNIQUE",
-                    "CREATE CONSTRAINT IF NOT EXISTS FOR (s:Skill) REQUIRE s.name IS UNIQUE",
-                    "CREATE CONSTRAINT IF NOT EXISTS FOR (p:Person) REQUIRE p.name IS UNIQUE",
-                ]
-
-                for constraint in constraints:
-                    session.run(constraint)
-                    logger.info(f"✅ {constraint.split('FOR')[1][:30]}...")
-
-                # Property indexes for common filters
-                indexes = [
-                    "CREATE INDEX article_published_date IF NOT EXISTS FOR (a:Article) ON (a.published_date)",
-                    "CREATE INDEX article_source IF NOT EXISTS FOR (a:Article) ON (a.source)",
-                    "CREATE INDEX technology_category IF NOT EXISTS FOR (t:Technology) ON (t.category)",
-                    "CREATE INDEX skill_category IF NOT EXISTS FOR (s:Skill) ON (s.category)",
-                    "CREATE INDEX company_location IF NOT EXISTS FOR (c:Company) ON (c.location)",
-                ]
-                for index in indexes:
-                    session.run(index)
-
-                # Vector index used by ai-rag-core RAG retrieval (768-dim, cosine).
-                # Mirrors services/ai-rag-core/scripts/create_vector_index.py.
-                session.run(
-                    "CREATE VECTOR INDEX article_embedding_index IF NOT EXISTS "
-                    "FOR (a:Article) ON (a.embedding) "
-                    "OPTIONS {indexConfig: {`vector.dimensions`: 768, "
-                    "`vector.similarity_function`: 'cosine'}}"
-                )
-                logger.info("✅ Property + vector indexes created")
-
-            logger.info("✅ All constraints and indexes created")
+                for stmt in SCHEMA_CONSTRAINTS:
+                    session.run(stmt)
+                for stmt in SCHEMA_INDEXES:
+                    session.run(stmt)
+                session.run(SCHEMA_VECTOR_INDEX)
+                logger.info("✅ All constraints, indexes and vector index created")
             return True
         except Exception as e:
             logger.error(f"✗ Error creating constraints: {e}")
@@ -155,22 +128,18 @@ class Neo4jJobImporter:
 
     def import_technologies_list(self, technologies: List[TechNode]) -> int:
         """Import multiple Technology nodes"""
+        from cypher_repo.repository import MERGE_TECHNOLOGY
         try:
             with self.driver.session(database=self.database) as session:
                 for tech in technologies:
                     session.run(
-                        """
-                        MERGE (t:Technology {name: $name})
-                        ON CREATE SET
-                            t.category = $category,
-                            t.description = $description,
-                            t.trend_score = $trend_score
-                        """,
+                        MERGE_TECHNOLOGY,
                         parameters={
                             'name': tech.name,
                             'category': tech.category,
+                            'subcategory': tech.subcategory,
                             'description': tech.description,
-                            'trend_score': tech.trend_score
+                            'trend_score': tech.trend_score,
                         }
                     )
             logger.info(f"✅ Imported {len(technologies)} technologies")
@@ -181,30 +150,18 @@ class Neo4jJobImporter:
 
     def import_companies_list(self, companies: List[CompanyNode]) -> int:
         """Import multiple Company nodes"""
+        from cypher_repo.repository import MERGE_COMPANY
         try:
             with self.driver.session(database=self.database) as session:
                 for company in companies:
                     session.run(
-                        """
-                        MERGE (c:Company {name: $name})
-                        ON CREATE SET
-                            c.field = $field,
-                            c.size = $size,
-                            c.location = $location,
-                            c.rating = $rating
-                        ON MATCH SET
-                            c.location = CASE 
-                                WHEN c.location = "Unknown" OR c.location = "" 
-                                THEN $location 
-                                ELSE c.location 
-                            END
-                        """,
+                        MERGE_COMPANY,
                         parameters={
                             'name': company.name,
                             'field': company.field,
                             'size': company.size,
                             'location': company.location,
-                            'rating': company.rating
+                            'rating': company.rating,
                         }
                     )
             logger.info(f"✅ Imported {len(companies)} companies")
@@ -215,20 +172,12 @@ class Neo4jJobImporter:
 
     def import_jobs_list(self, jobs: List[JobNode]) -> int:
         """Import multiple Job nodes"""
+        from cypher_repo.repository import MERGE_JOB
         try:
             with self.driver.session(database=self.database) as session:
                 for job in jobs:
                     session.run(
-                        """
-                        MERGE (j:Job {title: $title})
-                        ON CREATE SET
-                            j.description = $description,
-                            j.requirement = $requirement,
-                            j.benefit = $benefit,
-                            j.salary = $salary,
-                            j.due_date = $due_date,
-                            j.source_url = $source_url
-                        """,
+                        MERGE_JOB,
                         parameters={
                             'title': job.title,
                             'description': job.description,
@@ -236,7 +185,7 @@ class Neo4jJobImporter:
                             'benefit': job.benefit,
                             'salary': job.salary,
                             'due_date': job.due_date.isoformat() if job.due_date else None,
-                            'source_url': job.source_url
+                            'source_url': job.source_url,
                         }
                     )
             logger.info(f"✅ Imported {len(jobs)} jobs")
@@ -247,20 +196,16 @@ class Neo4jJobImporter:
 
     def import_skills_list(self, skills: List[SkillNode]) -> int:
         """Import multiple Skill nodes"""
+        from cypher_repo.repository import MERGE_SKILL
         try:
             with self.driver.session(database=self.database) as session:
                 for skill in skills:
                     session.run(
-                        """
-                        MERGE (s:Skill {name: $name})
-                        ON CREATE SET
-                            s.category = $category,
-                            s.demand_score = $demand_score
-                        """,
+                        MERGE_SKILL,
                         parameters={
                             'name': skill.name,
                             'category': skill.category,
-                            'demand_score': skill.demand_score
+                            'demand_score': skill.demand_score,
                         }
                     )
             logger.info(f"✅ Imported {len(skills)} skills")
@@ -318,26 +263,18 @@ class Neo4jJobImporter:
     
     def import_articles(self, articles: List[Article]) -> int:
         """Import Article nodes"""
+        from cypher_repo.repository import MERGE_ARTICLE
         try:
             with self.driver.session(database=self.database) as session:
                 for article in articles:
                     session.run(
-                        """
-                        MERGE (a:Article {title: $title})
-                        ON CREATE SET
-                            a.content = $content,
-                            a.source = $source,
-                            a.published_date = $published_date,
-                            a.sentiment_score = $sentiment_score
-                        ON MATCH SET
-                            a.content = CASE WHEN a.content = "" OR a.content IS NULL THEN $content ELSE a.content END
-                        """,
+                        MERGE_ARTICLE,
                         parameters={
                             'title': article.title,
                             'content': article.content,
                             'source': article.source,
                             'published_date': article.published_date.isoformat(),
-                            'sentiment_score': article.sentiment_score
+                            'sentiment_score': article.sentiment_score,
                         }
                     )
             
@@ -349,60 +286,42 @@ class Neo4jJobImporter:
     
     def import_technologies(self, technologies: List[Technology]) -> int:
         """Import Technology nodes"""
+        from cypher_repo.repository import MERGE_TECHNOLOGY
         try:
             with self.driver.session(database=self.database) as session:
                 for tech in technologies:
                     session.run(
-                        """
-                        MERGE (t:Technology {name: $name})
-                        ON CREATE SET
-                            t.category = $category,
-                            t.description = $description,
-                            t.trend_score = $trend_score
-                        """,
+                        MERGE_TECHNOLOGY,
                         parameters={
                             'name': tech.name,
                             'category': tech.category,
+                            'subcategory': getattr(tech, 'subcategory', ''),
                             'description': tech.description,
-                            'trend_score': tech.trend_score
+                            'trend_score': tech.trend_score,
                         }
                     )
-            
             logger.info(f"✅ Imported {len(technologies)} technologies")
             return len(technologies)
         except Exception as e:
             logger.error(f"✗ Error importing technologies: {e}")
             return 0
-    
+
     def import_companies(self, companies: List[Company]) -> int:
         """Import Company nodes"""
+        from cypher_repo.repository import MERGE_COMPANY
         try:
             with self.driver.session(database=self.database) as session:
                 for company in companies:
                     session.run(
-                        """
-                        MERGE (c:Company {name: $name})
-                        ON CREATE SET
-                            c.industry = $industry,
-                            c.size = $size,
-                            c.location = $location,
-                            c.rating = $rating
-                        ON MATCH SET
-                            c.location = CASE 
-                                WHEN c.location = "Unknown" OR c.location = "" 
-                                THEN $location 
-                                ELSE c.location 
-                            END
-                        """,
+                        MERGE_COMPANY,
                         parameters={
                             'name': company.name,
-                            'industry': company.industry,
+                            'field': getattr(company, 'field', getattr(company, 'industry', '')),
                             'size': company.size,
                             'location': company.location,
-                            'rating': company.rating
+                            'rating': company.rating,
                         }
                     )
-            
             logger.info(f"✅ Imported {len(companies)} companies")
             return len(companies)
         except Exception as e:
@@ -411,18 +330,15 @@ class Neo4jJobImporter:
     
     def import_persons(self, persons: List[Person]) -> int:
         """Import Person nodes"""
+        from cypher_repo.repository import MERGE_PERSON
         try:
             with self.driver.session(database=self.database) as session:
                 for person in persons:
                     session.run(
-                        """
-                        MERGE (p:Person {name: $name})
-                        ON CREATE SET
-                            p.role = $role
-                        """,
+                        MERGE_PERSON,
                         parameters={
                             'name': person.name,
-                            'role': person.role
+                            'role': person.role,
                         }
                     )
             
@@ -434,23 +350,18 @@ class Neo4jJobImporter:
     
     def import_skills(self, skills: List[Skill]) -> int:
         """Import Skill nodes"""
+        from cypher_repo.repository import MERGE_SKILL
         try:
             with self.driver.session(database=self.database) as session:
                 for skill in skills:
                     session.run(
-                        """
-                        MERGE (s:Skill {name: $name})
-                        ON CREATE SET
-                            s.category = $category,
-                            s.demand_score = $demand_score
-                        """,
+                        MERGE_SKILL,
                         parameters={
                             'name': skill.name,
                             'category': skill.category,
-                            'demand_score': skill.demand_score
+                            'demand_score': skill.demand_score,
                         }
                     )
-            
             logger.info(f"✅ Imported {len(skills)} skills")
             return len(skills)
         except Exception as e:

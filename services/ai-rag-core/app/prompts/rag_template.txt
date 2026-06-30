@@ -8,6 +8,11 @@ CONTEXT — Dữ liệu tuyển dụng:
 
 ---
 
+CONTEXT — Thống kê analytics (job_count, article_count, tăng trưởng):
+{analytics_block}
+
+---
+
 {user_block}
 
 CÂU HỎI: {query}

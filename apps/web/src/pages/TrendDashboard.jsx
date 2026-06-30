@@ -5,6 +5,7 @@ import {
 } from 'recharts';
 import Select from 'react-select';
 import { getRadarSearch, getRadarTop4, getRadarTop10 } from '../api/trendService';
+import { getForecast } from '../api/forecastService';
 import './TrendDashboard.css';
 
 const PALETTE = [
@@ -153,6 +154,9 @@ export default function TrendDashboard() {
     const [loadingTop, setLoadingTop] = useState(true);
     const [loadingChart, setLoadingChart] = useState(false);
     const [error, setError] = useState('');
+    const [forecast, setForecast] = useState(null);
+    const [loadingForecast, setLoadingForecast] = useState(false);
+    const [forecastTech, setForecastTech] = useState(null);
 
     const colorMap = useMemo(() => {
         const map = {};
@@ -230,6 +234,25 @@ export default function TrendDashboard() {
         };
         fetch();
     }, [selectedTechs, timeRange]);
+
+    const handleForecast = useCallback(async (techName) => {
+        if (forecastTech === techName) {
+            setForecast(null);
+            setForecastTech(null);
+            return;
+        }
+        setForecastTech(techName);
+        setLoadingForecast(true);
+        setForecast(null);
+        try {
+            const res = await getForecast(techName, 6);
+            setForecast(res?.data ?? res);
+        } catch {
+            setForecast(null);
+        } finally {
+            setLoadingForecast(false);
+        }
+    }, [forecastTech]);
 
     const handleExportCSV = useCallback(() => {
         const headers = ['Month', ...activeTechIds];
@@ -405,10 +428,58 @@ export default function TrendDashboard() {
                             <span className="top10-dot" style={{ background: PALETTE[i % PALETTE.length] }} />
                             <span className="top10-name">{t.keyword}</span>
                             <span className="top10-jobs">{t.job_count?.toLocaleString()} jobs</span>
+                            <button
+                                className={`forecast-btn${forecastTech === t.keyword ? ' active' : ''}`}
+                                onClick={() => handleForecast(t.keyword)}
+                                title="Dự báo xu hướng"
+                            >
+                                {forecastTech === t.keyword && loadingForecast ? '...' : '📈'}
+                            </button>
                         </div>
                     ))}
                 </div>
             </div>
+
+            {/* Forecast panel */}
+            {forecastTech && (
+                <div className="card forecast-panel" style={{ marginTop: 16 }}>
+                    <div className="forecast-header">
+                        <h2 className="section-title">Dự báo xu hướng: <span style={{ color: 'var(--primary)' }}>{forecastTech}</span></h2>
+                        <button className="forecast-close-btn" onClick={() => { setForecast(null); setForecastTech(null); }}>✕</button>
+                    </div>
+
+                    {loadingForecast ? (
+                        <div className="forecast-loading">Đang phân tích dữ liệu...</div>
+                    ) : forecast ? (
+                        <div className="forecast-content">
+                            <div className="forecast-direction-row">
+                                <span className={`forecast-direction forecast-direction--${forecast.predicted_direction}`}>
+                                    {forecast.predicted_direction === 'growing' ? '↑ Tăng trưởng' :
+                                     forecast.predicted_direction === 'declining' ? '↓ Suy giảm' : '→ Ổn định'}
+                                </span>
+                                <span className="forecast-confidence">
+                                    Độ tin cậy: {Math.round((forecast.confidence ?? 0) * 100)}%
+                                </span>
+                            </div>
+                            {forecast.reasoning && (
+                                <p className="forecast-reasoning">{forecast.reasoning}</p>
+                            )}
+                            {forecast.signals?.length > 0 && (
+                                <div className="forecast-signals">
+                                    {forecast.signals.map((s, i) => (
+                                        <div key={i} className="forecast-signal">
+                                            <span className="signal-label">{s.signal}</span>
+                                            <span className="signal-value">{typeof s.value === 'number' ? s.value.toFixed(2) : s.value}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="forecast-loading">Không có dữ liệu dự báo cho công nghệ này.</div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

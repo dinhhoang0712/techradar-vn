@@ -305,3 +305,113 @@
     font-size: 0.78rem;
     margin-left: auto;
 }
+
+/* ── Forecast ────────────────────────────────────────────────────────────── */
+.forecast-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-3);
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 2px 7px;
+    margin-left: auto;
+    transition: all 0.15s;
+    line-height: 1;
+}
+
+.forecast-btn:hover,
+.forecast-btn.active {
+    border-color: var(--primary);
+    background: var(--primary-glow);
+}
+
+.forecast-panel {
+    padding: 20px 24px;
+}
+
+.forecast-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+.forecast-close-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-3);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: color 0.15s;
+}
+
+.forecast-close-btn:hover { color: var(--text); }
+
+.forecast-loading {
+    color: var(--text-3);
+    font-size: 0.88rem;
+    padding: 10px 0;
+}
+
+.forecast-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.forecast-direction-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.forecast-direction {
+    font-size: 1rem;
+    font-weight: 700;
+    padding: 4px 14px;
+    border-radius: 20px;
+}
+
+.forecast-direction--growing  { background: rgba(0,214,143,0.12); color: #00d68f; border: 1px solid rgba(0,214,143,0.3); }
+.forecast-direction--stable   { background: rgba(255,201,77,0.12); color: #ffc94d; border: 1px solid rgba(255,201,77,0.3); }
+.forecast-direction--declining{ background: rgba(255,82,82,0.10);  color: #ff5252; border: 1px solid rgba(255,82,82,0.25); }
+
+.forecast-confidence {
+    color: var(--text-2);
+    font-size: 0.85rem;
+}
+
+.forecast-reasoning {
+    color: var(--text-2);
+    font-size: 0.88rem;
+    line-height: 1.6;
+    margin: 0;
+    padding: 10px 14px;
+    background: var(--surface);
+    border-radius: 8px;
+    border-left: 3px solid var(--primary);
+}
+
+.forecast-signals {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.forecast-signal {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--surface);
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    font-size: 0.82rem;
+}
+
+.signal-label { color: var(--text-2); flex: 1; }
+.signal-value { color: var(--primary); font-weight: 600; margin-left: 12px; }

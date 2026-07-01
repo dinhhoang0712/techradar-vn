@@ -24,7 +24,7 @@ tiktoken==0.7.0
 # Embedding, NER, and reranking
 sentence-transformers==3.0.1
 transformers==4.44.2
-torch==2.4.1
+torch>=2.0.0
 onnxruntime==1.20.1
 huggingface-hub==0.36.0
 

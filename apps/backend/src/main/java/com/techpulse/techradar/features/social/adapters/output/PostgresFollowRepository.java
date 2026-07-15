@@ -16,13 +16,14 @@ public class PostgresFollowRepository implements FollowRepository {
     private final DatabaseClient dbClient;
 
     @Override
-    public Mono<Void> follow(UUID followerId, UUID followeeId) {
+    public Mono<Boolean> follow(UUID followerId, UUID followeeId) {
         return dbClient.sql(
                 "INSERT INTO follow (follower_id, followee_id) VALUES (:follower_id, :followee_id) " +
                 "ON CONFLICT (follower_id, followee_id) DO NOTHING")
                 .bind("follower_id", followerId)
                 .bind("followee_id", followeeId)
-                .fetch().rowsUpdated().then();
+                .fetch().rowsUpdated()
+                .map(rows -> rows > 0);
     }
 
     @Override
@@ -52,6 +53,14 @@ public class PostgresFollowRepository implements FollowRepository {
     @Override
     public Mono<Long> followingCount(UUID userId) {
         return count("SELECT count(*) AS c FROM follow WHERE follower_id = :user_id", userId);
+    }
+
+    @Override
+    public Mono<Long> countAll() {
+        return dbClient.sql("SELECT count(*) AS c FROM follow")
+                .map((row, meta) -> row.get("c", Long.class))
+                .one()
+                .defaultIfEmpty(0L);
     }
 
     private Mono<Long> count(String sql, UUID userId) {

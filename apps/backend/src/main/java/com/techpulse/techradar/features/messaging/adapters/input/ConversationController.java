@@ -46,9 +46,12 @@ public class ConversationController {
 
     @Operation(summary = "List the current user's conversations, most recently active first")
     @GetMapping
-    public Mono<ResponseEntity<ApiResponse<List<MessagingDtos.ConversationResponse>>>> list() {
+    public Mono<ResponseEntity<ApiResponse<List<MessagingDtos.ConversationResponse>>>> list(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
         return SecurityUtils.currentUserId()
-                .flatMapMany(getConversationsUseCase::execute)
+                .flatMapMany(userId -> getConversationsUseCase.execute(userId, page, size))
                 .map(MessagingDtos.ConversationResponse::from)
                 .collectList()
                 .map(list -> ResponseEntity.ok(ApiResponse.success(list, "Conversations")));

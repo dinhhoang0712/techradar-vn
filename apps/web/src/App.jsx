@@ -4,6 +4,8 @@ import { ToastProvider } from './components/common/ToastProvider';
 import UserLayout from './layouts/UserLayout';
 import AdminLayout from './layouts/AdminLayout';
 import AdminDashboard from './pages/admin/AdminDashboard';
+import AdminModeration from './pages/admin/AdminModeration';
+import AdminReports from './pages/admin/AdminReports';
 import AdminCMS from './pages/admin/AdminCMS';
 import AdminSettings from './pages/admin/AdminSettings';
 import AdminUsers from './pages/admin/AdminUsers';
@@ -59,6 +61,8 @@ export default function App() {
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<AdminDashboard />} />
+            <Route path="moderation" element={<AdminModeration />} />
+            <Route path="reports" element={<AdminReports />} />
             <Route path="users" element={<AdminUsers />} />
             <Route path="cms" element={<AdminCMS />} />
             <Route path="settings" element={<AdminSettings />} />

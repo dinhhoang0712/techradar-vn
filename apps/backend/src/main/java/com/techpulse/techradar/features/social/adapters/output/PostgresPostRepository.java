@@ -83,13 +83,22 @@ public class PostgresPostRepository implements PostRepository {
     }
 
     @Override
-    public Mono<Void> like(UUID postId, UUID userId) {
+    public Mono<UUID> findAuthorId(UUID postId) {
+        return dbClient.sql("SELECT user_id FROM post WHERE id = :id")
+                .bind("id", postId)
+                .map((row, meta) -> row.get("user_id", UUID.class))
+                .one();
+    }
+
+    @Override
+    public Mono<Boolean> like(UUID postId, UUID userId) {
         return dbClient.sql(
                 "INSERT INTO post_like (post_id, user_id) VALUES (:post_id, :user_id) " +
                 "ON CONFLICT (post_id, user_id) DO NOTHING")
                 .bind("post_id", postId)
                 .bind("user_id", userId)
-                .fetch().rowsUpdated().then();
+                .fetch().rowsUpdated()
+                .map(rows -> rows > 0);
     }
 
     @Override
@@ -98,6 +107,79 @@ public class PostgresPostRepository implements PostRepository {
                 .bind("post_id", postId)
                 .bind("user_id", userId)
                 .fetch().rowsUpdated().then();
+    }
+
+    @Override
+    public Flux<FeedRow> findAllForModeration(int limit, int offset) {
+        return dbClient.sql(
+                "SELECT p.id, p.user_id, u.full_name, up.avatar_url, p.content, p.created_at, " +
+                "       (SELECT count(*) FROM post_like pl WHERE pl.post_id = p.id) AS like_count, " +
+                "       (SELECT count(*) FROM post_comment pc WHERE pc.post_id = p.id) AS comment_count " +
+                "FROM post p " +
+                "JOIN users u ON u.id = p.user_id " +
+                "LEFT JOIN user_profile up ON up.user_id = p.user_id " +
+                "ORDER BY p.created_at DESC LIMIT :limit OFFSET :offset")
+                .bind("limit", limit)
+                .bind("offset", offset)
+                .map((row, meta) -> new FeedRow(
+                        row.get("id", UUID.class),
+                        row.get("user_id", UUID.class),
+                        row.get("full_name", String.class),
+                        row.get("avatar_url", String.class),
+                        row.get("content", String.class),
+                        row.get("created_at", LocalDateTime.class),
+                        row.get("like_count", Long.class),
+                        row.get("comment_count", Long.class),
+                        false))
+                .all();
+    }
+
+    @Override
+    public Mono<Boolean> deleteById(UUID postId) {
+        return dbClient.sql("DELETE FROM post WHERE id = :id")
+                .bind("id", postId)
+                .fetch().rowsUpdated()
+                .map(rows -> rows > 0);
+    }
+
+    @Override
+    public Mono<Long> countAll() {
+        return dbClient.sql("SELECT count(*) AS c FROM post")
+                .map((row, meta) -> row.get("c", Long.class))
+                .one()
+                .defaultIfEmpty(0L);
+    }
+
+    @Override
+    public Mono<Long> countCreatedSince(LocalDateTime since) {
+        return dbClient.sql("SELECT count(*) AS c FROM post WHERE created_at >= :since")
+                .bind("since", since)
+                .map((row, meta) -> row.get("c", Long.class))
+                .one()
+                .defaultIfEmpty(0L);
+    }
+
+    @Override
+    public Mono<Long> countAllLikes() {
+        return dbClient.sql("SELECT count(*) AS c FROM post_like")
+                .map((row, meta) -> row.get("c", Long.class))
+                .one()
+                .defaultIfEmpty(0L);
+    }
+
+    @Override
+    public Flux<TopPosterRow> topPosters(int limit) {
+        return dbClient.sql(
+                "SELECT p.user_id, u.full_name, count(*) AS post_count " +
+                "FROM post p JOIN users u ON u.id = p.user_id " +
+                "GROUP BY p.user_id, u.full_name " +
+                "ORDER BY post_count DESC LIMIT :limit")
+                .bind("limit", limit)
+                .map((row, meta) -> new TopPosterRow(
+                        row.get("user_id", UUID.class),
+                        row.get("full_name", String.class),
+                        row.get("post_count", Long.class)))
+                .all();
     }
 
     private static FeedRow mapRow(Row row) {

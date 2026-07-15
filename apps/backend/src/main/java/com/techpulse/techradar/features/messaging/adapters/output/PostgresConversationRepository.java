@@ -19,8 +19,13 @@ public class PostgresConversationRepository implements ConversationRepository {
 
     @Override
     public Mono<UUID> findOrCreate(UUID userX, UUID userY) {
-        UUID a = userX.compareTo(userY) < 0 ? userX : userY;
-        UUID b = userX.compareTo(userY) < 0 ? userY : userX;
+        // Postgres compares uuid values byte-wise (unsigned), which disagrees with
+        // java.util.UUID#compareTo (signed long on the MSBs) whenever the two UUIDs' most
+        // significant bytes differ in sign bit — ordering by the canonical string form matches
+        // Postgres's ordering exactly, satisfying the `CHECK (user_a_id < user_b_id)` constraint.
+        boolean xFirst = userX.toString().compareTo(userY.toString()) < 0;
+        UUID a = xFirst ? userX : userY;
+        UUID b = xFirst ? userY : userX;
 
         return dbClient.sql(
                 "INSERT INTO conversation (id, user_a_id, user_b_id) VALUES (:id, :a, :b) " +
@@ -56,7 +61,7 @@ public class PostgresConversationRepository implements ConversationRepository {
     }
 
     @Override
-    public Flux<ConversationRow> findAllForUser(UUID userId) {
+    public Flux<ConversationRow> findAllForUser(UUID userId, int limit, int offset) {
         return dbClient.sql(
                 "SELECT c.id, " +
                 "       CASE WHEN c.user_a_id = :user_id THEN c.user_b_id ELSE c.user_a_id END AS other_id, " +
@@ -72,10 +77,38 @@ public class PostgresConversationRepository implements ConversationRepository {
                 "    WHERE dm.conversation_id = c.id ORDER BY dm.created_at DESC LIMIT 1 " +
                 ") lm ON true " +
                 "WHERE c.user_a_id = :user_id OR c.user_b_id = :user_id " +
-                "ORDER BY lm.created_at DESC NULLS LAST")
+                "ORDER BY lm.created_at DESC NULLS LAST " +
+                "LIMIT :limit OFFSET :offset")
                 .bind("user_id", userId)
+                .bind("limit", limit)
+                .bind("offset", offset)
                 .map((row, meta) -> mapRow(row))
                 .all();
+    }
+
+    @Override
+    public Mono<Long> countConversations() {
+        return dbClient.sql("SELECT count(*) AS c FROM conversation")
+                .map((row, meta) -> row.get("c", Long.class))
+                .one()
+                .defaultIfEmpty(0L);
+    }
+
+    @Override
+    public Mono<Long> countMessages() {
+        return dbClient.sql("SELECT count(*) AS c FROM direct_message")
+                .map((row, meta) -> row.get("c", Long.class))
+                .one()
+                .defaultIfEmpty(0L);
+    }
+
+    @Override
+    public Mono<Long> countMessagesSince(LocalDateTime since) {
+        return dbClient.sql("SELECT count(*) AS c FROM direct_message WHERE created_at >= :since")
+                .bind("since", since)
+                .map((row, meta) -> row.get("c", Long.class))
+                .one()
+                .defaultIfEmpty(0L);
     }
 
     private static ConversationRow mapRow(Row row) {

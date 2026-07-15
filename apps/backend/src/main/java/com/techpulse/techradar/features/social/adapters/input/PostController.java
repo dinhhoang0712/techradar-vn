@@ -5,6 +5,7 @@ import com.techpulse.techradar.features.social.application.CreatePostUseCase;
 import com.techpulse.techradar.features.social.application.DeletePostUseCase;
 import com.techpulse.techradar.features.social.application.GetCommentsUseCase;
 import com.techpulse.techradar.features.social.application.GetFeedUseCase;
+import com.techpulse.techradar.features.social.application.ReportContentUseCase;
 import com.techpulse.techradar.features.social.application.ToggleLikeUseCase;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import com.techpulse.techradar.shared.security.SecurityUtils;
@@ -38,6 +39,7 @@ public class PostController {
     private final ToggleLikeUseCase toggleLikeUseCase;
     private final GetCommentsUseCase getCommentsUseCase;
     private final AddCommentUseCase addCommentUseCase;
+    private final ReportContentUseCase reportContentUseCase;
 
     @Operation(summary = "Feed: posts by the current user and everyone they follow")
     @GetMapping("/feed")
@@ -106,5 +108,27 @@ public class PostController {
         return SecurityUtils.currentUserId()
                 .flatMap(userId -> addCommentUseCase.execute(id, userId, request.getContent()))
                 .map(commentId -> ResponseEntity.ok(ApiResponse.success(Map.of("id", commentId), "Comment added")));
+    }
+
+    @Operation(summary = "Report a post for moderation")
+    @PostMapping("/posts/{id}/report")
+    public Mono<ResponseEntity<ApiResponse<Void>>> reportPost(
+            @PathVariable String id,
+            @RequestBody SocialDtos.ReportRequest request
+    ) {
+        return SecurityUtils.currentUserId()
+                .flatMap(userId -> reportContentUseCase.reportPost(id, userId, request.getReason()))
+                .thenReturn(ResponseEntity.ok(ApiResponse.<Void>success(null, "Post reported")));
+    }
+
+    @Operation(summary = "Report a comment for moderation")
+    @PostMapping("/comments/{id}/report")
+    public Mono<ResponseEntity<ApiResponse<Void>>> reportComment(
+            @PathVariable String id,
+            @RequestBody SocialDtos.ReportRequest request
+    ) {
+        return SecurityUtils.currentUserId()
+                .flatMap(userId -> reportContentUseCase.reportComment(id, userId, request.getReason()))
+                .thenReturn(ResponseEntity.ok(ApiResponse.<Void>success(null, "Comment reported")));
     }
 }

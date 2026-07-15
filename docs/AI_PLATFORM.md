@@ -24,7 +24,7 @@ AI Platform bao gồm 2 Python services chính và các supporting services:
 
 | Service | Port | Mô tải |
 |---------|------|--------|
-| **ai-rag-core** | 8000 | Graph RAG chatbot, recommendation, forecast, career assistant |
+| **ai-rag-core** | 8000 | Graph RAG chatbot, recommendation, forecast, career assistant, mock interview |
 | **ml-clustering** | 8001 | HDBSCAN clustering pipeline + serving |
 
 ### Supporting services
@@ -54,7 +54,7 @@ Spring Boot gắn header `X-Internal-Auth: <INTERNAL_API_TOKEN>` vào tất cả
 
 ## 2. ai-rag-core Service
 
-**ai-rag-core** là FastAPI service (port 8000) cung cấp các AI capabilities: Graph RAG chatbot, recommendation, forecast, career assistant, summarization, report generation, và AI agent.
+**ai-rag-core** là FastAPI service (port 8000) cung cấp các AI capabilities: Graph RAG chatbot, recommendation, forecast, career assistant, summarization, report generation, AI agent, và AI mock interview (mới).
 
 ### 2.1 Architecture
 
@@ -91,6 +91,7 @@ ai-rag-core/
 | POST | `/summarize` | X-Internal-Auth | Tóm tắt xu hướng công nghệ |
 | POST | `/report` | X-Internal-Auth | Báo cáo xu hướng theo kỳ |
 | POST | `/agent` | X-Internal-Auth | AI Agent (multi-tool) |
+| POST | `/interview` | X-Internal-Auth | **NEW** — AI mock interview, stateless (xem §2.4) |
 
 ### 2.3 RAG Pipeline (Graph RAG)
 
@@ -241,6 +242,42 @@ Multi-tool agent với 4 tools:
 | `recommend_technologies` | Gợi ý tech liên quan |
 | `forecast_technology` | Dự báo xu hướng |
 | `summarize_technology` | Tóm tắt tin tức |
+
+#### AI Interview (NEW)
+
+Phỏng vấn thử với AI — **stateless**: không lưu session phía server (khác `/chat`, giống
+`/career`/`/recommend`). Trạng thái được suy ra hoàn toàn từ độ dài `history` do client gửi mỗi
+lượt (`app/services/interview_service.py`):
+
+```
+POST /interview
+{
+  "target_role": "Senior Backend Developer",
+  "target_company": "Tiki",          // optional
+  "history": []                       // [] = bắt đầu buổi mới
+}
+```
+
+- **`len(history) == 0`** (mở đầu): tra Neo4j lấy 1 job posting thật khớp `target_role`
+  (+ `target_company` nếu có) qua `Job-[:HIRES_FOR]->Company` (`graph_queries.py`,
+  `JOBS_BY_TITLE_AND_COMPANY`, fallback về `JOBS_BY_TITLE` dùng chung với RAG chat nếu không có
+  company hoặc không tìm thấy, fallback tiếp về câu nhắc chung chung nếu Neo4j lỗi/không có kết
+  quả) → LLM sinh 1 câu hỏi mở đầu (`interview_opening_template.txt`) → trả `next_question`,
+  `turn=1`.
+- **`0 < len(history) < 5`** (giữa buổi): 1 LLM call vừa chấm điểm câu trả lời gần nhất vừa sinh
+  câu hỏi tiếp theo, parse theo delimiter cố định `---FEEDBACK---`/`---QUESTION---`
+  (`interview_turn_template.txt`) → trả `feedback_on_last_answer`, `next_question`, `turn`.
+- **`len(history) >= 5`** (`MAX_TURNS`): LLM sinh nhận xét tổng kết (`interview_final_template.txt`),
+  điểm số lấy từ dòng `SCORE: N/10` cuối cùng (regex, clamp 0-10, mặc định 5 nếu model không theo
+  đúng format) → trả `is_final=true`, `final_summary: {score, summary}`.
+
+**Response fields:** `next_question`, `feedback_on_last_answer`, `is_final`, `turn`, `final_summary`
+(`{score, summary}` hoặc `null`).
+
+**Lưu ý khác với các route AI khác:** `routes_interview.py` KHÔNG có `try/except` quanh lời gọi
+LLM (khác `/chat` và `/internal/ai/llm-summary`, cả 2 đều catch → trả `HTTPException` có status
+code rõ ràng) — nếu `generate()` hết retry, lỗi sẽ trồi lên thành `500` mặc định của FastAPI,
+không có `detail` mô tả. Neo4j lookup thì có catch (log warning, fallback sang text chung chung).
 
 ### 2.5 Memory
 
@@ -570,7 +607,15 @@ docker compose --profile vector up qdrant qdrant-writer
 
 ### 5.1 Spring Boot gọi Python
 
-Tất cả module trong `apps/backend/features/` dùng `WebClient` với pattern:
+> **Cập nhật kiến trúc gateway:** `/chat`, `/chat/stream` có client riêng, typed
+> (`RagProxyService`). Còn `/recommend /forecast /career /summarize(`/chat/summarize`) /report
+> /agent /interview` giờ đi qua **một** module gateway dùng chung là `features/aiproxy`
+> (`PythonAiProxyClient`/`AiProxyPort`) thay vì 6 module/client riêng biệt như trước — xem
+> [`docs/BACKEND_GUIDE.md`](./BACKEND_GUIDE.md) §4.16. Phía `ai-rag-core` (Python) **không đổi**:
+> mỗi route vẫn là 1 file `routes_*.py` riêng như liệt kê ở §2.2/§2.4.
+
+Pattern `WebClient` chung (cả `RagProxyService` lẫn `PythonAiProxyClient` đều theo pattern này,
+khác biệt là `PythonAiProxyClient` forward `Map<String,Object>` nguyên văn, không có DTO):
 
 ```java
 @Value("${app.python.ai.base-url:http://localhost:8000}")
@@ -595,12 +640,18 @@ private WebClient webClient() {
 | POST `/api/v1/chat` | POST `/chat` | - |
 | POST `/api/v1/chat/stream` | POST `/chat/stream` | - |
 | POST `/api/v1/recommend` | POST `/recommend` | - |
-| POST `/api/v1/forecast` | POST `/forecast` | - |
+| **GET** `/api/v1/forecast` *(sửa: gateway nhận GET + query params, không phải POST)* | POST `/forecast` | - |
 | POST `/api/v1/career` | POST `/career` | - |
 | POST `/api/v1/chat/summarize` | POST `/summarize` | - |
 | GET `/api/v1/report` | POST `/report` | - |
 | POST `/api/v1/agent` | POST `/agent` | - |
+| POST `/api/v1/interview` **(NEW)** | POST `/interview` | - |
 | GET `/api/v1/clustering/clusters` | - | GET `/clusters` |
+
+**Auth phía gateway (SecurityConfig, không liên quan X-Internal-Auth ở §5.3):** `/forecast`,
+`/report`, `/chat/summarize` là public (không cần Bearer JWT); `/recommend`, `/career`,
+`/interview`, `/agent` yêu cầu Bearer JWT — sự khác biệt này kế thừa từ path string của 6 module
+cũ trước khi gộp vào `aiproxy`, chưa được rà soát lại (xem `docs/API_DOCs_v1.md` mục Phân quyền).
 
 ### 5.3 Security
 
@@ -619,6 +670,7 @@ private WebClient webClient() {
 | Career | 60 giây |
 | Summarize | 60 giây |
 | Report | 60 giây |
+| Interview (NEW) | 60 giây (`AiProxyPort.DEFAULT_TIMEOUT`) |
 
 ---
 

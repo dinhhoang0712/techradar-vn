@@ -24,11 +24,18 @@ public class Neo4jCompanyRepository implements CompanyRepository {
 
     private final Driver driver;
 
-    // Company.USES is declared in the schema but never written by any ingestion pipeline
-    // (Kafka writer only sets Job-[:POSTED_BY]->Company); the tech stack signal that actually
-    // exists comes from the technologies required by a company's own job postings.
+    // Company-[:USES]->Technology does exist (written by data-platform/gold/neo4j_enricher.py),
+    // but we deliberately infer the tech stack from job requirements instead: it reflects jobs the
+    // company is hiring for right now, whereas USES is a derived, batch-enriched signal that only
+    // refreshes on the enricher's schedule.
+    //
+    // Job-[:POSTED_BY]->Company is written by the real-time Kafka pipeline
+    // (KafkaNeo4jWriterService); Job-[:HIRES_FOR]->Company is written by the batch
+    // knowledge-graph importer (import_multi_source.py) and is what every other reader
+    // (ai-rag-core, ml-clustering) relies on. A job seen by only one of the two pipelines has
+    // only one of these edges, so match both or company linkage silently goes missing.
     private static final String QUERY =
-            "MATCH (c:Company)<-[:POSTED_BY]-(j:Job)-[:REQUIRES]->(t) " +
+            "MATCH (c:Company)<-[:POSTED_BY|HIRES_FOR]-(j:Job)-[:REQUIRES]->(t) " +
             "WHERE t:Technology OR t:Skill " +
             "WITH c, collect(DISTINCT t.name) AS techStack, count(DISTINCT j) AS jobCount " +
             "RETURN c.id AS id, c.name AS name, c.location AS location, techStack, jobCount " +

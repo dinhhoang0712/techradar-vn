@@ -65,6 +65,28 @@ export const addComment = async (postId, content) => {
 };
 
 /**
+ * Báo cáo một bài viết vi phạm để admin xem xét. Gọi lại nhiều lần không tạo báo cáo trùng.
+ * Endpoint: POST /posts/{id}/report
+ */
+export const reportPost = async (id, reason) => {
+    return await apiClient(`/posts/${encodeURIComponent(id)}/report`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+    });
+};
+
+/**
+ * Báo cáo một bình luận vi phạm để admin xem xét.
+ * Endpoint: POST /comments/{id}/report
+ */
+export const reportComment = async (id, reason) => {
+    return await apiClient(`/comments/${encodeURIComponent(id)}/report`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+    });
+};
+
+/**
  * Thông tin hồ sơ công khai của một người dùng (bio, follower/following, is_following).
  * Endpoint: GET /users/{id}/profile-summary
  */

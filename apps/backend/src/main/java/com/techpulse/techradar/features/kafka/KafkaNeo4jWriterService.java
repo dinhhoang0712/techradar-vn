@@ -4,11 +4,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.techpulse.techradar.features.kafka.KafkaTopicConstants;
 import com.techpulse.techradar.features.kafka.model.ExtractedArticle;
 import com.techpulse.techradar.features.kafka.model.ExtractedJob;
+import com.techpulse.techradar.features.kafka.producer.KafkaProducerService;
+import com.techpulse.techradar.features.notification.event.JobMatchEvent;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.neo4j.driver.Driver;
 import org.neo4j.driver.Record;
 import org.neo4j.driver.Session;
 import org.neo4j.driver.TransactionWork;
+import org.neo4j.driver.Values;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -16,6 +19,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.DigestUtils;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Service
 public class KafkaNeo4jWriterService {
@@ -24,10 +30,21 @@ public class KafkaNeo4jWriterService {
 
     private final ObjectMapper objectMapper;
     private final Driver neo4jDriver;
+    private final KafkaProducerService kafkaProducer;
 
-    public KafkaNeo4jWriterService(ObjectMapper objectMapper, Driver neo4jDriver) {
+    private final AtomicLong articlesProcessed = new AtomicLong();
+    private final AtomicLong articlesFailed = new AtomicLong();
+    private final AtomicLong jobsProcessed = new AtomicLong();
+    private final AtomicLong jobsFailed = new AtomicLong();
+    private final AtomicReference<Instant> lastArticleProcessedAt = new AtomicReference<>();
+    private final AtomicReference<Instant> lastJobProcessedAt = new AtomicReference<>();
+    private final AtomicReference<Instant> lastFailureAt = new AtomicReference<>();
+    private final AtomicReference<String> lastFailureMessage = new AtomicReference<>();
+
+    public KafkaNeo4jWriterService(ObjectMapper objectMapper, Driver neo4jDriver, KafkaProducerService kafkaProducer) {
         this.objectMapper = objectMapper;
         this.neo4jDriver = neo4jDriver;
+        this.kafkaProducer = kafkaProducer;
     }
 
     @KafkaListener(topics = KafkaTopicConstants.EXTRACTED_ARTICLES, groupId = "neo4j-writer-group")
@@ -36,6 +53,8 @@ public class KafkaNeo4jWriterService {
             ExtractedArticle article = objectMapper.readValue(record.value(), ExtractedArticle.class);
             writeArticle(article);
         } catch (Exception e) {
+            articlesFailed.incrementAndGet();
+            recordFailure(e);
             LOGGER.error("Failed to process extracted article for Neo4j", e);
         }
     }
@@ -46,8 +65,29 @@ public class KafkaNeo4jWriterService {
             ExtractedJob job = objectMapper.readValue(record.value(), ExtractedJob.class);
             writeJob(job);
         } catch (Exception e) {
+            jobsFailed.incrementAndGet();
+            recordFailure(e);
             LOGGER.error("Failed to process extracted job for Neo4j", e);
         }
+    }
+
+    private void recordFailure(Exception e) {
+        lastFailureAt.set(Instant.now());
+        lastFailureMessage.set(e.getMessage());
+    }
+
+    /** Snapshot of throughput/error counters since this instance started, for admin dashboards. */
+    public KafkaSyncStatus syncStatus() {
+        return new KafkaSyncStatus(
+                articlesProcessed.get(),
+                articlesFailed.get(),
+                jobsProcessed.get(),
+                jobsFailed.get(),
+                lastArticleProcessedAt.get(),
+                lastJobProcessedAt.get(),
+                lastFailureAt.get(),
+                lastFailureMessage.get()
+        );
     }
 
     private void writeArticle(ExtractedArticle article) {
@@ -121,13 +161,23 @@ public class KafkaNeo4jWriterService {
                 return null;
             });
             LOGGER.info("Stored extracted article to Neo4j: {}", article.getData().getSourceUrl());
+            articlesProcessed.incrementAndGet();
+            lastArticleProcessedAt.set(Instant.now());
         } catch (Exception e) {
+            articlesFailed.incrementAndGet();
+            recordFailure(e);
             LOGGER.error("Error writing article to Neo4j", e);
         }
     }
 
     private void writeJob(ExtractedJob job) {
+        String jobId = generateId(job.getData().getJob().getSourceUrl());
         try (Session session = neo4jDriver.session()) {
+            boolean isNewJob = !session.run(
+                    "MATCH (j:Job {id: $id}) RETURN j",
+                    Values.parameters("id", jobId)
+            ).hasNext();
+
             session.executeWrite(tx -> {
                 tx.run(
                         "MERGE (j:Job {id: $id}) " +
@@ -196,8 +246,37 @@ public class KafkaNeo4jWriterService {
                 return null;
             });
             LOGGER.info("Stored extracted job to Neo4j: {}", job.getData().getJob().getSourceUrl());
+            jobsProcessed.incrementAndGet();
+            lastJobProcessedAt.set(Instant.now());
+            if (isNewJob) {
+                publishJobMatchAlert(job);
+            }
         } catch (Exception e) {
+            jobsFailed.incrementAndGet();
+            recordFailure(e);
             LOGGER.error("Error writing job to Neo4j", e);
+        }
+    }
+
+    /**
+     * Publish a {@code job.match.alerts} event for a brand-new job posting (skipped for MERGE
+     * updates to an already-known job, so re-crawls of the same listing don't re-notify).
+     */
+    private void publishJobMatchAlert(ExtractedJob job) {
+        var technologies = job.getData().getTechnologies();
+        if (technologies == null || technologies.isEmpty()) {
+            return;
+        }
+        try {
+            JobMatchEvent event = new JobMatchEvent(
+                    job.getData().getJob().getTitle(),
+                    job.getData().getCompany() != null ? job.getData().getCompany().getName() : null,
+                    technologies,
+                    job.getData().getJob().getSourceUrl());
+            kafkaProducer.send(KafkaTopicConstants.JOB_MATCH_ALERTS, event);
+        } catch (Exception e) {
+            LOGGER.warn("Could not publish job match alert for {} (Kafka unavailable?)",
+                    job.getData().getJob().getSourceUrl(), e);
         }
     }
 

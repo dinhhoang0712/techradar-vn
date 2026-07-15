@@ -130,11 +130,71 @@ So sánh chi tiết giữa các công nghệ.
 
 - **Skill Gap Analysis**: Phân tích thiếu hụt kỹ năng
 - **Learning Path**: Đề xuất lộ trình học tập
-- **Job Matching**: Gợi ý việc làm phù hợp
 - **Salary Insights**: Thông tin lương theo kỹ năng, location
 - **Career Roadmap**: Lộ trình phát triển nghề nghiệp
 
 **Use Case**: Developer muốn biết từ Junior Frontend nên học gì để trở thành Senior Full-stack.
+
+---
+
+### 💼 Job Matching
+
+Gợi ý việc làm phù hợp với hồ sơ, dựa trên đồ thị tri thức (Neo4j).
+
+- **Skill-based Ranking**: Xếp hạng job theo tỷ lệ khớp kỹ năng hồ sơ (`matched_skills` / `missing_skills`)
+- **Location & Salary Filter**: Lọc theo địa điểm và mức lương tối thiểu (parse lương free-text tiếng Việt)
+
+**Use Case**: Developer có kỹ năng Java/Spring Boot muốn xem ngay những job đang tuyển khớp nhất với mình.
+
+---
+
+### 🏢 Company Explorer
+
+Khám phá công ty và tech stack thực tế của họ, suy luận từ dữ liệu job posting trên đồ thị tri thức.
+
+- **Company Directory**: Danh sách công ty xếp hạng theo số lượng job đang tuyển
+- **Similar Companies**: Gợi ý công ty có tech stack tương đồng (Jaccard similarity)
+
+**Use Case**: Developer muốn biết công ty nào đang dùng stack giống công ty mình đang cân nhắc ứng tuyển.
+
+---
+
+### 🎤 AI Mock Interview
+
+Phỏng vấn thử với AI, có ngữ cảnh từ job posting thật trên đồ thị tri thức.
+
+- **Grounded Questions**: Câu hỏi mở đầu dựa trên 1 job posting thật khớp vị trí/công ty mục tiêu
+- **Turn-based Feedback**: Mỗi câu trả lời được AI chấm điểm + hỏi tiếp câu tiếp theo
+- **Final Assessment**: Kết thúc buổi phỏng vấn với điểm số (0-10) và nhận xét tổng kết
+
+**Use Case**: Developer chuẩn bị phỏng vấn vị trí Senior Backend Developer, luyện tập trả lời trước với AI.
+
+---
+
+### 📰 Social Feed
+
+Mạng xã hội nội bộ để chia sẻ và kết nối với developer khác.
+
+- **Feed**: Đăng bài, xem bài của bản thân + người đang follow
+- **Like & Comment**: Tương tác trên bài đăng — tác giả nhận notification realtime khi có like/comment mới
+- **Follow**: Theo dõi người dùng khác, gợi ý người nên follow — nhận notification khi có follower mới
+- **Public Profile**: Trang hồ sơ công khai với follower/following/post count
+- **Report vi phạm**: Báo cáo bài viết/bình luận, admin duyệt qua hàng đợi kiểm duyệt riêng
+
+**Use Case**: Developer chia sẻ một mẹo học React và nhận phản hồi từ cộng đồng trong app.
+
+---
+
+### 💬 Direct Messaging
+
+Nhắn tin trực tiếp 1-1 giữa người dùng, realtime qua SSE (fan-out qua Redis Pub/Sub — hoạt động đúng dù backend chạy nhiều instance).
+
+- **1-1 Conversations**: Danh sách hội thoại, mới nhất trước
+- **Realtime Delivery**: Tin nhắn mới đẩy trực tiếp qua SSE (không cần refresh)
+- **Read Receipts**: Đánh dấu đã đọc, badge số tin nhắn chưa đọc
+- **Notification**: Nhận thông báo tin nhắn mới ngay cả khi không đang mở trang Tin nhắn
+
+**Use Case**: Developer nhắn tin trực tiếp cho tác giả một bài đăng hoặc một gợi ý kết nối.
 
 ---
 
@@ -152,12 +212,12 @@ Quản lý tài khoản và hồ sơ cá nhân.
 
 ### 🔔 Notifications
 
-Hệ thống thông báo realtime.
+Hệ thống thông báo realtime, fan-out qua Redis Pub/Sub nên đúng dù chạy nhiều instance backend.
 
-- **Trend Alerts**: Thông báo khi công nghệ quan tâm tăng trưởng vượt threshold
-- **System Notifications**: Thông báo hệ thống (maintenance, new features)
+- **Trend Alerts**: Thông báo khi công nghệ quan tâm tăng trưởng vượt threshold (in-app + email)
+- **Job Match Alerts**: Thông báo khi có job mới khớp kỹ năng hồ sơ (in-app + email)
+- **Social & Messaging**: Thông báo khi có người like/comment bài viết, follow bạn, hoặc gửi tin nhắn (chỉ in-app, không email)
 - **Real-time Streaming**: SSE để push notification realtime
-- **Multi-channel**: In-app + Email
 - **Notification Center**: Quản lý và đánh dấu đã đọc
 
 ---

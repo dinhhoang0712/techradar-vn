@@ -117,4 +117,11 @@ public class SocialDtos {
     public static class AddCommentRequest {
         private String content;
     }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ReportRequest {
+        private String reason;
+    }
 }

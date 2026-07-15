@@ -4,6 +4,8 @@ import com.techpulse.techradar.features.chat.adapters.input.dto.ChatHealthRespon
 import com.techpulse.techradar.features.chat.adapters.input.dto.ChatResponse;
 import com.techpulse.techradar.features.chat.ports.ChatPort;
 import com.techpulse.techradar.features.clustering.ports.ClusteringServicePort;
+import com.techpulse.techradar.features.notification.domain.TrendSubscriber;
+import com.techpulse.techradar.features.notification.ports.NotificationRepository;
 import com.techpulse.techradar.features.system.ports.ActivityLogRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -53,6 +55,9 @@ class ApiIntegrationTest {
 
     @Autowired
     DatabaseClient db;
+
+    @Autowired
+    NotificationRepository notificationRepository;
 
     @MockitoBean
     ClusteringServicePort clusteringPort;
@@ -116,6 +121,14 @@ class ApiIntegrationTest {
 
     private static String bearer(String token) {
         return "Bearer " + token;
+    }
+
+    @SuppressWarnings("unchecked")
+    private String meId(String token) {
+        Map<String, Object> body = web.get().uri("/api/v1/auth/me").header("Authorization", bearer(token))
+                .exchange().expectStatus().isOk()
+                .expectBody(MAP).returnResult().getResponseBody();
+        return (String) body.get("id");
     }
 
     @SuppressWarnings("unchecked")
@@ -541,5 +554,146 @@ class ApiIntegrationTest {
         web.post().uri("/api/v1/auth/reset-password").contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of("token", "not-a-uuid", "new_password", "NewPass1!"))
                 .exchange().expectStatus().isBadRequest();
+    }
+
+    // ==== messaging + social notifications (in-process, no Kafka involved) ===
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void message_notifiesRecipient_withConversationLink() {
+        String alice = registerAndLogin("alice-msg@test.vn");
+        String bob = registerAndLogin("bob-msg@test.vn");
+        String bobId = meId(bob);
+
+        Map<String, Object> conv = web.post().uri("/api/v1/conversations/with/" + bobId)
+                .header("Authorization", bearer(alice))
+                .exchange().expectStatus().isOk()
+                .expectBody(MAP).returnResult().getResponseBody();
+        String conversationId = (String) ((Map<String, Object>) conv.get("data")).get("id");
+
+        web.post().uri("/api/v1/conversations/" + conversationId + "/messages")
+                .header("Authorization", bearer(alice))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("content", "Chào Bob!"))
+                .exchange().expectStatus().isOk();
+
+        web.get().uri("/api/v1/notifications").header("Authorization", bearer(bob))
+                .exchange().expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.data[0].type").isEqualTo("NEW_MESSAGE")
+                .jsonPath("$.data[0].link").isEqualTo("/messages?conversation=" + conversationId)
+                .jsonPath("$.data[1]").doesNotExist();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void comment_notifiesPostAuthor_butNotOnSelfComment() {
+        String author = registerAndLogin("author-cmt@test.vn");
+        String commenter = registerAndLogin("commenter-cmt@test.vn");
+
+        Map<String, Object> post = web.post().uri("/api/v1/posts").header("Authorization", bearer(author))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("content", "Hello feed"))
+                .exchange().expectStatus().isOk()
+                .expectBody(MAP).returnResult().getResponseBody();
+        String postId = (String) ((Map<String, Object>) post.get("data")).get("id");
+
+        // commenting on your own post shouldn't notify you
+        web.post().uri("/api/v1/posts/" + postId + "/comments").header("Authorization", bearer(author))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("content", "self note"))
+                .exchange().expectStatus().isOk();
+
+        web.get().uri("/api/v1/notifications").header("Authorization", bearer(author))
+                .exchange().expectStatus().isOk()
+                .expectBody().jsonPath("$.data[0]").doesNotExist();
+
+        // someone else commenting does notify the author
+        web.post().uri("/api/v1/posts/" + postId + "/comments").header("Authorization", bearer(commenter))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("content", "nice post"))
+                .exchange().expectStatus().isOk();
+
+        web.get().uri("/api/v1/notifications").header("Authorization", bearer(author))
+                .exchange().expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.data[0].type").isEqualTo("POST_COMMENT")
+                .jsonPath("$.data[0].link").isEqualTo("/feed")
+                .jsonPath("$.data[1]").doesNotExist();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void like_notifiesPostAuthor_onlyOnceAndNotOnSelfLike() {
+        String author = registerAndLogin("author-like@test.vn");
+        String liker = registerAndLogin("liker-like@test.vn");
+
+        Map<String, Object> post = web.post().uri("/api/v1/posts").header("Authorization", bearer(author))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("content", "Like me"))
+                .exchange().expectStatus().isOk()
+                .expectBody(MAP).returnResult().getResponseBody();
+        String postId = (String) ((Map<String, Object>) post.get("data")).get("id");
+
+        // liking your own post shouldn't notify you
+        web.post().uri("/api/v1/posts/" + postId + "/like").header("Authorization", bearer(author))
+                .exchange().expectStatus().isOk();
+
+        // liking twice (idempotent insert) must only notify once
+        web.post().uri("/api/v1/posts/" + postId + "/like").header("Authorization", bearer(liker))
+                .exchange().expectStatus().isOk();
+        web.post().uri("/api/v1/posts/" + postId + "/like").header("Authorization", bearer(liker))
+                .exchange().expectStatus().isOk();
+
+        web.get().uri("/api/v1/notifications").header("Authorization", bearer(author))
+                .exchange().expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.data[0].type").isEqualTo("POST_LIKE")
+                .jsonPath("$.data[0].link").isEqualTo("/feed")
+                .jsonPath("$.data[1]").doesNotExist();
+    }
+
+    @Test
+    void follow_notifiesFollowee_onlyOnce() {
+        String follower = registerAndLogin("follower-flw@test.vn");
+        String followee = registerAndLogin("followee-flw@test.vn");
+        String followerId = meId(follower);
+        String followeeId = meId(followee);
+
+        web.post().uri("/api/v1/users/" + followeeId + "/follow").header("Authorization", bearer(follower))
+                .exchange().expectStatus().isOk();
+        // following again (idempotent insert) must not duplicate the notification
+        web.post().uri("/api/v1/users/" + followeeId + "/follow").header("Authorization", bearer(follower))
+                .exchange().expectStatus().isOk();
+
+        web.get().uri("/api/v1/notifications").header("Authorization", bearer(followee))
+                .exchange().expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.data[0].type").isEqualTo("NEW_FOLLOWER")
+                .jsonPath("$.data[0].link").isEqualTo("/users/" + followerId)
+                .jsonPath("$.data[1]").doesNotExist();
+    }
+
+    // ==== job-match subscriber lookup (SQL correctness; the Kafka round-trip itself needs a
+    // live broker and is exercised manually against the docker-compose stack, not here) =======
+
+    @Test
+    void jobMatchSubscribers_matchByTechnologyOverlap() {
+        String token = registerAndLogin("jobmatch@test.vn");
+        String userId = meId(token);
+        web.put().uri("/api/v1/user/profile").header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("full_name", "Job Match User", "technologies", List.of("Kotlin", "Ktor")))
+                .exchange().expectStatus().isOk();
+
+        List<TrendSubscriber> matches = notificationRepository
+                .findJobMatchSubscribers(List.of("Kotlin", "Rust"))
+                .collectList().block();
+        assertThat(matches).extracting(s -> s.userId().toString()).contains(userId);
+
+        List<TrendSubscriber> noMatches = notificationRepository
+                .findJobMatchSubscribers(List.of("COBOL"))
+                .collectList().block();
+        assertThat(noMatches).extracting(s -> s.userId().toString()).doesNotContain(userId);
     }
 }

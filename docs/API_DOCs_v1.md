@@ -17,9 +17,15 @@ Tài liệu này phản ánh **API thực tế** do Spring Boot gateway (`apps/b
 9. [Notifications — `/api/v1/notifications`](#8-notifications---apiv1notifications)
 10. [Admin — `/api/v1/admin`](#9-admin---apiv1admin)
 11. [Health & Status](#10-health--status)
-12. [Phân quyền](#phân-quyền)
-13. [Proxy sang Python](#proxy-sang-python)
-14. [Error Codes](#error-codes)
+12. [Salary — `/api/v1/salary`](#11-salary---apiv1salary)
+13. [Company — `/api/v1/companies`](#12-company---apiv1companies)
+14. [Job Matching — `/api/v1/jobs`](#13-job-matching---apiv1jobs)
+15. [Messaging — `/api/v1/conversations`](#14-messaging---apiv1conversations)
+16. [Social / Feed — `/api/v1/feed`, `/api/v1/posts`, `/api/v1/users`](#15-social--feed---apiv1feed-apiv1posts-apiv1users)
+17. [AI Interview — `/api/v1/interview`](#16-ai-interview---apiv1interview)
+18. [Phân quyền](#phân-quyền)
+19. [Proxy sang Python](#proxy-sang-python)
+20. [Error Codes](#error-codes)
 
 ---
 
@@ -1028,8 +1034,8 @@ Lọc graph nodes theo nhiều tiêu chí.
 {
   "locations": ["Ho Chi Minh City", "Hanoi"],
   "node_types": ["Technology", "Company"],
-  "min_salary": 1000,
-  "max_salary": 5000,
+  "min_salary": 15,
+  "max_salary": 30,
   "sentiment": "positive"
 }
 ```
@@ -1037,9 +1043,12 @@ Lọc graph nodes theo nhiều tiêu chí.
 **Fields:**
 - `locations`: Danh sách địa điểm để lọc (tùy chọn)
 - `node_types`: Danh sách loại node để lọc (tùy chọn)
-- `min_salary`: Mức lương tối thiểu (tùy chọn)
-- `max_salary`: Mức lương tối đa (tùy chọn)
-- `sentiment`: Sentiment filter cho articles (`positive`, `negative`, `neutral`) (tùy chọn)
+- `min_salary`/`max_salary`: đơn vị **triệu VND** — chỉ áp dụng cho node `Job` (property `salary`
+  là free-text tiếng Việt, vd. `"15-25 triệu"`); parse + so khớp khoảng được thực hiện **phía
+  Java** sau khi Cypher trả về (không parse được free-text trong Cypher), text không parse được
+  (vd. `"Thoả thuận"`) bị coi là KHÔNG khớp nếu có truyền khoảng lọc (tùy chọn)
+- `sentiment`: Sentiment filter cho articles (`positive`, `negative`, `neutral`) — áp dụng
+  `sentiment_score BETWEEN`, với dead-zone `neutral` là `[-0.2, 0.2]` (tùy chọn)
 
 **Response:**
 ```json
@@ -1572,7 +1581,7 @@ Lấy danh sách notifications của user.
 
 **Fields:**
 - `id`: UUID của notification
-- `type`: Loại notification (`trend_alert`, `system`, `career`, etc.)
+- `type`: Loại notification — giá trị thực tế đang dùng (UPPER_SNAKE_CASE, không phải lowercase): `TREND_ALERT`, `JOB_MATCH`, `POST_LIKE`, `POST_COMMENT`, `NEW_FOLLOWER`, `NEW_MESSAGE` (xem [`docs/BACKEND_GUIDE.md`](./BACKEND_GUIDE.md) §4.10 cho nơi mỗi loại được tạo)
 - `title`: Tiêu đề ngắn
 - `body`: Nội dung chi tiết
 - `link`: Link để điều hướng khi click
@@ -1700,10 +1709,10 @@ while (true) {
 - Heartbeat được gửi mỗi 25s để giữ connection alive
 - Không thể dùng `EventSource` thuần vì cần gửi header `Authorization`. Phải dùng `fetch` với streaming response.
 
-**Notification Sources:**
-- **Trend Alert**: ETL radar phát event `trend.alerts` lên Kafka khi một công nghệ tăng ≥ threshold (mặc định 20%) MoM. `TrendAlertDispatcher` fan-out tới user có công nghệ đó trong `user_profile.technologies` (kênh in-app + email theo `notify_inapp`/`notify_email`).
-- **System**: Notifications từ hệ thống (welcome, maintenance, etc.)
-- **Career**: Notifications liên quan đến career path
+**Notification Sources** (`type` values thực tế, xem [`docs/BACKEND_GUIDE.md`](./BACKEND_GUIDE.md) §4.10):
+- **`TREND_ALERT`**: ETL radar phát event `trend.alerts` lên Kafka khi một công nghệ tăng ≥ threshold (mặc định 20%) MoM. `TrendAlertDispatcher` fan-out tới user có công nghệ đó trong `user_profile.technologies` (kênh in-app + email theo `notify_inapp`/`notify_email`).
+- **`JOB_MATCH`** *(NEW)*: `KafkaNeo4jWriterService` phát event `job.match.alerts` lên Kafka khi có 1 job posting HOÀN TOÀN MỚI (bỏ qua nếu chỉ là MERGE-update job đã biết). `JobMatchDispatcher` fan-out tới user có kỹ năng trùng công nghệ job yêu cầu (cùng cơ chế `notify_inapp`/`notify_email` như trend alert).
+- **`POST_LIKE`**, **`POST_COMMENT`**, **`NEW_FOLLOWER`**, **`NEW_MESSAGE`** *(NEW, không qua Kafka)*: tạo trực tiếp (đồng bộ, best-effort) từ `ToggleLikeUseCase`/`AddCommentUseCase`/`ToggleFollowUseCase`/`SendMessageUseCase` khi có tương tác — **luôn ghi in-app bất kể `notify_inapp`/`notify_email`**, và KHÔNG gửi email (2 flag đó chỉ áp dụng cho `TREND_ALERT`/`JOB_MATCH`).
 
 ## 9. Admin — `/api/v1/admin` *(yêu cầu role ADMIN)*
 
@@ -2075,6 +2084,226 @@ Lấy top 10 keywords được tìm kiếm nhiều nhất.
 
 ---
 
+#### GET `/admin/dashboard/social` *(NEW)*
+
+Thống kê tương tác trên social feed.
+
+**Authentication:** Admin role required
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "total_posts": 340,
+    "posts_today": 12,
+    "total_comments": 890,
+    "total_likes": 2100,
+    "total_follows": 560,
+    "top_posters": [
+      { "user_id": "u1...", "full_name": "Nguyễn Văn A", "post_count": 24 }
+    ],
+    "pending_reports": 3
+  }
+}
+```
+
+**Fields:**
+- `pending_reports`: số report `content_report` đang ở trạng thái `PENDING` — cùng số hiển thị badge ở AdminSidebar mục "Báo cáo vi phạm".
+
+---
+
+#### GET `/admin/dashboard/jobs` *(NEW)*
+
+Thống kê thị trường việc làm/công nghệ.
+
+**Authentication:** Admin role required
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "total_jobs_indexed": 4200,
+    "top_technologies": [
+      { "name": "React", "job_count": 320 }
+    ],
+    "job_match_alerts_sent": 87
+  }
+}
+```
+
+**Fields:**
+- `job_match_alerts_sent`: tổng số notification loại `JOB_MATCH` đã từng tạo (không phải theo ngày — luỹ kế từ đầu).
+
+---
+
+#### GET `/admin/dashboard/pipeline` *(NEW)*
+
+Sức khoẻ pipeline Kafka → Neo4j (`KafkaNeo4jWriterService`).
+
+**Authentication:** Admin role required
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "articles_processed": 1520,
+    "articles_failed": 3,
+    "jobs_processed": 980,
+    "jobs_failed": 1,
+    "last_article_processed_at": "2026-07-15T10:00:00Z",
+    "last_job_processed_at": "2026-07-15T09:58:00Z",
+    "last_failure_at": "2026-07-14T22:10:00Z",
+    "last_failure_message": "Neo4j session timeout"
+  }
+}
+```
+
+**Lưu ý:** các số liệu này là counter **trong bộ nhớ** của instance đang trả lời request (không
+lưu Postgres/Redis) — reset về 0 mỗi khi backend restart, và trong triển khai nhiều instance mỗi
+instance có số riêng (không cộng gộp).
+
+---
+
+#### GET `/admin/dashboard/messaging` *(NEW)*
+
+Thống kê khối lượng nhắn tin/notification.
+
+**Authentication:** Admin role required
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "total_conversations": 210,
+    "total_messages": 5400,
+    "messages_today": 130,
+    "notifications_by_type": [
+      { "type": "NEW_MESSAGE", "count": 5400 },
+      { "type": "POST_LIKE", "count": 2100 },
+      { "type": "TREND_ALERT", "count": 45 }
+    ]
+  }
+}
+```
+
+---
+
+### Social Moderation *(NEW)*
+
+Admin xem/xoá bất kỳ post/comment nào (bỏ qua kiểm tra quyền sở hữu mà user thường bị áp), và
+duyệt hàng đợi report.
+
+#### GET `/admin/posts`
+
+Danh sách toàn bộ post để kiểm duyệt.
+
+**Authentication:** Admin role required
+
+**Query params:** `page` (default `0`), `size` (default `20`)
+
+**Response (wrapped):** mảng `{ id, author_id, author_name, author_avatar_url, content, created_at, like_count, comment_count }`
+
+---
+
+#### DELETE `/admin/posts/{id}`
+
+Xoá bất kỳ post nào (khác `DELETE /posts/{id}` — endpoint đó chỉ cho chủ bài đăng).
+
+**Authentication:** Admin role required
+
+---
+
+#### GET `/admin/posts/{id}/comments`
+
+Danh sách comment của 1 post để kiểm duyệt.
+
+**Authentication:** Admin role required
+
+**Query params:** `page` (default `0`), `size` (default `20`)
+
+**Response (wrapped):** mảng `{ id, author_id, author_name, author_avatar_url, content, created_at }`
+
+---
+
+#### DELETE `/admin/comments/{id}`
+
+Xoá bất kỳ comment nào.
+
+**Authentication:** Admin role required
+
+---
+
+#### GET `/admin/reports`
+
+Hàng đợi kiểm duyệt — các report đang `PENDING`, cũ nhất trước.
+
+**Authentication:** Admin role required
+
+**Query params:** `page` (default `0`), `size` (default `20`)
+
+**Response (wrapped):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "r1...",
+      "reporter_id": "u1...",
+      "reporter_name": "Nguyễn Văn A",
+      "post_id": "p1...",
+      "comment_id": null,
+      "target_type": "POST",
+      "target_content": "Nội dung bài viết bị report...",
+      "target_author_name": "Trần Văn B",
+      "reason": "Spam / quảng cáo không liên quan",
+      "status": "PENDING",
+      "created_at": "2026-07-15T08:00:00Z"
+    }
+  ]
+}
+```
+
+**Fields:**
+- `target_type`: `"POST"` nếu `post_id` khác null, ngược lại `"COMMENT"` — suy ra ở tầng response, không phải cột riêng trong DB.
+
+---
+
+#### POST `/admin/reports/{id}/dismiss`
+
+Đánh dấu report đã xem xét, không vi phạm (không xoá nội dung — muốn xoá thì gọi
+`DELETE /admin/posts/{id}` hoặc `DELETE /admin/comments/{id}` riêng).
+
+**Authentication:** Admin role required
+
+**Error Responses:** `404 Not Found` nếu report không tồn tại hoặc không còn ở trạng thái `PENDING` (đã được xử lý trước đó)
+
+---
+
+### Cache Admin *(NEW)*
+
+Xoá cache cho `company`/`job` — 2 feature cache toàn bộ kết quả Neo4j (30 phút mặc định) và không
+có bước ETL/rebuild nào để tự động invalidate như `radar` — xem [`docs/DATABASE.md`](./DATABASE.md) §5.
+
+#### POST `/admin/cache/companies/evict`
+
+Xoá cache `GET /companies` (key `cache:company:all`).
+
+**Authentication:** Admin role required
+
+---
+
+#### POST `/admin/cache/jobs/evict`
+
+Xoá TOÀN BỘ cache `GET /jobs/matches` (mọi key khớp pattern `cache:job:match:*` — mỗi tập kỹ năng có 1 key riêng, không evict chọn lọc theo user được).
+
+**Authentication:** Admin role required
+
+---
+
 ### CMS Management
 
 #### GET `/admin/cms`
@@ -2242,6 +2471,48 @@ Dựng lại bảng `tech_analytics` từ Neo4j.
 
 **Note:** Thao tác này có thể tốn thời gian tùy thuộc vào lượng dữ liệu trong Neo4j.
 
+---
+
+### Cache eviction
+
+Company/job không có bước ETL/rebuild như radar (dữ liệu Neo4j đã cập nhật liên tục qua Kafka +
+batch import) — chỉ có cache Redis (30 phút, xem [`docs/DATABASE.md`](./DATABASE.md) §5) là cũ.
+2 endpoint này cho phép evict tay thay vì chờ TTL.
+
+#### POST `/admin/cache/companies/evict`
+
+Evict cache `cache:company:all` (dùng bởi `GET /companies` và `GET /companies/{id}/similar`).
+
+**Authentication:** Admin role required
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": null,
+  "message": "Company cache evicted",
+  "error_code": null,
+  "timestamp": 1719792000000
+}
+```
+
+#### POST `/admin/cache/jobs/evict`
+
+Evict toàn bộ cache `cache:job:match:*` (một entry/tập kỹ năng, dùng bởi `GET /jobs/matches`).
+
+**Authentication:** Admin role required
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": null,
+  "message": "Job match cache evicted",
+  "error_code": null,
+  "timestamp": 1719792000000
+}
+```
+
 ## 10. Health & Status — Public
 
 ### GET `/health`
@@ -2315,6 +2586,536 @@ Lấy feature flags và maintenance status (bare response).
 
 ---
 
+## 11. Salary — `/api/v1/salary` *(đọc Neo4j, giá trị đơn vị triệu VND)*
+
+### GET `/salary/top`
+
+Top công nghệ theo mức lương trung vị (chỉ tính tech có ≥ `min_jobs` job posting có dữ liệu lương).
+
+**Authentication:** Required (Bearer JWT)
+
+**Query params:**
+- `limit` (int, optional, default `20`)
+- `min_jobs` (int, optional, default `3`)
+
+**Response (wrapped):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "tech_name": "React",
+      "total_jobs": 120,
+      "jobs_with_salary": 45,
+      "median_salary_mvnd": 22.0,
+      "avg_salary_mvnd": 23.5,
+      "min_salary_mvnd": 12.0,
+      "max_salary_mvnd": 45.0,
+      "p25_salary_mvnd": 18.0,
+      "p75_salary_mvnd": 28.0,
+      "salary_range": "18 - 28 triệu VND",
+      "top_co_techs": ["TypeScript", "Redux", "Node.js"]
+    }
+  ],
+  "message": "Salary insights",
+  "error_code": null,
+  "timestamp": 1719792000000
+}
+```
+
+**Example:**
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8080/api/v1/salary/top?limit=10&min_jobs=3"
+```
+
+---
+
+### GET `/salary/tech/{techName}`
+
+Chi tiết lương cho một công nghệ cụ thể (cùng shape response với `/salary/top`, chỉ 1 object thay vì mảng).
+
+**Authentication:** Required (Bearer JWT)
+
+**Path params:**
+- `techName` (string, required) — tên công nghệ, ví dụ `React`
+
+**Error Responses:**
+- `404 Not Found` (`NOT_FOUND`): Không có dữ liệu lương cho tech này
+
+**Example:**
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8080/api/v1/salary/tech/React"
+```
+
+---
+
+## 12. Company — `/api/v1/companies` *(Neo4j; NEW)*
+
+### GET `/companies`
+
+Danh sách công ty, xếp hạng theo số lượng job đang tuyển. Tech stack của mỗi công ty được suy ra
+gián tiếp qua `Company<-[:POSTED_BY|HIRES_FOR]-Job-[:REQUIRES]->Technology` (KHÔNG đọc quan hệ
+`USES` — xem [`docs/DATABASE.md`](./DATABASE.md) §4.1 về sự khác biệt này).
+
+**Authentication:** Required (Bearer JWT)
+
+**Query params:**
+- `page` (int, optional, default `0`)
+- `size` (int, optional, default `20`)
+
+**Lưu ý cache:** kết quả Neo4j được cache nguyên khối trong Redis 30 phút (`cache:company:all`,
+xem [`docs/DATABASE.md`](./DATABASE.md) §5) rồi mới phân trang trong bộ nhớ — công ty/job mới
+ingest có thể chưa xuất hiện ngay cho tới khi cache hết hạn hoặc admin gọi tay
+`POST /admin/cache/companies/evict` (xem mục 9).
+
+**Response (wrapped):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "4:abc:123",
+      "name": "FPT Software",
+      "location": "Hà Nội",
+      "job_count": 34,
+      "tech_stack": ["Java", "React", "PostgreSQL"]
+    }
+  ],
+  "message": null,
+  "error_code": null,
+  "timestamp": 1719792000000
+}
+```
+
+---
+
+### GET `/companies/{id}/similar`
+
+Công ty có tech stack tương tự (Jaccard similarity, tính in-memory trên toàn bộ tập công ty).
+
+**Authentication:** Required (Bearer JWT)
+
+**Path params:**
+- `id` (string, required) — Neo4j element id của company
+
+**Query params:**
+- `limit` (int, optional, default `10`, 1-100)
+
+**Response (wrapped):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "4:abc:456",
+      "name": "VNG Corporation",
+      "location": "TP.HCM",
+      "shared_techs": ["Java", "React"],
+      "score": 0.42
+    }
+  ]
+}
+```
+
+**Error Responses:**
+- `404 Not Found`: `id` không tồn tại
+
+---
+
+## 13. Job Matching — `/api/v1/jobs` *(Neo4j; NEW)*
+
+### GET `/jobs/matches`
+
+Gợi ý job phù hợp với hồ sơ (kỹ năng trong `user_profile.technologies`), xếp theo `score = số kỹ
+năng khớp / số kỹ năng job yêu cầu`. Location/min-salary được lọc phía Java (Cypher không parse
+được lương dạng free-text tiếng Việt).
+
+**Authentication:** Required (Bearer JWT) — dùng `SecurityUtils.currentUserId()` để lấy kỹ năng hồ sơ
+
+**Query params:**
+- `location` (string, optional)
+- `min_salary` (number, optional, đơn vị triệu VND)
+- `limit` (int, optional, default `20`)
+
+**Response (wrapped):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "title": "Senior Backend Developer",
+      "company": "Tiki",
+      "location": "TP.HCM",
+      "salary_raw": "25-35 triệu",
+      "salary_min_mvnd": 25.0,
+      "salary_max_mvnd": 35.0,
+      "source_url": "https://itviec.com/...",
+      "due_date": "2026-08-01",
+      "matched_skills": ["Java", "Spring Boot"],
+      "missing_skills": ["Kafka"],
+      "score": 0.67
+    }
+  ]
+}
+```
+
+**Fields:**
+- `salary_min_mvnd`/`salary_max_mvnd`: lưu ý tên field — Jackson snake_case biến `salaryMinMVnd` (Java) thành `salary_min_mvnd` (KHÔNG phải `salary_min_m_vnd`).
+- `matched_skills`/`missing_skills`: so khớp giữa kỹ năng hồ sơ và kỹ năng job yêu cầu.
+
+**Lưu ý cache:** kết quả Neo4j (trước khi lọc `location`/`min_salary`) được cache theo tập kỹ năng
+hồ sơ trong Redis 30 phút (`cache:job:match:<skills>`) — job mới ingest có thể chưa xuất hiện
+ngay cho tới khi cache hết hạn hoặc admin gọi tay `POST /admin/cache/jobs/evict` (xem mục 9);
+xem [`docs/DATABASE.md`](./DATABASE.md) §5.
+
+**Example:**
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8080/api/v1/jobs/matches?location=H%C3%A0%20N%E1%BB%99i&min_salary=20&limit=10"
+```
+
+---
+
+## 14. Messaging — `/api/v1/conversations` *(Postgres + SSE; NEW)*
+
+1-1 direct messaging. Realtime là **SSE** (không phải WebSocket), push qua Redis Pub/Sub nên hoạt
+động đúng dù chạy nhiều instance backend — xem [`docs/DATABASE.md`](./DATABASE.md) §5. Vì
+`EventSource` chuẩn không set được header `Authorization`, client PHẢI dùng `fetch` +
+`ReadableStream` để đọc `/conversations/stream` (không dùng `new EventSource(...)` trực tiếp).
+
+### GET `/conversations`
+
+Danh sách hội thoại của user hiện tại, mới nhất trước.
+
+**Authentication:** Required (Bearer JWT)
+
+**Query params:**
+- `page` (int, optional, default `0`)
+- `size` (int, optional, default `20`, tối đa 100)
+
+**Response (wrapped):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "c1a2...",
+      "other_user": { "id": "u1...", "full_name": "Nguyễn Văn A", "avatar_url": null },
+      "last_message_content": "Chào bạn!",
+      "last_message_at": "2026-07-15T10:00:00Z",
+      "last_message_sender_id": "u1...",
+      "unread_count": 2
+    }
+  ]
+}
+```
+
+---
+
+### POST `/conversations/with/{userId}`
+
+Lấy hội thoại 1-1 với `userId`, tạo mới nếu chưa có (upsert theo cặp user, canonical
+`user_a_id < user_b_id`).
+
+**Authentication:** Required (Bearer JWT)
+
+**Response (wrapped):** `{ "id": "<conversation_id>" }`
+
+**Error Responses:**
+- `400 Bad Request` (`INVALID_CONVERSATION`): tự nhắn tin cho chính mình
+
+---
+
+### GET `/conversations/{id}/messages`
+
+**Authentication:** Required (Bearer JWT) — 404 nếu người gọi không phải thành viên hội thoại
+
+**Query params:** `page` (default `0`), `size` (default `30`)
+
+**Response (wrapped):** mảng `{ id, sender_id, content, created_at }`, cũ nhất trước.
+
+---
+
+### POST `/conversations/{id}/messages`
+
+Gửi tin nhắn — sau khi lưu Postgres sẽ push realtime tới người nhận qua SSE, đồng thời tạo
+notification `NEW_MESSAGE` (kèm preview 140 ký tự, `link=/messages?conversation={id}`) cho
+người nhận.
+
+**Authentication:** Required (Bearer JWT)
+
+**Request Body:**
+```json
+{ "content": "Xin chào!" }
+```
+
+**Fields:**
+- `content` (string, required, ≤ 2000 ký tự)
+
+**Response (wrapped):** `{ id, sender_id, content, created_at }`
+
+---
+
+### POST `/conversations/{id}/read`
+
+Đánh dấu toàn bộ tin nhắn (không phải do mình gửi) trong hội thoại là đã đọc.
+
+**Authentication:** Required (Bearer JWT)
+
+**Response:** `ApiResponse<Void>`
+
+---
+
+### GET `/conversations/stream`
+
+SSE stream mọi tin nhắn mới của user hiện tại (mọi hội thoại), dùng để cập nhật badge/tin nhắn
+realtime toàn app.
+
+**Authentication:** Required (Bearer JWT, gửi qua header — KHÔNG dùng query param)
+
+**Response:** `text/event-stream`, mỗi `data:` line là 1 JSON `DirectMessage` (kèm `conversation_id`).
+
+**Example:**
+```bash
+curl -N -H "Authorization: Bearer $TOKEN" -H "Accept: text/event-stream" \
+  "http://localhost:8080/api/v1/conversations/stream"
+```
+
+---
+
+## 15. Social / Feed — `/api/v1/feed`, `/api/v1/posts`, `/api/v1/users` *(Postgres; NEW)*
+
+> Lưu ý: 2 controller khác convention nhau — `PostController` KHÔNG có prefix riêng (route thẳng
+> `/feed`, `/posts/**`), còn `UserSocialController` dùng prefix `/users`.
+
+### GET `/feed`
+
+Feed bài đăng của bản thân + người đang follow.
+
+**Authentication:** Required (Bearer JWT)
+
+**Query params:** `page` (default `0`), `size` (default `20`, tối đa 50)
+
+**Response (wrapped):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "p1...",
+      "author": { "id": "u1...", "full_name": "Nguyễn Văn A", "avatar_url": null },
+      "content": "Vừa học xong Kubernetes!",
+      "created_at": "2026-07-15T09:00:00Z",
+      "like_count": 3,
+      "comment_count": 1,
+      "liked_by_me": false
+    }
+  ]
+}
+```
+
+---
+
+### POST `/posts`
+
+**Authentication:** Required (Bearer JWT)
+
+**Request Body:** `{ "content": "..." }` (required, ≤ 2000 ký tự)
+
+**Response (wrapped):** post vừa tạo (shape như trong `/feed`)
+
+---
+
+### DELETE `/posts/{id}`
+
+Chỉ chủ bài đăng được xoá.
+
+**Authentication:** Required (Bearer JWT)
+
+**Error Responses:** `404 Not Found` nếu không phải chủ bài đăng (hoặc id không tồn tại)
+
+---
+
+### POST `/posts/{id}/like` · DELETE `/posts/{id}/like`
+
+Like/unlike một bài đăng (idempotent).
+
+**Authentication:** Required (Bearer JWT)
+
+**Side effect:** lần like đầu tiên (không tính unlike hay like lặp lại) tạo notification
+`POST_LIKE` cho tác giả bài viết (bỏ qua nếu tự like bài của mình); lỗi tạo notification không
+làm fail request like — xem [`docs/BACKEND_GUIDE.md`](./BACKEND_GUIDE.md) §4.10.
+
+---
+
+### GET `/posts/{id}/comments` · POST `/posts/{id}/comments`
+
+**Authentication:** Required (Bearer JWT) — **lưu ý:** GET không thực sự cần định danh người gọi
+(handler không đọc identity), nhưng vẫn bị chặn cho người dùng chưa đăng nhập vì `/posts/**`
+không nằm trong `PUBLIC_PATHS`; đây là một điểm chưa được rà soát lại, không phải chủ đích.
+
+**Query params (GET):** `page` (default `0`), `size` (default `20`)
+
+**Request Body (POST):** `{ "content": "..." }` (required, ≤ 1000 ký tự)
+
+**Response (wrapped, GET):** mảng `{ id, author, content, created_at }`, cũ nhất trước.
+
+**Side effect (POST):** tạo notification `POST_COMMENT` (kèm preview 140 ký tự) cho tác giả bài
+viết, bỏ qua nếu tự comment vào bài của mình.
+
+---
+
+### POST `/posts/{id}/report` · POST `/comments/{id}/report` *(NEW)*
+
+Báo cáo (flag) một bài viết hoặc bình luận vi phạm để admin xem xét trong hàng đợi kiểm duyệt.
+
+**Authentication:** Required (Bearer JWT)
+
+**Request Body:**
+```json
+{ "reason": "Spam / quảng cáo không liên quan" }
+```
+
+**Fields:**
+- `reason` (string, required, 1-500 ký tự)
+
+**Response:** `ApiResponse<Void>`
+
+**Hành vi idempotent:** nếu user này đã có 1 report **PENDING** trên đúng target đó, gọi lại
+không tạo dòng mới (`ON CONFLICT DO NOTHING`, im lặng — không lỗi, không phản hồi khác biệt).
+Nếu report trước đó đã bị admin dismiss, user CÓ THỂ report lại (V12 chỉ tính `status='PENDING'`
+là "đã report" — xem [`docs/DATABASE.md`](./DATABASE.md) §3.2).
+
+**Error Responses:**
+- `400 Bad Request` (`INVALID_REASON`): `reason` rỗng hoặc quá 500 ký tự
+
+---
+
+### GET `/users/{id}/profile-summary`
+
+**Authentication:** Required (Bearer JWT)
+
+**Response (wrapped):**
+```json
+{
+  "id": "u1...",
+  "full_name": "Nguyễn Văn A",
+  "avatar_url": null,
+  "bio": "Backend developer",
+  "job_role": "Backend Developer",
+  "location": "Hà Nội",
+  "follower_count": 12,
+  "following_count": 8,
+  "post_count": 5,
+  "is_following": false
+}
+```
+
+**Fields:**
+- `is_following`: field này được ép `@JsonProperty("is_following")` tường minh trong code — KHÔNG
+  suy ra tự động từ naming strategy (field Java tên `following`, không có "hump" để tách).
+
+---
+
+### GET `/users/{id}/posts`
+
+Bài đăng của 1 user, `liked_by_me` được tính theo người xem hiện tại.
+
+**Authentication:** Required (Bearer JWT)
+
+**Query params:** `page` (default `0`), `size` (default `20`)
+
+---
+
+### POST `/users/{id}/follow` · DELETE `/users/{id}/follow`
+
+**Authentication:** Required (Bearer JWT)
+
+**Error Responses:** `400 Bad Request` (`INVALID_FOLLOW`): tự follow chính mình
+
+**Side effect:** follow mới (không tính unfollow rồi follow lại — chỉ tính lần đầu) tạo
+notification `NEW_FOLLOWER` cho người được follow, `link` trỏ về `/users/{followerId}`.
+
+---
+
+### GET `/users/suggested`
+
+Gợi ý người để follow, xếp theo số follower.
+
+**Authentication:** Required (Bearer JWT)
+
+**Query params:** `limit` (default `10`, tối đa 50)
+
+**Response (wrapped):** mảng `{ id, full_name, avatar_url }`
+
+---
+
+## 16. AI Interview — `/api/v1/interview` *(proxy ai-rag-core qua module `aiproxy`; NEW)*
+
+### POST `/interview`
+
+Phỏng vấn thử với AI — **stateless**: client tự giữ toàn bộ lịch sử (`history`) và gửi lại đầy đủ
+mỗi lượt; trạng thái (mở đầu / giữa buổi / kết thúc) được server suy ra hoàn toàn từ độ dài
+`history` (không có session lưu phía server). Request được gateway forward nguyên văn tới
+`ai-rag-core` `POST /interview` qua `PythonAiProxyClient` (xem [`docs/AI_PLATFORM.md`](./AI_PLATFORM.md)).
+
+**Authentication:** Required (Bearer JWT) — `user_id` được gateway đính kèm từ token nếu có
+
+**Request Body:**
+```json
+{
+  "target_role": "Senior Backend Developer",
+  "target_company": "Tiki",
+  "history": [
+    { "question": "Bạn hãy giới thiệu về bản thân?", "answer": "Tôi có 5 năm kinh nghiệm..." }
+  ]
+}
+```
+
+**Fields:**
+- `target_role` (string, required, 1-120 ký tự)
+- `target_company` (string, optional)
+- `history` (array, optional, default `[]`) — gửi rỗng để bắt đầu buổi phỏng vấn mới; mỗi phần tử `{ question, answer }`
+
+**Response (wrapped — double-wrapped: response Python nằm nguyên trong `data`):**
+```json
+{
+  "success": true,
+  "data": {
+    "next_question": "Bạn đã từng làm việc với hệ thống distributed chưa?",
+    "feedback_on_last_answer": "Câu trả lời khá tốt, nên nêu ví dụ cụ thể hơn.",
+    "is_final": false,
+    "turn": 2,
+    "final_summary": null
+  }
+}
+```
+
+Khi `history.length >= 5` (MAX_TURNS phía `ai-rag-core`), response chuyển sang lượt cuối:
+```json
+{
+  "next_question": null,
+  "feedback_on_last_answer": null,
+  "is_final": true,
+  "turn": 5,
+  "final_summary": { "score": 7, "summary": "**Điểm mạnh:**\n- ...\n**Cần cải thiện:**\n- ..." }
+}
+```
+
+**Error Responses:**
+- `503 Service Unavailable`: mọi lỗi từ `ai-rag-core` bị gộp chung thành lỗi generic này (gateway không passthrough error detail của Python) — xem [`docs/BACKEND_GUIDE.md`](./BACKEND_GUIDE.md) §4.16.
+
+**Example:**
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  http://localhost:8080/api/v1/interview \
+  -d '{"target_role":"Senior Backend Developer","target_company":"Tiki","history":[]}'
+```
+
+---
+
 ## Phân quyền
 
 ### Public Endpoints
@@ -2332,6 +3133,9 @@ Không yêu cầu JWT authentication:
 - `GET /user/avatar/{userId}`
 - `/actuator/**`
 - Swagger UI (`/swagger-ui/**`, `/v3/api-docs/**`)
+- `GET /forecast` *(proxy `aiproxy` — public từ trước khi module `forecast` cũ bị gộp, path giữ nguyên)*
+- `GET /report` *(proxy `aiproxy`, tương tự)*
+- `POST /chat/summarize` *(proxy `aiproxy`, tương tự)*
 
 ### Admin Endpoints
 
@@ -2343,9 +3147,18 @@ Yêu cầu role `ADMIN`:
 
 Yêu cầu JWT hợp lệ:
 
-- Tất cả endpoints còn lại không thuộc Public hoặc Admin
+- Tất cả endpoints còn lại không thuộc Public hoặc Admin — bao gồm TOÀN BỘ endpoint mới:
+  `/companies/**`, `/jobs/matches`, `/conversations/**`, `/feed`, `/posts/**`, `/users/**`,
+  `/salary/**`, và (trong `aiproxy`) `/career`, `/recommend`, `/interview`, `/agent`.
 
 **Note:** `spring.webflux.base-path` bị strip **trước** security filter, nên matcher trong `SecurityConfig.PUBLIC_PATHS` được khai báo **không** kèm `/api/v1`.
+
+**Chưa hợp lý cần lưu ý:** việc `/forecast`/`/report`/`/chat/summarize` là public trong khi
+`/career`/`/recommend`/`/interview`/`/agent` (cùng nhóm `aiproxy`, cùng forward sang
+`ai-rag-core`) lại yêu cầu auth là do các path string này được giữ nguyên từ 6 module cũ
+(`forecast`/`report`/`summarize` vốn đã public từ trước) khi gộp vào `aiproxy` — KHÔNG phải
+một quyết định bảo mật có chủ đích cho lần gộp module này. Xem
+[`docs/BACKEND_GUIDE.md`](./BACKEND_GUIDE.md) §4.16.
 
 ---
 
@@ -2356,13 +3169,21 @@ Spring Boot gateway proxy các request đến Python services với header bảo
 ### ai-rag-core Proxy
 
 **Endpoints được proxy:**
-- `/chat/**`
-- `/compare/llm-summary`
+- `/chat/**` — qua `RagProxyService` riêng, request/response có typed DTO (§6)
+- `/compare/llm-summary` — gọi `ai-rag-core` `POST /internal/ai/llm-summary`
+- `/career`, `/forecast`, `/recommend`, `/report`, `/chat/summarize`, `/agent`, `/interview`
+  (§11-16 + AI Interview) — qua module **`aiproxy`** (`PythonAiProxyClient`/`AiProxyPort`):
+  forward **nguyên văn** `Map<String,Object>` (KHÔNG có typed DTO phía Java, khác với `/chat/**`),
+  response từ Python được bọc verbatim vào `ApiResponse.data` (double-wrapped). Bất kỳ lỗi nào
+  từ phía Python đều bị gộp thành `503 SERVICE_UNAVAILABLE` chung, không passthrough chi tiết lỗi.
+  Timeout riêng cho `/agent` là 120s; các endpoint còn lại trong nhóm này là 60s
+  (`AiProxyPort.DEFAULT_TIMEOUT`).
 
 **Configuration:**
-- Environment variable: `PYTHON_RAG_BASE_URL` (mặc định: `http://ai-rag-core:8000`)
-- Security header: `X-Internal-Auth: <INTERNAL_API_TOKEN>`
-- Timeout: 120 seconds
+- Environment variable: `PYTHON_RAG_BASE_URL` (mặc định: `http://ai-rag-core:8000`) — dùng cho `/chat/**`
+- `app.python.ai.base-url` (mặc định: `http://localhost:8000`) — dùng cho nhóm `aiproxy`
+- Security header: `X-Internal-Auth: <INTERNAL_API_TOKEN>` (`app.python.internal-token`)
+- Timeout: 120 giây cho `/chat/**` và `/agent`; 60 giây cho phần còn lại của `aiproxy`
 
 **Example:**
 ```http
@@ -2449,6 +3270,19 @@ X-Internal-Auth: techradar-internal-secret
 | `NOTIFICATION_NOT_FOUND` | Notification not found |
 | `NOTIFICATION_OWNERSHIP_ERROR` | Notification does not belong to user |
 
+### Messaging Error Codes (NEW)
+
+| Error Code | Description |
+|------------|-------------|
+| `INVALID_CONVERSATION` | Cố gắng nhắn tin cho chính mình |
+
+### Social Error Codes (NEW)
+
+| Error Code | Description |
+|------------|-------------|
+| `INVALID_FOLLOW` | Cố gắng follow chính mình |
+| `INVALID_REASON` | Report thiếu `reason` hoặc `reason` > 500 ký tự |
+
 ---
 
 ## Rate Limiting
@@ -2486,7 +3320,25 @@ Tương lai sẽ hỗ trợ webhooks cho:
 
 ## Changelog
 
-### v1.0 (Current)
+### v1.1 (Current)
+- **Mới:** Salary insights (`/salary/top`, `/salary/tech/{techName}`)
+- **Mới:** Company Explorer (`/companies`, `/companies/{id}/similar`)
+- **Mới:** Job Matching (`/jobs/matches`)
+- **Mới:** Direct Messaging (`/conversations/**`, SSE)
+- **Mới:** Social Feed (`/feed`, `/posts/**`, `/users/**` follow/suggested/profile-summary)
+- **Mới:** AI Interview (`/interview`)
+- **Refactor:** 6 module proxy Python riêng biệt (career/forecast/recommend/report/summarize/agent)
+  được gộp thành module gateway `aiproxy` dùng chung một client — không đổi hợp đồng API phía
+  client, chỉ đổi cách gateway implement (xem `docs/BACKEND_GUIDE.md` §4.16)
+- Đồ thị (`/graph/filter`): thêm lọc theo sentiment band và khoảng lương (salary overlap)
+- Bổ sung [`docs/DATABASE.md`](./DATABASE.md) làm tài liệu CSDL riêng (Postgres/Neo4j/Redis)
+- **Mới:** Content moderation — user report (`POST /posts/{id}/report`, `POST /comments/{id}/report`) + admin moderation queue (`/admin/posts/**`, `/admin/comments/{id}`, `/admin/reports/**`)
+- **Mới:** Admin Dashboard mở rộng — `/admin/dashboard/social|jobs|pipeline|messaging`
+- **Mới:** Cache Admin — `/admin/cache/companies/evict`, `/admin/cache/jobs/evict` (company/job dùng Redis look-aside cache từ bản này)
+- **Mới:** Notification-on-action — thích/bình luận/follow/nhắn tin giờ tạo notification (`POST_LIKE`/`POST_COMMENT`/`NEW_FOLLOWER`/`NEW_MESSAGE`), cộng với `JOB_MATCH` (job mới khớp kỹ năng hồ sơ, qua Kafka `job.match.alerts`)
+- **Sửa:** Messaging/Notification SSE giờ fan-out qua Redis Pub/Sub (`live:messages`/`live:notifications`) thay vì in-memory single-instance — hoạt động đúng khi backend chạy nhiều instance
+
+### v1.0
 - Initial API release
 - Auth, User, Radar, Compare, Graph, Chat, Clustering, Notifications, Admin endpoints
 - JWT authentication

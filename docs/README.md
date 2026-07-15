@@ -18,6 +18,10 @@
 
 - **[Backend Guide](./BACKEND_GUIDE.md)** - Tài liệu chi tiết về Spring Boot backend, kiến trúc Hexagonal, database layer, security và testing.
 
+### Database
+
+- **[Database Architecture](./DATABASE.md)** - Tài liệu riêng cho toàn bộ tầng dữ liệu: schema PostgreSQL, Neo4j graph, Redis, quy ước sở hữu dữ liệu giữa các service.
+
 ### Frontend
 
 - **[Frontend Guide](./FRONTEND_GUIDE.md)** - Tài liệu chi tiết về React frontend, component architecture, state management, routing và styling.
@@ -85,8 +89,9 @@ docker compose up --build
 
 1. [Architecture Overview](./ARCHITECTURE.md) - Phần Backend Architecture
 2. [Backend Guide](./BACKEND_GUIDE.md) - Chi tiết implementation
-3. [API Documentation](./API_DOCs_v1.md) - API endpoints
-4. [AI Platform](./AI_PLATFORM.md) - Tích hợp với AI services
+3. [Database Architecture](./DATABASE.md) - Schema Postgres/Neo4j/Redis, ownership giữa các service
+4. [API Documentation](./API_DOCs_v1.md) - API endpoints
+5. [AI Platform](./AI_PLATFORM.md) - Tích hợp với AI services
 
 ### Cho Frontend Developer
 
@@ -230,4 +235,4 @@ Nếu bạn có câu hỏi hoặc cần hỗ trợ:
 
 ---
 
-**Last Updated**: 2026-07-01
+**Last Updated**: 2026-07-15

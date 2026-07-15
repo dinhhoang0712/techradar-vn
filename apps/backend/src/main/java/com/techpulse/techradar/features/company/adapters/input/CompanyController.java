@@ -30,8 +30,11 @@ public class CompanyController {
 
     @Operation(summary = "Companies with an inferred tech stack, ranked by job count")
     @GetMapping
-    public Mono<ResponseEntity<ApiResponse<List<CompanyDtos.CompanyProfileResponse>>>> list() {
-        return getCompaniesUseCase.execute()
+    public Mono<ResponseEntity<ApiResponse<List<CompanyDtos.CompanyProfileResponse>>>> list(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return getCompaniesUseCase.execute(page, size)
                 .map(CompanyDtos.CompanyProfileResponse::from)
                 .collectList()
                 .map(list -> ResponseEntity.ok(ApiResponse.success(list, "Companies")));

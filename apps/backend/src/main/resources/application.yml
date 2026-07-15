@@ -124,6 +124,8 @@ app:
     token-blacklist-ttl: ${REDIS_TOKEN_BLACKLIST_TTL:604800}
     clustering-cache-ttl: ${REDIS_CLUSTERING_CACHE_TTL:900}
     radar-cache-ttl: ${REDIS_RADAR_CACHE_TTL:3600}
+    company-cache-ttl: ${REDIS_COMPANY_CACHE_TTL:1800}
+    job-cache-ttl: ${REDIS_JOB_CACHE_TTL:1800}
     chat-rate-limit:
       max-requests: ${CHAT_RATE_LIMIT_MAX:20}
       window-seconds: ${CHAT_RATE_LIMIT_WINDOW:60}

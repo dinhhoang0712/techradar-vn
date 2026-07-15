@@ -7,7 +7,8 @@ import java.util.UUID;
 
 public interface FollowRepository {
 
-    Mono<Void> follow(UUID followerId, UUID followeeId);
+    /** @return true if this is a newly-recorded follow (false if already following). */
+    Mono<Boolean> follow(UUID followerId, UUID followeeId);
 
     Mono<Void> unfollow(UUID followerId, UUID followeeId);
 
@@ -16,6 +17,8 @@ public interface FollowRepository {
     Mono<Long> followerCount(UUID userId);
 
     Mono<Long> followingCount(UUID userId);
+
+    Mono<Long> countAll();
 
     /** Basic public info (name/avatar/bio/job_role/location) for a profile page. */
     Mono<ProfileBasics> findProfileBasics(UUID userId);

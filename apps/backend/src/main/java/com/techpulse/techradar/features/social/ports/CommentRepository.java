@@ -12,6 +12,11 @@ public interface CommentRepository {
 
     Flux<CommentRow> findByPost(UUID postId, int limit, int offset);
 
+    /** Admin moderation: delete any comment by id. @return true if it existed. */
+    Mono<Boolean> deleteById(UUID commentId);
+
+    Mono<Long> countAll();
+
     record CommentRow(
             UUID id,
             UUID authorId,

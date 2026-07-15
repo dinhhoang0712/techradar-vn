@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { likePost, unlikePost, getComments, addComment, deletePost } from '../../api/socialService';
+import { likePost, unlikePost, getComments, addComment, deletePost, reportPost, reportComment } from '../../api/socialService';
 import { useToast } from '../common/toastContext';
 import Modal from '../common/Modal';
 import Avatar from '../common/Avatar';
@@ -27,6 +27,9 @@ export default function PostCard({ post, currentUserId, onDeleted }) {
     const [commentInput, setCommentInput] = useState('');
     const [postingComment, setPostingComment] = useState(false);
     const [confirmingDelete, setConfirmingDelete] = useState(false);
+    const [reportTarget, setReportTarget] = useState(null); // { type: 'post' | 'comment', id }
+    const [reportReason, setReportReason] = useState('');
+    const [submittingReport, setSubmittingReport] = useState(false);
     const navigate = useNavigate();
     const notify = useToast();
 
@@ -93,6 +96,30 @@ export default function PostCard({ post, currentUserId, onDeleted }) {
         }
     };
 
+    const closeReport = () => {
+        setReportTarget(null);
+        setReportReason('');
+    };
+
+    const submitReport = async () => {
+        const reason = reportReason.trim();
+        if (!reportTarget || !reason) return;
+        setSubmittingReport(true);
+        try {
+            if (reportTarget.type === 'post') {
+                await reportPost(reportTarget.id, reason);
+            } else {
+                await reportComment(reportTarget.id, reason);
+            }
+            notify({ title: 'Đã gửi báo cáo, cảm ơn bạn', variant: 'success' });
+            closeReport();
+        } catch (err) {
+            notify({ title: 'Không thể gửi báo cáo', body: err.message, variant: 'error' });
+        } finally {
+            setSubmittingReport(false);
+        }
+    };
+
     const goToProfile = () => navigate(`/users/${post.author?.id}`);
 
     return (
@@ -105,11 +132,18 @@ export default function PostCard({ post, currentUserId, onDeleted }) {
                         <span className="post-time">{timeAgo(post.created_at)}</span>
                     </div>
                 </button>
-                {isOwn && (
-                    <button type="button" className="post-delete-btn" title="Xoá bài viết" onClick={() => setConfirmingDelete(true)}>
-                        ✕
-                    </button>
-                )}
+                <div className="post-header-actions">
+                    {!isOwn && (
+                        <button type="button" className="post-report-btn" title="Báo cáo bài viết" onClick={() => setReportTarget({ type: 'post', id: post.id })}>
+                            🚩
+                        </button>
+                    )}
+                    {isOwn && (
+                        <button type="button" className="post-delete-btn" title="Xoá bài viết" onClick={() => setConfirmingDelete(true)}>
+                            ✕
+                        </button>
+                    )}
+                </div>
             </div>
 
             <p className="post-content">{post.content}</p>
@@ -138,6 +172,16 @@ export default function PostCard({ post, currentUserId, onDeleted }) {
                                         <span className="post-comment-text">{c.content}</span>
                                         <span className="post-comment-time">{timeAgo(c.created_at)}</span>
                                     </div>
+                                    {c.author?.id !== currentUserId && (
+                                        <button
+                                            type="button"
+                                            className="post-comment-report-btn"
+                                            title="Báo cáo bình luận"
+                                            onClick={() => setReportTarget({ type: 'comment', id: c.id })}
+                                        >
+                                            🚩
+                                        </button>
+                                    )}
                                 </div>
                             ))}
                         </div>
@@ -164,6 +208,32 @@ export default function PostCard({ post, currentUserId, onDeleted }) {
                     <div className="modal-actions">
                         <button className="btn btn-ghost" onClick={() => setConfirmingDelete(false)}>Hủy bỏ</button>
                         <button className="btn btn-danger" onClick={handleDelete}>Xoá</button>
+                    </div>
+                </Modal>
+            )}
+
+            {reportTarget && (
+                <Modal
+                    title={reportTarget.type === 'post' ? 'Báo cáo bài viết' : 'Báo cáo bình luận'}
+                    onClose={closeReport}
+                    width="420px"
+                >
+                    <p className="modal-body-text">Vui lòng cho biết lý do bạn báo cáo nội dung này. Quản trị viên sẽ xem xét.</p>
+                    <textarea
+                        className="report-reason-input"
+                        rows={3}
+                        maxLength={500}
+                        placeholder="VD: spam, ngôn từ thù ghét, thông tin sai lệch..."
+                        value={reportReason}
+                        onChange={(e) => setReportReason(e.target.value)}
+                        disabled={submittingReport}
+                        autoFocus
+                    />
+                    <div className="modal-actions">
+                        <button className="btn btn-ghost" onClick={closeReport} disabled={submittingReport}>Hủy bỏ</button>
+                        <button className="btn btn-danger" onClick={submitReport} disabled={submittingReport || !reportReason.trim()}>
+                            {submittingReport ? 'Đang gửi…' : 'Gửi báo cáo'}
+                        </button>
                     </div>
                 </Modal>
             )}

@@ -36,8 +36,13 @@ public class Neo4jJobRepository implements JobRepository {
             "WITH j, requiredNames, " +
             "     [n IN requiredNames WHERE toLower(n) IN $userSkillsLower] AS matchedNames " +
             "WHERE size(matchedNames) > 0 " +
-            "OPTIONAL MATCH (j)-[:POSTED_BY]->(c:Company) " +
-            "WITH j, c, requiredNames, matchedNames, " +
+            // Job-[:HIRES_FOR]->Company comes from the batch knowledge-graph importer;
+            // Job-[:POSTED_BY]->Company comes from the real-time Kafka pipeline
+            // (KafkaNeo4jWriterService) — a job seen by only one of the two has only one edge.
+            // A job seen by both could match a company via each edge; collect+head picks one
+            // instead of returning one JobMatchRaw row per matched company.
+            "OPTIONAL MATCH (j)-[:POSTED_BY|HIRES_FOR]->(c:Company) " +
+            "WITH j, requiredNames, matchedNames, head(collect(DISTINCT c)) AS c, " +
             "     toFloat(size(matchedNames)) / size(requiredNames) AS score " +
             // Job.title/source_url come from the batch Python importer; the real-time Kafka
             // pipeline (KafkaNeo4jWriterService) writes the same data as Job.name/Job.url instead
@@ -76,6 +81,38 @@ public class Neo4jJobRepository implements JobRepository {
                 }
             }
             log.info("Neo4jJobRepository found {} matching jobs for {} skills", result.size(), userSkillsLower.size());
+            return result;
+        })
+        .subscribeOn(Schedulers.boundedElastic())
+        .flatMapIterable(list -> list);
+    }
+
+    private static final String COUNT_JOBS_QUERY = "MATCH (j:Job) RETURN count(j) AS c";
+
+    private static final String TOP_TECHNOLOGIES_QUERY =
+            "MATCH (j:Job)-[:REQUIRES]->(t) WHERE t:Technology OR t:Skill " +
+            "RETURN t.name AS name, count(DISTINCT j) AS jobCount " +
+            "ORDER BY jobCount DESC LIMIT $limit";
+
+    @Override
+    public Mono<Long> countJobs() {
+        return Mono.fromCallable(() -> {
+            try (Session session = driver.session()) {
+                return session.run(COUNT_JOBS_QUERY).single().get("c").asLong();
+            }
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    @Override
+    public Flux<TechDemandRaw> topTechnologies(int limit) {
+        return Mono.fromCallable(() -> {
+            List<TechDemandRaw> result = new ArrayList<>();
+            try (Session session = driver.session()) {
+                var queryResult = session.run(TOP_TECHNOLOGIES_QUERY, Map.of("limit", limit));
+                for (Record r : queryResult.list()) {
+                    result.add(new TechDemandRaw(r.get("name").asString(), r.get("jobCount").asLong()));
+                }
+            }
             return result;
         })
         .subscribeOn(Schedulers.boundedElastic())

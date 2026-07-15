@@ -12,6 +12,10 @@ giữa Spring backend (`apps/backend`) và service `ai-rag-core`.
 | `chat_session` | backend (ghi/đọc/auth) | Backend quản vòng đời session: tạo, list, xoá, kiểm quyền sở hữu. |
 | `chat_message` | **ai-rag-core (ghi)** | Service RAG sinh câu trả lời nên nó ghi cả `user` lẫn `assistant` message (cả non-stream lẫn stream). Backend chỉ **đọc** để trả lịch sử. |
 | `settings`, `tech_analytics` | backend | Feature flags + ETL Neo4j→Postgres. |
+| `notification` | backend (ghi/đọc) | Kafka `trend.alerts` → `NotificationDispatcher` (in-app + email fan-out). |
+| `dp_bronze_catalog`, `dp_processed_articles`, `dp_processed_jobs`, `dp_pipeline_runs` | **data-platform** (Python, ghi) | Backend/Flyway chỉ tạo bảng; ghi/đọc thuộc `data-platform` (bronze/silver catalog, xem `data-platform/README.md`). |
+| `post`, `follow`, `post_like`, `post_comment` | backend (ghi/đọc) | Social feed — xem [`docs/DATABASE.md`](../../../../../../docs/DATABASE.md). |
+| `conversation`, `direct_message` | backend (ghi/đọc) | Direct messaging 1-1; realtime là SSE in-memory (`MessageBroadcaster`), KHÔNG dùng Postgres LISTEN/NOTIFY hay Redis pub/sub — single-instance only. |
 
 > **Vì sao tách `chat_session` (backend) và `chat_message` (ai-rag-core)?**
 > Trước đây CẢ HAI cùng ghi message → mỗi lượt chat tạo 4 dòng thay vì 2
@@ -109,15 +113,92 @@ cms_content                                       -- (V3) AdminCMS content
   status       VARCHAR(50) NOT NULL = 'Pending'
   created_at   TIMESTAMP NOT NULL = now()
   updated_at   TIMESTAMP NOT NULL = now()
+
+notification                                      -- (V6) in-app/email, ghi bởi backend
+  id         UUID PK
+  user_id    UUID NOT NULL -> users(id) ON DELETE CASCADE
+  type       VARCHAR(40) NOT NULL                  -- trend_alert | system | career | ...
+  title      VARCHAR(200) NOT NULL
+  body       TEXT
+  link       VARCHAR(300)
+  is_read    BOOLEAN NOT NULL = false
+  created_at TIMESTAMP NOT NULL = now()
+  INDEX idx_notification_user(user_id, is_read, created_at DESC)
+  -- (V6) user_profile += notify_inapp, notify_email BOOLEAN = true (per-user channel prefs)
+
+dp_bronze_catalog / dp_processed_articles /       -- (V7) sở hữu bởi `data-platform` (Python),
+dp_processed_jobs / dp_pipeline_runs                 KHÔNG phải backend/ai-rag-core. Registry file
+                                                      MinIO (bronze) + article/job đã dedupe (silver)
+                                                      + log mỗi lần chạy Gold ETL/enricher.
+                                                      Chi tiết cột: xem `data-platform/README.md`.
+
+post                                              -- (V8) social feed, ghi bởi backend
+  id         UUID PK
+  user_id    UUID NOT NULL -> users(id) ON DELETE CASCADE
+  content    TEXT NOT NULL
+  created_at TIMESTAMP NOT NULL = now()
+  INDEX idx_post_created(created_at DESC), idx_post_user(user_id, created_at DESC)
+
+follow                                            -- (V8) đồ thị theo dõi (không phải Neo4j)
+  follower_id UUID NOT NULL -> users(id) ON DELETE CASCADE
+  followee_id UUID NOT NULL -> users(id) ON DELETE CASCADE
+  created_at  TIMESTAMP NOT NULL = now()
+  PK(follower_id, followee_id), CHECK(follower_id <> followee_id)
+  INDEX idx_follow_followee(followee_id)
+
+post_like                                         -- (V8)
+  post_id UUID NOT NULL -> post(id) ON DELETE CASCADE
+  user_id UUID NOT NULL -> users(id) ON DELETE CASCADE
+  created_at TIMESTAMP NOT NULL = now()
+  PK(post_id, user_id)
+
+post_comment                                      -- (V8)
+  id         UUID PK
+  post_id    UUID NOT NULL -> post(id) ON DELETE CASCADE
+  user_id    UUID NOT NULL -> users(id) ON DELETE CASCADE
+  content    TEXT NOT NULL
+  created_at TIMESTAMP NOT NULL = now()
+  INDEX idx_comment_post(post_id, created_at)
+
+conversation                                      -- (V9) direct messaging, ghi bởi backend
+  id         UUID PK
+  user_a_id  UUID NOT NULL -> users(id) ON DELETE CASCADE   -- luôn user_a_id < user_b_id
+  user_b_id  UUID NOT NULL -> users(id) ON DELETE CASCADE      (canonical ordering, CHECK)
+  created_at TIMESTAMP NOT NULL = now()
+  CHECK(user_a_id < user_b_id), UNIQUE(user_a_id, user_b_id)
+  INDEX idx_conversation_user_a(user_a_id), idx_conversation_user_b(user_b_id)
+
+direct_message                                    -- (V9)
+  id              UUID PK
+  conversation_id UUID NOT NULL -> conversation(id) ON DELETE CASCADE
+  sender_id       UUID NOT NULL -> users(id) ON DELETE CASCADE
+  content         TEXT NOT NULL
+  created_at      TIMESTAMP NOT NULL = now()
+  read_at         TIMESTAMP NULL
+  INDEX idx_dm_conversation(conversation_id, created_at)
 ```
 
-Quan hệ: `users 1—1 user_profile`, `users 1—N chat_session 1—N chat_message`.
+Quan hệ: `users 1—1 user_profile`, `users 1—N chat_session 1—N chat_message`,
+`users 1—N post 1—N post_comment`, `users N—N users` qua `follow`/`post_like` (composite PK, không có bảng riêng),
+`users 1—1 conversation` (canonical `user_a_id<user_b_id`) `1—N direct_message`.
 
 **Migrations:** V1 base + flags + tech_analytics · V2 full_name + user_profile · V3 activity_log + cms_content ·
 V4 CHECK (`users.role`, `chat_message.role`, `activity_log.type`) + functional/role index +
 trigger `set_updated_at()` (BEFORE UPDATE: users/user_profile/chat_session/settings/cms_content) ·
-V5 `user_avatar` (BYTEA, in-DB avatar) + `password_reset` (token, expires_at, used).
-Dev-only: V900 admin seed · V901 sample data (demo user, tech_analytics, cms).
+V5 `user_avatar` (BYTEA, in-DB avatar) + `password_reset` (token, expires_at, used) ·
+V6 `notification` + `user_profile` notify_inapp/notify_email ·
+V7 `dp_bronze_catalog`/`dp_processed_articles`/`dp_processed_jobs`/`dp_pipeline_runs` (data-platform catalog, sở hữu bởi service Python `data-platform`, KHÔNG phải ai-rag-core) ·
+V8 `post`/`follow`/`post_like`/`post_comment` (social feed) ·
+V9 `conversation`/`direct_message` (direct messaging) ·
+V10 GIN index `idx_user_profile_technologies_gin` trên `user_profile.technologies` (dùng bởi
+`PostgresNotificationRepository.findTrendSubscribers`, chạy trên mỗi Kafka `trend.alerts` — trước
+đó là sequential scan; query đổi từ `:tech = ANY(technologies)` sang `technologies @> :tech` để
+tận dụng index).
+Dev-only: V900 admin seed · V901 sample data (demo user, tech_analytics, cms) · V902-V905 (jobs/articles/activity_log/tech_analytics/users+cms mở rộng cho dev).
+
+Xem thêm [`docs/DATABASE.md`](../../../../../../docs/DATABASE.md) cho bức tranh toàn hệ CSDL
+(Postgres + Neo4j + Redis) và các quy ước cross-service; file này (`db/README.md`) vẫn là
+nguồn sự thật cho **DDL chi tiết** của Postgres (do Flyway quản lý).
 
 ## 4. Quy ước migration
 

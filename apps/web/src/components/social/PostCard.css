@@ -44,6 +44,13 @@
     color: var(--text-3);
 }
 
+.post-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
 .post-delete-btn {
     background: transparent;
     border: none;
@@ -58,6 +65,58 @@
 .post-delete-btn:hover {
     background: var(--danger-glow);
     color: var(--danger-light);
+}
+
+.post-report-btn {
+    background: transparent;
+    border: none;
+    font-size: 0.85rem;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    opacity: 0.55;
+    transition: background var(--t), opacity var(--t);
+}
+
+.post-report-btn:hover {
+    background: var(--yellow-glow);
+    opacity: 1;
+}
+
+.post-comment-report-btn {
+    background: transparent;
+    border: none;
+    font-size: 0.75rem;
+    padding: 4px 6px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    opacity: 0.4;
+    align-self: flex-start;
+    transition: background var(--t), opacity var(--t);
+}
+
+.post-comment-report-btn:hover {
+    background: var(--yellow-glow);
+    opacity: 1;
+}
+
+.report-reason-input {
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    padding: 10px 12px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    resize: vertical;
+    margin: 12px 0;
+    transition: border-color var(--t);
+}
+
+.report-reason-input:focus {
+    outline: none;
+    border-color: var(--primary);
 }
 
 .post-content {

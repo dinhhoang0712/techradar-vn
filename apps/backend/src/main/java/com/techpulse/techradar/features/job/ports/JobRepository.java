@@ -1,6 +1,7 @@
 package com.techpulse.techradar.features.job.ports;
 
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 
@@ -12,6 +13,15 @@ public interface JobRepository {
      * they can be displayed as-is.
      */
     Flux<JobMatchRaw> findMatchingJobs(List<String> userSkillsLower, int limit);
+
+    /** Total number of Job nodes indexed in the graph, for admin dashboards. */
+    Mono<Long> countJobs();
+
+    /** Most in-demand technologies/skills across all indexed jobs, most-requested first. */
+    Flux<TechDemandRaw> topTechnologies(int limit);
+
+    record TechDemandRaw(String name, long jobCount) {
+    }
 
     record JobMatchRaw(
             String title,

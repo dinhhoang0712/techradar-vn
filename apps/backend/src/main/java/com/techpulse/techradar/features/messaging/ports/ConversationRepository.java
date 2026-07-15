@@ -15,8 +15,14 @@ public interface ConversationRepository {
     /** The other participant in a conversation (who to push a real-time event to). */
     Mono<UUID> otherParticipant(UUID conversationId, UUID userId);
 
-    /** All conversations for a user, each with its last message + unread count, most recent first. */
-    Flux<ConversationRow> findAllForUser(UUID userId);
+    /** A user's conversations, each with its last message + unread count, most recent first. */
+    Flux<ConversationRow> findAllForUser(UUID userId, int limit, int offset);
+
+    Mono<Long> countConversations();
+
+    Mono<Long> countMessages();
+
+    Mono<Long> countMessagesSince(java.time.LocalDateTime since);
 
     record ConversationRow(
             UUID id,

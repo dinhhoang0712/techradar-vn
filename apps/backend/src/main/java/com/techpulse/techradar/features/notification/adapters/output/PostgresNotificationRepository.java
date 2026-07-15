@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -78,17 +79,44 @@ public class PostgresNotificationRepository implements NotificationRepository {
 
     @Override
     public Flux<TrendSubscriber> findTrendSubscribers(String technology) {
+        // @> (contains) instead of `:tech = ANY(technologies)` so the GIN index on
+        // user_profile.technologies (V10) can be used instead of a sequential scan.
         return dbClient.sql(
                 "SELECT u.id AS user_id, u.email AS email, p.notify_inapp, p.notify_email " +
                 "FROM user_profile p JOIN users u ON u.id = p.user_id " +
-                "WHERE :tech = ANY(p.technologies) AND (p.notify_inapp = true OR p.notify_email = true)"
+                "WHERE p.technologies @> :tech AND (p.notify_inapp = true OR p.notify_email = true)"
         )
-                .bind("tech", technology)
+                .bind("tech", new String[] { technology })
                 .map((row, meta) -> new TrendSubscriber(
                         row.get("user_id", UUID.class),
                         row.get("email", String.class),
                         Boolean.TRUE.equals(row.get("notify_inapp", Boolean.class)),
                         Boolean.TRUE.equals(row.get("notify_email", Boolean.class))))
+                .all();
+    }
+
+    @Override
+    public Flux<TrendSubscriber> findJobMatchSubscribers(List<String> technologies) {
+        // && (overlap) instead of per-technology containment so one query covers every skill the
+        // job requires; still served by the GIN index on user_profile.technologies (V10).
+        return dbClient.sql(
+                "SELECT u.id AS user_id, u.email AS email, p.notify_inapp, p.notify_email " +
+                "FROM user_profile p JOIN users u ON u.id = p.user_id " +
+                "WHERE p.technologies && :techs AND (p.notify_inapp = true OR p.notify_email = true)"
+        )
+                .bind("techs", technologies.toArray(new String[0]))
+                .map((row, meta) -> new TrendSubscriber(
+                        row.get("user_id", UUID.class),
+                        row.get("email", String.class),
+                        Boolean.TRUE.equals(row.get("notify_inapp", Boolean.class)),
+                        Boolean.TRUE.equals(row.get("notify_email", Boolean.class))))
+                .all();
+    }
+
+    @Override
+    public Flux<TypeCount> countGroupedByType() {
+        return dbClient.sql("SELECT type, count(*) AS c FROM notification GROUP BY type ORDER BY c DESC")
+                .map((row, meta) -> new TypeCount(row.get("type", String.class), row.get("c", Long.class)))
                 .all();
     }
 

@@ -106,6 +106,56 @@ export const deleteAdminUser = async (id) => {
     });
 };
 
+// --- Social Moderation ---
+
+export const fetchAdminPosts = async (page = 0, size = 20) => {
+    return await apiClient(`/admin/posts?page=${page}&size=${size}`);
+};
+
+export const deleteAdminPost = async (id) => {
+    return await apiClient(`/admin/posts/${id}`, { method: 'DELETE' });
+};
+
+export const fetchAdminPostComments = async (postId, page = 0, size = 20) => {
+    return await apiClient(`/admin/posts/${postId}/comments?page=${page}&size=${size}`);
+};
+
+export const deleteAdminComment = async (id) => {
+    return await apiClient(`/admin/comments/${id}`, { method: 'DELETE' });
+};
+
+// --- Content Reports (moderation queue) ---
+
+// Dispatched after a report is dismissed or its content deleted, so AdminSidebar can refresh its
+// pending-count badge immediately instead of waiting for the next poll.
+export const ADMIN_REPORTS_CHANGED_EVENT = 'admin-reports-changed';
+
+export const fetchAdminReports = async (page = 0, size = 20) => {
+    return await apiClient(`/admin/reports?page=${page}&size=${size}`);
+};
+
+export const dismissAdminReport = async (id) => {
+    return await apiClient(`/admin/reports/${id}/dismiss`, { method: 'POST' });
+};
+
+// --- Report Dashboards ---
+
+export const fetchSocialDashboard = async () => {
+    return await apiClient('/admin/dashboard/social');
+};
+
+export const fetchJobMarketDashboard = async () => {
+    return await apiClient('/admin/dashboard/jobs');
+};
+
+export const fetchPipelineDashboard = async () => {
+    return await apiClient('/admin/dashboard/pipeline');
+};
+
+export const fetchMessagingDashboard = async () => {
+    return await apiClient('/admin/dashboard/messaging');
+};
+
 // --- CMS Content Management ---
 
 export const fetchCmsContent = async () => {

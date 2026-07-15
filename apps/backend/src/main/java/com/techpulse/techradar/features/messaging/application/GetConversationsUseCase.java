@@ -14,10 +14,16 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class GetConversationsUseCase {
 
+    private static final int DEFAULT_SIZE = 20;
+    private static final int MAX_SIZE = 100;
+
     private final ConversationRepository conversationRepository;
 
-    public Flux<ConversationSummary> execute(String userId) {
-        return conversationRepository.findAllForUser(UUID.fromString(userId))
+    public Flux<ConversationSummary> execute(String userId, int page, int size) {
+        int effectiveSize = size <= 0 ? DEFAULT_SIZE : Math.min(size, MAX_SIZE);
+        int offset = Math.max(page, 0) * effectiveSize;
+
+        return conversationRepository.findAllForUser(UUID.fromString(userId), effectiveSize, offset)
                 .map(row -> new ConversationSummary(
                         row.id().toString(),
                         new UserRef(row.otherUserId().toString(), row.otherUserName(), row.otherUserAvatarUrl()),

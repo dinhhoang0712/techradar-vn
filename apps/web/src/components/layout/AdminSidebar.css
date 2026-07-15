@@ -120,6 +120,21 @@
     overflow: hidden;
 }
 
+.nav-badge {
+    background: var(--danger);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 99px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
 .sidebar-footer {
     padding: 12px;
     border-top: 1px solid var(--border);

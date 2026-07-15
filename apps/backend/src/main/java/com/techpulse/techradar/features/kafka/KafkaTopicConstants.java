@@ -15,6 +15,9 @@ public final class KafkaTopicConstants {
     /** Domain event: a technology crossed the trend-growth threshold (radar ETL → notifications). */
     public static final String TREND_ALERTS = "trend.alerts";
 
+    /** Domain event: a brand-new job posting was ingested (Kafka writer → notifications). */
+    public static final String JOB_MATCH_ALERTS = "job.match.alerts";
+
     private KafkaTopicConstants() {
         // Constants only
     }

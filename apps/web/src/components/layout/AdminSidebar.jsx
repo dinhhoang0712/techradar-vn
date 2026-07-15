@@ -1,11 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { logoutUser } from '../../api/authService';
+import { fetchSocialDashboard, ADMIN_REPORTS_CHANGED_EVENT } from '../../api/adminService';
 import Modal from '../common/Modal';
 import './AdminSidebar.css';
 
 const NAV_ITEMS = [
     { to: '/admin/dashboard', label: 'Dashboard' },
+    { to: '/admin/moderation', label: 'Kiểm duyệt nội dung' },
+    { to: '/admin/reports', label: 'Báo cáo vi phạm', badgeKey: 'reports' },
     { to: '/admin/users', label: 'Quản lý người dùng' },
     { to: '/admin/cms', label: 'Quản lý dữ liệu (CMS)' },
     { to: '/admin/settings', label: 'Cài đặt hệ thống' },
@@ -14,6 +17,24 @@ const NAV_ITEMS = [
 export default function AdminSidebar({ collapsed, onToggle }) {
     const navigate = useNavigate();
     const [confirmingLogout, setConfirmingLogout] = useState(false);
+    const [pendingReports, setPendingReports] = useState(0);
+
+    useEffect(() => {
+        const loadPendingReports = () => {
+            fetchSocialDashboard()
+                .then(res => setPendingReports(res?.data?.pending_reports || 0))
+                .catch(() => {});
+        };
+        loadPendingReports();
+        const interval = setInterval(loadPendingReports, 30000); // Cùng nhịp với AppContext polling /status
+        window.addEventListener(ADMIN_REPORTS_CHANGED_EVENT, loadPendingReports);
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener(ADMIN_REPORTS_CHANGED_EVENT, loadPendingReports);
+        };
+    }, []);
+
+    const badgeCount = { reports: pendingReports };
 
     const confirmLogout = async () => {
         try {
@@ -41,16 +62,20 @@ export default function AdminSidebar({ collapsed, onToggle }) {
             </div>
 
             <nav className="sidebar-nav">
-                {NAV_ITEMS.map(item => (
-                    <NavLink
-                        key={item.to}
-                        to={item.to}
-                        className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
-                        title={collapsed ? item.label : ''}
-                    >
-                        {!collapsed && <span className="nav-label">{item.label}</span>}
-                    </NavLink>
-                ))}
+                {NAV_ITEMS.map(item => {
+                    const count = item.badgeKey ? badgeCount[item.badgeKey] : 0;
+                    return (
+                        <NavLink
+                            key={item.to}
+                            to={item.to}
+                            className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
+                            title={collapsed ? item.label : ''}
+                        >
+                            {!collapsed && <span className="nav-label">{item.label}</span>}
+                            {count > 0 && <span className="nav-badge">{count}</span>}
+                        </NavLink>
+                    );
+                })}
             </nav>
 
             <div className="sidebar-footer">

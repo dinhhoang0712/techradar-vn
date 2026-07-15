@@ -46,6 +46,22 @@ public class PostgresCommentRepository implements CommentRepository {
                 .all();
     }
 
+    @Override
+    public Mono<Boolean> deleteById(UUID commentId) {
+        return dbClient.sql("DELETE FROM post_comment WHERE id = :id")
+                .bind("id", commentId)
+                .fetch().rowsUpdated()
+                .map(rows -> rows > 0);
+    }
+
+    @Override
+    public Mono<Long> countAll() {
+        return dbClient.sql("SELECT count(*) AS c FROM post_comment")
+                .map((row, meta) -> row.get("c", Long.class))
+                .one()
+                .defaultIfEmpty(0L);
+    }
+
     private static CommentRow mapRow(Row row) {
         return new CommentRow(
                 row.get("id", UUID.class),

@@ -1,7 +1,7 @@
 package com.techpulse.techradar.features.company.application;
 
+import com.techpulse.techradar.features.company.domain.CompanyProfile;
 import com.techpulse.techradar.features.company.domain.SimilarCompany;
-import com.techpulse.techradar.features.company.ports.CompanyRepository;
 import com.techpulse.techradar.shared.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -16,17 +16,18 @@ import java.util.stream.Collectors;
 
 /**
  * Companies ranked by Jaccard similarity of their inferred tech stack against a target company.
+ * Reuses GetCompaniesUseCase's Redis-cached company list instead of re-querying Neo4j per request.
  */
 @Component
 @RequiredArgsConstructor
 public class GetSimilarCompaniesUseCase {
 
-    private final CompanyRepository companyRepository;
+    private final GetCompaniesUseCase getCompaniesUseCase;
 
     public Mono<List<SimilarCompany>> execute(String companyId, int limit) {
         int effectiveLimit = limit <= 0 ? 10 : Math.min(limit, 100);
 
-        return companyRepository.findAllWithTechStack()
+        return getCompaniesUseCase.all()
                 .collectList()
                 .flatMap(all -> {
                     var target = all.stream()
@@ -48,7 +49,7 @@ public class GetSimilarCompaniesUseCase {
                 });
     }
 
-    private SimilarCompany toSimilarCompany(CompanyRepository.CompanyRaw candidate, Set<String> targetLower) {
+    private SimilarCompany toSimilarCompany(CompanyProfile candidate, Set<String> targetLower) {
         Set<String> candidateLower = lowerSet(candidate.techStack());
 
         List<String> shared = new ArrayList<>();
@@ -64,7 +65,7 @@ public class GetSimilarCompaniesUseCase {
 
         return new SimilarCompany(
                 candidate.id(),
-                CompanyNames.clean(candidate.name()),
+                candidate.name(),
                 candidate.location(),
                 shared,
                 jaccard

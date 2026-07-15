@@ -5,6 +5,8 @@ import com.techpulse.techradar.features.notification.domain.TrendSubscriber;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
+
 /**
  * Persistence port for notifications and trend-alert subscriber lookups.
  */
@@ -22,4 +24,13 @@ public interface NotificationRepository {
 
     /** Users whose profile lists {@code technology} and who want at least one channel. */
     Flux<TrendSubscriber> findTrendSubscribers(String technology);
+
+    /** Users whose profile technologies overlap any of {@code technologies}, wanting at least one channel. */
+    Flux<TrendSubscriber> findJobMatchSubscribers(List<String> technologies);
+
+    /** Notification counts grouped by {@code type} (e.g. JOB_MATCH, TREND_ALERT), for admin dashboards. */
+    Flux<TypeCount> countGroupedByType();
+
+    record TypeCount(String type, long count) {
+    }
 }

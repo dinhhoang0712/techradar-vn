@@ -124,7 +124,7 @@ TechRadar VN là nền tảng phân tích xu hướng công nghệ và thị tr�
 
 | Component | Tech Stack | Port | Mô tả |
 |-----------|------------|------|-------|
-| **ai-rag-core** | FastAPI, Python 3.11+ | 8000 | Graph RAG chat, recommendation, forecast |
+| **ai-rag-core** | FastAPI, Python 3.11+ | 8000 | Graph RAG chat, recommendation, forecast, career/interview coaching, summarize, report, agent |
 | **ml-clustering** | FastAPI, Python 3.11+, DVC | 8001 | HDBSCAN clustering pipeline |
 
 ### 3.4 Data Layer
@@ -188,23 +188,32 @@ bronze/             dp_processed_jobs)              │
                     │                     │                  extracted_*, see *)
                     ▼                     ▼  Kafka: article_vectors, job_vectors
           Neo4j Knowledge Graph     Kafka Broker
-                    │                     │
-                    ▼                     ▼
-          Gold ETL (3:00 AM daily)  qdrant-writer (Kafka consumer)
-                    │                     │
-                    ▼                     ▼
-          PostgreSQL tech_analytics  Qdrant Vector DB
-                    │                (optional, --profile vector)
-                    ▼  MoM growth ≥ 20% threshold
-          Kafka: trend.alerts
-                    │
-                    ▼
-          TrendAlertDispatcher (feature notification)
-                    │
-                    ▼
-          Fan-out: in-app + email
-          (theo user_profile.technologies /
-           notify_inapp / notify_email)
+            │             │              │
+            │             ▼              ▼
+            │   (job MERGE'd — is it   qdrant-writer (Kafka consumer)
+            │    brand new? if yes:)        │
+            │             ▼                 ▼
+            │   Kafka: job.match.alerts   Qdrant Vector DB
+            │             │              (optional, --profile vector)
+            │             ▼
+            │   JobMatchDispatcher (feature notification, NEW)
+            │             │
+            ▼             ▼
+    Gold ETL (3:00 AM daily)   Fan-out: in-app + email
+            │                 (theo user_profile.technologies /
+            ▼                  notify_inapp / notify_email)
+    PostgreSQL tech_analytics
+            │
+            ▼  MoM growth ≥ 20% threshold
+    Kafka: trend.alerts
+            │
+            ▼
+    TrendAlertDispatcher (feature notification)
+            │
+            ▼
+    Fan-out: in-app + email
+    (theo user_profile.technologies /
+     notify_inapp / notify_email)
 ```
 
 \* **Silver Processor đọc dual-topic**: cả `raw_*` (từ crawler, khi Spring Boot tắt) lẫn `extracted_*`
@@ -286,9 +295,20 @@ apps/backend/src/main/java/com/techpulse/
 │   │       └── out/persistence # Repository implementations
 │   ├── radar/
 │   ├── compare/
-│   ├── graph/
+│   ├── graph/                  # + salary/sentiment filter (SalaryOverlap, SentimentBand)
 │   ├── chat/
 │   ├── clustering/
+│   ├── salary/
+│   ├── notification/
+│   ├── company/                 # NEW — Company Explorer (Neo4j)
+│   ├── job/                     # NEW — Job Matching (Neo4j, ranks by skill overlap)
+│   ├── messaging/                # NEW — 1-1 direct messages (Postgres + SSE fan-out via Redis Pub/Sub)
+│   ├── social/                   # NEW — posts/follow/like/comment feed + content reports (Postgres)
+│   ├── aiproxy/                  # Consolidates the old career/forecast/recommend/report/
+│   │                              # summarize/agent modules into ONE generic forwarder
+│   │                              # (AiProxyRequestHandler + single PythonAiProxyClient);
+│   │                              # thin controllers still expose /career /forecast /recommend
+│   │                              # /report /interview /agent /chat/summarize
 │   ├── user/
 │   ├── system/
 │   ├── health/
@@ -333,28 +353,46 @@ apps/backend/src/main/java/com/techpulse/
 
 ### 5.4 Database Schema (PostgreSQL)
 
+> Xem [`docs/DATABASE.md`](./DATABASE.md) cho tài liệu đầy đủ về schema (Postgres + Neo4j +
+> Redis), quy ước sở hữu dữ liệu giữa các service, và Flyway migration ledger. Tóm tắt nhanh:
+
 ```sql
 -- Users & Authentication
 users (id, email, password_hash, role, status, created_at)
-user_profiles (user_id, full_name, avatar_url, bio, job_role, location, 
-               technologies[], preferences_json, notify_inapp, notify_email)
+user_profile (user_id, full_name, avatar_url, bio, job_role, location,
+              technologies[], notify_inapp, notify_email)
 user_avatar (user_id, content_type, data)
+password_reset (token, user_id, expires_at, used)
 
--- Chat & AI
-chat_sessions (id, user_id, title, created_at)
-chat_messages (id, session_id, role, content, created_at)
+-- Chat & AI (chat_message ghi bởi ai-rag-core, không phải backend — xem DATABASE.md)
+chat_session (id, user_id, title, model_used, system_prompt, created_at)
+chat_message (id, session_id, role, content, prompt_tokens, completion_tokens, created_at)
 
 -- Analytics
-tech_analytics (tech_name, period, article_count, job_count, 
-                growth_rate, mom_growth, yoy_growth, snapshot_jobs)
+tech_analytics (technology_name, month, job_count, article_count,
+                growth_rate, mom_growth, yoy_growth, ranking)
+activity_log (id, type, user_id, path, keyword, created_at)
 
--- CMS
-cms_content (id, title, type, content, content_date, status, created_at)
-
--- System
+-- CMS & System
+cms_content (id, title, type, content_date, status, created_at)
 settings (key, value, description)
-activity_log (id, user_id, action, metadata, created_at)
-notifications (id, user_id, type, title, body, link, read, created_at)
+notification (id, user_id, type, title, body, link, is_read, created_at)
+
+-- Social Feed (NEW, V8)
+post (id, user_id, content, created_at)
+follow (follower_id, followee_id, created_at)
+post_like (post_id, user_id, created_at)
+post_comment (id, post_id, user_id, content, created_at)
+
+-- Content Moderation (NEW, V11/V12)
+content_report (id, reporter_id, post_id, comment_id, reason, status, resolved_at, resolved_by)
+
+-- Direct Messaging (NEW, V9)
+conversation (id, user_a_id, user_b_id, created_at)
+direct_message (id, conversation_id, sender_id, content, created_at, read_at)
+
+-- Data Platform catalog (sở hữu bởi service `data-platform`, không phải backend)
+dp_bronze_catalog / dp_processed_articles / dp_processed_jobs / dp_pipeline_runs
 ```
 
 ---
@@ -384,19 +422,26 @@ apps/web/src/pages/
 │   ├── RegisterPage.jsx
 │   └── ForgotPasswordPage.jsx
 ├── TrendDashboard.jsx          # Tech radar dashboard
-├── GraphExplorer.jsx            # Knowledge graph visualization
-├── ChatbotPage.jsx              # Graph RAG chat interface
+├── GraphExplorer.jsx            # Knowledge graph (Explore / Road Analysis / Browse Filters)
+├── ChatbotPage.jsx              # Graph RAG chat + Agent mode toggle
 ├── ClusterDashboard.jsx         # Technology clustering visualization
 ├── ComparePage.jsx              # Technology comparison
-├── CareerPage.jsx               # Career path assistant
+├── CareerPage.jsx               # Career path assistant + job-match card
+├── InterviewPage.jsx            # NEW — AI mock interview (turn-based, /interview)
 ├── ReportPage.jsx               # Trend reports
 ├── SalaryPage.jsx               # Salary analytics
-├── UserProfile.jsx              # User profile management
+├── CompanyExplorer.jsx          # NEW — company directory + similar-company panel
+├── FeedPage.jsx                 # NEW — social feed (posts/likes/comments)
+├── MessagesPage.jsx             # NEW — direct messaging (SSE)
+├── PublicProfilePage.jsx        # NEW — public profile (/users/:id), follow + message entry point
+├── UserProfile.jsx              # User profile management (own profile)
 ├── admin/
-│   ├── AdminDashboard.jsx
-│   ├── UserManagement.jsx
-│   ├── CMSManagement.jsx
-│   └── SettingsPage.jsx
+│   ├── AdminDashboard.jsx        # + Social Engagement / Job Market / Pipeline Health / Messaging Volume tabs (NEW)
+│   ├── AdminModeration.jsx       # NEW — view/delete any post/comment
+│   ├── AdminReports.jsx          # NEW — content_report moderation queue (dismiss)
+│   ├── AdminUsers.jsx
+│   ├── AdminCMS.jsx
+│   └── AdminSettings.jsx
 └── MaintenancePage.jsx          # Maintenance mode
 ```
 
@@ -404,24 +449,35 @@ apps/web/src/pages/
 
 ```
 apps/web/src/
+├── layouts/
+│   ├── UserLayout.jsx           # wraps Header/Footer + <MessagingProvider> for all user pages
+│   └── AdminLayout.jsx
 ├── components/
 │   ├── layout/
-│   │   ├── Header.jsx
-│   │   ├── Sidebar.jsx
-│   │   ├── Footer.jsx
-│   │   └── Layout.jsx
-│   └── notifications/
-│       ├── NotificationBell.jsx
-│       └── NotificationPanel.jsx
+│   │   ├── Header.jsx           # top nav — gained Bảng tin/Tin nhắn/Công ty/Phỏng vấn thử links
+│   │   ├── AdminSidebar.jsx
+│   │   └── Footer.jsx
+│   ├── notifications/
+│   │   ├── NotificationBell.jsx
+│   │   └── NotificationPanel.jsx
+│   ├── social/
+│   │   └── PostCard.jsx         # NEW — shared like/comment/delete card (Feed + PublicProfile)
+│   └── common/
+│       ├── Avatar.jsx           # NEW — shared avatar-or-fallback-icon
+│       ├── Modal.jsx            # confirm dialogs (replaces window.confirm call sites)
+│       └── ToastProvider.jsx / toastContext.js   # split apart for Fast-Refresh compatibility
 ├── contexts/
-│   └── AuthContext.jsx          # Auth state management
+│   ├── AppContext.jsx / appContextStore.js       # auth/app state
+│   └── MessagingContext.jsx / messagingStore.js  # NEW — single app-wide SSE connection (unread badges)
 ├── api/
-│   ├── client.js                # HTTP client with interceptors
-│   ├── auth.js
-│   ├── radar.js
-│   ├── graph.js
-│   ├── chat.js
-│   └── clustering.js
+│   ├── apiClient.js             # HTTP client with interceptors (bearer token, auto-refresh)
+│   ├── authService.js, radarService.js, graphService.js, chatService.js, clusterService.js
+│   ├── companyService.js        # NEW
+│   ├── jobService.js            # NEW
+│   ├── messagingService.js      # NEW
+│   ├── socialService.js         # NEW
+│   ├── interviewService.js      # NEW
+│   └── agentService.js          # NEW — one-shot Agent-mode chat
 ├── utils/
 │   ├── formatters.js
 │   └── validators.js
@@ -431,7 +487,11 @@ apps/web/src/
 
 ### 6.4 State Management
 
-- **Auth State**: React Context (`AuthContext`)
+- **Auth/App State**: React Context (`AppContext`)
+- **Messaging State**: React Context (`MessagingContext`) — opens ONE persistent SSE connection
+  (`GET /conversations/stream`, via raw `fetch`+`ReadableStream` since `EventSource` can't set
+  `Authorization`) at `UserLayout` mount; feeds unread badges + live message delivery app-wide,
+  not just on `/messages`.
 - **Local State**: React hooks (`useState`, `useReducer`)
 - **Server State**: Fetch API with caching (future: React Query)
 - **Form State**: Controlled components
@@ -458,6 +518,7 @@ services/ai-rag-core/app/
 │   ├── routes_career.py         # /career
 │   ├── routes_summarize.py      # /summarize
 │   ├── routes_report.py         # /report
+│   ├── routes_interview.py      # /interview — NEW, stateless AI mock-interview turn machine
 │   └── routes_agent.py          # /agent (LangChain)
 ├── core/
 │   ├── pipeline.py              # RAG orchestrator
@@ -477,7 +538,8 @@ services/ai-rag-core/app/
 │   ├── forecast_service.py
 │   ├── career_service.py
 │   ├── summarize_service.py
-│   └── report_service.py
+│   ├── report_service.py
+│   └── interview_service.py     # NEW — opening/turn/final state machine (stateless, driven by history[])
 ├── agent/
 │   ├── executor.py              # LangChain AgentExecutor
 │   └── tools.py                 # 4 tools
@@ -498,8 +560,19 @@ services/ai-rag-core/app/
 └── prompts/
     ├── system_prompt.txt
     ├── rag_template.txt
+    ├── interview_opening_template.txt   # NEW — turn 0, sinh câu hỏi mở đầu
+    ├── interview_turn_template.txt      # NEW — feedback + câu hỏi tiếp theo
+    ├── interview_final_template.txt     # NEW — nhận xét tổng kết + SCORE: N/10
     └── ...
 ```
+
+> **Ghi chú kiến trúc (aiproxy, phía Spring Boot):** các route `/recommend /forecast /career
+> /summarize /report /agent` (và `/interview` mới) không đổi ở phía `ai-rag-core` (Python) —
+> thay đổi nằm ở **gateway** (`apps/backend`): 6 module riêng biệt trước đây
+> (mỗi module có `ModuleConfig` + `ServicePort` + `PythonXClient` typed riêng) đã được gộp
+> thành một module `features/aiproxy` dùng chung MỘT `PythonAiProxyClient`/`AiProxyPort`
+> (forward `Map<String,Object>` nguyên văn, không có typed request/response phía Java nữa).
+> Xem [`docs/BACKEND_GUIDE.md`](./BACKEND_GUIDE.md) §4 để biết chi tiết.
 
 ### 7.2 ml-clustering (FastAPI)
 
@@ -543,9 +616,13 @@ services/ml-clustering/
 
 **Relationship Types:**
 - `MENTIONS`: Article → Technology/Company/Person
-- `REQUIRES`: Job → Technology/Skill
-- `HIRES_FOR`: Job → Company
-- `USES`: Company → Technology (derived)
+- `REQUIRES`: Job → Technology/Skill — dùng bởi backend **Job Matching** (`features/job`)
+- `HIRES_FOR`: Job → Company — dùng bởi backend **Company Explorer** (`features/company`) và
+  làm ngữ cảnh cho **AI Interview** (`ai-rag-core` `graph_queries.JOBS_BY_TITLE_AND_COMPANY`)
+- `USES`: Company → Technology (derived, ghi bởi `data-platform/gold/neo4j_enricher.py`) —
+  **lưu ý:** backend hiện KHÔNG đọc quan hệ này; `features/company` tự suy ra tech stack của
+  công ty gián tiếp qua `Company<-[HIRES_FOR]-Job-[REQUIRES]->Technology`. Chi tiết + phân tích
+  sự khác biệt này ở [`docs/DATABASE.md`](./DATABASE.md) §4.1.
 - `RELATED_TO`: Technology → Technology (derived)
 - `WORKS_AT`: Person → Company (derived)
 - `WROTE`: Person → Article (derived)

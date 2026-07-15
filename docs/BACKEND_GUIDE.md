@@ -199,9 +199,17 @@ apps/backend/src/main/java/com/techpulse/
 │   │
 │   ├── radar/                         # Tech radar feature
 │   ├── compare/                       # Technology comparison
-│   ├── graph/                         # Knowledge graph explorer
+│   ├── graph/                         # Knowledge graph explorer + salary/sentiment filter
 │   ├── chat/                          # RAG chat
 │   ├── clustering/                    # ML clustering
+│   ├── salary/                        # Salary insights (Neo4j, salary-text parsing)
+│   ├── notification/                  # In-app/email notifications + trend-alert dispatch
+│   ├── company/                       # NEW — Company Explorer (Neo4j)
+│   ├── job/                           # NEW — Job Matching (Neo4j)
+│   ├── messaging/                      # NEW — 1-1 direct messages (Postgres + SSE broadcaster)
+│   ├── social/                         # NEW — posts/follow/like/comment feed (Postgres)
+│   ├── aiproxy/                        # NEW — replaces career/forecast/recommend/report/
+│   │                                    # summarize/agent: one generic forwarder to ai-rag-core
 │   ├── user/                          # User management
 │   ├── system/                        # System settings
 │   ├── health/                        # Health checks
@@ -268,8 +276,9 @@ apps/backend/src/main/java/com/techpulse/
 
 **Database Tables:**
 - `users`: User credentials and status
-- `user_profiles`: User profile information
+- `user_profile`: User profile information (singular table name — not `user_profiles`)
 - `user_avatar`: Avatar images (BYTEA)
+- `password_reset`: Reset tokens
 
 ### 4.2 Radar Feature
 
@@ -314,11 +323,14 @@ apps/backend/src/main/java/com/techpulse/
 **Key Components:**
 - `ChatSessionService`: Create and manage sessions
 - `ChatMessageService`: Store and retrieve messages
-- `RagProxyService`: Proxy requests to ai-rag-core
+- `RagProxyService`: Proxy requests to ai-rag-core `/chat` and `/chat/stream` (SSE) — a
+  **separate** proxy from the `aiproxy` module in §4.16; only chat has its own dedicated proxy.
 
 **Database Tables:**
-- `chat_sessions`: Chat sessions
-- `chat_messages`: Message history
+- `chat_session` (singular): written by backend — lifecycle (create/list/delete/ownership check)
+- `chat_message` (singular): **written by `ai-rag-core`, not backend** — backend only reads it
+  to serve history. See [`docs/DATABASE.md`](./DATABASE.md) for the full ownership rationale
+  (this split fixed a prior double-write bug).
 
 ### 4.5 Clustering Feature
 
@@ -358,12 +370,22 @@ apps/backend/src/main/java/com/techpulse/
 **Key Components:**
 - `SettingsService`: CRUD application settings
 - `ActivityLogService`: Log user activities
-- `NotificationService`: Create and retrieve notifications
+- `AdminDashboardController` (NEW additions — `hasRole('ADMIN')`): beyond the original `user-count`/`visits`/`monthly-visits`/`top-keywords`, now also:
+  - `GET /admin/dashboard/social` → `SocialEngagementStats` (`total_posts`, `posts_today`, `total_comments`, `total_likes`, `total_follows`, `top_posters[]` (`user_id`,`full_name`,`post_count`), `pending_reports`) — reads across `PostRepository`/`CommentRepository`/`FollowRepository`/`ReportRepository`
+  - `GET /admin/dashboard/jobs` → `JobMarketStats` (`total_jobs_indexed`, `top_technologies[]` (`name`,`job_count`), `job_match_alerts_sent`) — the last field is `NotificationRepository.countGroupedByType()` filtered to `JOB_MATCH`
+  - `GET /admin/dashboard/pipeline` → `KafkaSyncStatus` (`articles_processed/failed`, `jobs_processed/failed`, `last_article_processed_at`, `last_job_processed_at`, `last_failure_at`, `last_failure_message`) — **in-process counters only** (`AtomicLong`/`AtomicReference` fields on `KafkaNeo4jWriterService`), reset to zero on every backend restart, NOT persisted anywhere
+  - `GET /admin/dashboard/messaging` → `MessagingStats` (`total_conversations`, `total_messages`, `messages_today`, `notifications_by_type[]` (`type`,`count`))
+- `SocialModerationService` + `AdminSocialController` (NEW, feature `system`, delegates into `features/social` ports) — admin-only moderation over the social feed: list/delete ANY post or comment (bypassing ownership), list/dismiss pending `content_report`s. See §4.15 for the endpoint list.
+- `CacheAdminController` (NEW, `/admin/cache`, `hasRole('ADMIN')`) — `POST /admin/cache/companies/evict` (single key `cache:company:all`), `POST /admin/cache/jobs/evict` (pattern-evicts every `cache:job:match:*` entry via `ReactiveRedisCache.evictByPattern`). Exists because `company`/`job` (§4.12/§4.13) have no ETL/rebuild step to hang a cache invalidation off of, unlike `radar`'s `AnalyticsAdminController`.
 
 **Database Tables:**
-- `settings`: Application settings
-- `activity_log`: User activity logs
-- `notifications`: User notifications
+- `settings`: Application settings + feature flags (also read by public `/status`)
+- `activity_log`: User activity logs (visits/searches, populated by `ActivityTrackingFilter`)
+- `cms_content`: AdminCMS content (Report/Job/Keyword)
+- `content_report` (NEW, read/updated via `AdminSocialController`, owned by `features/social` — see §4.15)
+
+> Notifications are their **own** feature module (`features/notification`), not part of
+> System — see §4.10.
 
 ### 4.8 Health Feature
 
@@ -387,10 +409,150 @@ apps/backend/src/main/java/com/techpulse/
 - `KafkaEventPublisher`: Publish events to Kafka
 - `KafkaEventListener`: Consume events from Kafka
 - `TrendAlertDispatcher`: Dispatch trend alerts to users
+- `KafkaNeo4jWriterService` — consumes `extracted_articles`/`extracted_jobs`, writes to Neo4j; **NEW**: also publishes `job.match.alerts` the first time a job is genuinely new (checked via a `MATCH` before the `MERGE`, so re-crawled/updated listings don't re-fire), and tracks in-process throughput/error counters exposed via `syncStatus()` (`KafkaSyncStatus` record — see `GET /admin/dashboard/pipeline`, §4.7). Counters reset on restart, not persisted.
+- `JobMatchDispatcher` (NEW) — consumes `job.match.alerts`, fans out to users whose profile technologies overlap the job's, mirroring `TrendAlertDispatcher`. See §4.10.
+
+### 4.10 Notification Feature
+
+**Responsibilities:**
+- In-app + email notifications from multiple producers (Kafka trend/job alerts, direct calls from social/messaging use cases)
+- Unread count, mark-as-read/read-all
+- Live delivery via SSE, **fanned out across backend instances via Redis Pub/Sub** (not just in-process)
+- Admin-facing notification-type counts (for the dashboard, §4.7-equivalent under System)
+
+**Key Components:**
+- `NotificationService` (`application/`): list/unread-count/mark-read/`save()`. `save()` persists to Postgres then publishes the notification on Redis channel `live:notifications`; every backend instance is subscribed and re-emits to whichever local SSE clients (`streamFor`) it's holding — see [`docs/DATABASE.md`](./DATABASE.md) §5. Same fire-and-forget contract as before: a missed live push just means the client sees it on its next `GET /notifications`.
+- `TrendAlertDispatcher`: consumes Kafka `trend.alerts` → `NotificationService.save()` with `type=TREND_ALERT`
+- `JobMatchDispatcher` (NEW): consumes Kafka `job.match.alerts` (published by `KafkaNeo4jWriterService` the first time a job posting is newly written to Neo4j — skipped on MERGE-update of an already-known job) → looks up `findJobMatchSubscribers` (users whose `user_profile.technologies` overlaps the job's required techs) → `type=JOB_MATCH`, `link=/career`
+- **Notification-on-social-action (NEW, not Kafka — called directly from the triggering use case, best-effort/`onErrorResume`-swallowed so a notification failure never fails the parent action):**
+  - `ToggleLikeUseCase` → `POST_LIKE` on first-like only (no notification on unlike or repeat like), skipped if liking your own post
+  - `AddCommentUseCase` → `POST_COMMENT` with a 140-char preview of the comment, skipped on self-comment
+  - `ToggleFollowUseCase` → `NEW_FOLLOWER`, `link=/users/{followerId}`
+  - `SendMessageUseCase` → `NEW_MESSAGE` with a 140-char preview, `link=/messages?conversation={id}` — fired alongside (not instead of) the `MessageBroadcaster` live push
+- `NotificationController` — `GET /notifications`, `GET /notifications/unread-count`, `POST /notifications/{id}/read`, `POST /notifications/read-all`, `GET /notifications/stream` (SSE)
+- `NotificationRepository.countGroupedByType()` — used only by `AdminDashboardController` (§4.7) for `/admin/dashboard/jobs` and `/admin/dashboard/messaging`
+
+**Notification `type` values in use:** `TREND_ALERT`, `JOB_MATCH`, `POST_LIKE`, `POST_COMMENT`, `NEW_FOLLOWER`, `NEW_MESSAGE`.
+
+**Database Tables:**
+- `notification` (singular)
+- `user_profile.notify_inapp` / `notify_email` (per-user channel prefs) — only checked by `TrendAlertDispatcher`/`JobMatchDispatcher` (both gate in-app AND email fan-out on these flags); the 4 direct social/messaging notifications above ignore both flags and never send email — they always write an in-app `notification` row unconditionally
+
+### 4.11 Salary Feature
+
+**Responsibilities:**
+- Salary insights ranked by technology (top techs, min-job threshold)
+- Per-technology salary detail (median/avg/P25-P75/min-max, co-occurring techs)
+- Free-text salary parsing (Vietnamese job postings write salary as unstructured text)
+
+**Key Components:**
+- `GetSalaryInsightsUseCase`, `GetTechSalaryDetailUseCase`
+- `SalaryParser` / `SalaryRange` / `SalaryStats` (domain): parses raw strings like `"15-25 triệu"` into numeric ranges — also reused by `features/job`'s min-salary filter
+- `Neo4jSalaryRepository` — `GET /salary/top?limit=&min_jobs=`, `GET /salary/tech/{techName}`
+- Cached via `ReactiveRedisCache` (see [`docs/DATABASE.md`](./DATABASE.md) §5)
+
+**Data Source:**
+- Neo4j (`Job.salary` free text)
+
+### 4.12 Company Feature (NEW)
+
+**Responsibilities:**
+- Company directory (ranked by job count)
+- Similar-company recommendations (Jaccard similarity of tech stacks)
+
+**Key Components:**
+- `CompanyController` — `GET /companies?page=&size=`, `GET /companies/{id}/similar?limit=`
+- `GetCompaniesUseCase` — Neo4j result cached whole in Redis (`cache:company:all`, TTL `app.redis.company-cache-ttl`, default 1800s) since it only changes as often as ingestion runs; pagination (`page`/`size`) is applied in-memory on top of the cached list
+- `GetSimilarCompaniesUseCase` — in-memory Jaccard similarity, reuses `GetCompaniesUseCase`'s cached list instead of re-querying Neo4j
+- `Neo4jCompanyRepository` — infers a company's tech stack via `Company<-[:HIRES_FOR]-Job-[:REQUIRES]->Technology` rather than reading the `USES` relationship directly (see [`docs/DATABASE.md`](./DATABASE.md) §4.1 for why this is worth double-checking — `USES` is in fact populated by the data-platform Gold enricher)
+- `CompanyNames.clean()` — strips a crawler-appended badge line from display names
+
+**Data Source:**
+- Neo4j, look-aside cached in Redis (see [`docs/DATABASE.md`](./DATABASE.md) §5) — newly ingested companies/jobs may take up to the cache TTL to appear
+
+### 4.13 Job Feature (NEW — Job Matching)
+
+**Responsibilities:**
+- Match job postings to the current user's profile skills, ranked by overlap score
+- Optional location / min-salary filtering
+
+**Key Components:**
+- `JobController` — `GET /jobs/matches?location=&min_salary=&limit=` (auth required, uses caller's `user_profile.technologies`)
+- `GetJobMatchesUseCase` — over-fetches from Neo4j at a fixed `MAX_LIMIT*3`, cached in Redis per distinct (sorted) skill set (`cache:job:match:<skills>`, TTL `app.redis.job-cache-ttl`, default 1800s) so any requested `limit` is served from the same cache entry; location/min-salary filtering happens in Java AFTER the cache read (so it doesn't fragment the cache key) since Cypher can't reliably parse free-text salary
+- `Neo4jJobRepository` — `Job-[:REQUIRES]->(Technology|Skill)` matched against the user's lower-cased skill set
+
+**Data Source:**
+- Neo4j, look-aside cached in Redis per skill set (see [`docs/DATABASE.md`](./DATABASE.md) §5)
+
+### 4.14 Messaging Feature (NEW — Direct Messages)
+
+**Responsibilities:**
+- 1-1 conversations, message history, read receipts
+- Real-time delivery
+
+**Key Components:**
+- `ConversationController` — `GET /conversations?page=&size=`, `POST /conversations/with/{userId}`, `GET /conversations/{id}/messages?page=&size=`, `POST /conversations/{id}/messages`, `POST /conversations/{id}/read`, `GET /conversations/stream` (SSE)
+- `SendMessageUseCase` — persists the message, pushes it live via `MessageBroadcaster.publish`, AND (best-effort, failure-swallowed) creates a `NEW_MESSAGE` notification for the recipient (§4.10)
+- `GetConversationsUseCase` (now paginated), `GetMessagesUseCase`, `GetOrCreateConversationUseCase`, `MarkReadUseCase`
+- `MessageBroadcaster` — **updated: cross-instance now**, backed by Redis Pub/Sub (channel `live:messages`, shared `ReactiveRedisMessageListenerContainer` bean). Each instance still holds a local per-user `Sinks.Many` for its own SSE subscribers, but `publish()` always goes over Redis first so any instance can deliver regardless of where the sender/recipient's SSE connection landed — this now DOES fan out correctly in a horizontally-scaled deployment (superseded the earlier in-memory-only design). Fire-and-forget by design either way: Postgres remains the source of truth.
+- `PostgresConversationRepository` / `PostgresMessageRepository` — canonicalizes `user_a_id < user_b_id` to avoid duplicate conversations for the same pair
+
+**Database Tables:**
+- `conversation`, `direct_message` (see [`docs/DATABASE.md`](./DATABASE.md))
+
+### 4.15 Social Feature (NEW — Feed / Follow / Like / Comment / Report)
+
+**Responsibilities:**
+- Post creation/deletion, feed (self + followees)
+- Follow/unfollow, suggested users
+- Like/unlike, comments
+- Public profile summary (follower/following/post counts)
+- User-submitted content reports (moderation flags) on posts/comments — **NEW**
+- Triggers in-app notifications on like/comment/follow (§4.10) — **NEW**
+
+**Key Components:**
+- `PostController` (bare root paths, no `/social` prefix) — `GET /feed`, `POST /posts`, `DELETE /posts/{id}`, `POST|DELETE /posts/{id}/like`, `GET|POST /posts/{id}/comments`, `POST /posts/{id}/report` (NEW), `POST /comments/{id}/report` (NEW)
+- `UserSocialController` (`/users` prefix) — `GET /users/{id}/profile-summary`, `GET /users/{id}/posts`, `POST|DELETE /users/{id}/follow`, `GET /users/suggested?limit=`
+- `GetFeedUseCase`, `CreatePostUseCase`, `GetProfileSummaryUseCase`, `GetSuggestedUsersUseCase`
+- `ToggleLikeUseCase` — like/unlike; on a genuinely NEW like (not a repeat or unlike), fires a best-effort `POST_LIKE` notification to the post author (skipped if liking your own post)
+- `AddCommentUseCase` — validates + inserts, then fires a best-effort `POST_COMMENT` notification (140-char preview) to the post author (skipped on self-comment)
+- `ToggleFollowUseCase` — on a genuinely new follow, fires a best-effort `NEW_FOLLOWER` notification to the followee
+- `ReportContentUseCase` (NEW) — validates non-empty/≤500-char `reason`, inserts into `content_report` via `ON CONFLICT DO NOTHING` (silently a no-op if this user already has a PENDING report on the same target — see V11/V12 unique-index history in [`docs/DATABASE.md`](./DATABASE.md) §3.2); exactly one of `post_id`/`comment_id` is set
+- `PostgresPostRepository` / `PostgresFollowRepository` / `PostgresCommentRepository` / `PostgresReportRepository` (NEW)
+
+**Admin moderation over this feature lives in the `system` module, not here** — see §4.7-equivalent: `SocialModerationService` + `AdminSocialController` (`/admin/posts`, `/admin/posts/{id}/comments`, `/admin/comments/{id}`, `/admin/reports`, `/admin/reports/{id}/dismiss`) can view/delete ANY post or comment (bypassing the ownership check `DeletePostUseCase` enforces for normal users) and review/dismiss the report queue.
+
+**Database Tables:**
+- `post`, `follow`, `post_like`, `post_comment`, `content_report` (NEW, V11/V12) — see [`docs/DATABASE.md`](./DATABASE.md)
+
+### 4.16 AiProxy Feature (NEW — replaces career/forecast/recommend/report/summarize/agent)
+
+**Responsibilities:**
+- Forward AI-capability requests to `ai-rag-core` behind a single, generic mechanism instead of
+  one bespoke module per capability. **This is a refactor, not a new capability** — the 6
+  previously separate feature modules (each with its own `ModuleConfig` + `ServicePort` +
+  typed `PythonXClient`) were deleted and replaced by thin controllers over one shared handler.
+
+**Key Components:**
+- `AiProxyRequestHandler` — shared plumbing; `forwardAsCurrentUser(...)` attaches `user_id` from the JWT when present, `forward(...)` passes the body through unmodified. Both wrap the Python response as `ApiResponse<Map<String,Object>>` (double-wrapped — whatever JSON `ai-rag-core` returns becomes `data` verbatim) and turn ANY upstream error into a generic `503 SERVICE_UNAVAILABLE`.
+- `PythonAiProxyClient` (implements `AiProxyPort`) — one generic `WebClient.post()` per call, no per-endpoint typed request/response classes anymore.
+- Thin controllers, one per legacy path: `AgentController` (`POST /agent`), `CareerController` (`POST /career`), `ForecastController` (`GET /forecast`), `InterviewController` (`POST /interview`, NEW), `RecommendController` (`POST /recommend`), `ReportController` (`GET /report`), `SummarizeController` (`POST /chat/summarize`).
+
+**Known inconsistency worth flagging:** `/forecast`, `/report`, and `/chat/summarize` are public
+(`SecurityConfig.PUBLIC_PATHS`) while `/career`, `/recommend`, `/interview`, and `/agent` require
+auth — this split predates the refactor (the path strings were simply carried over from the
+deleted modules) and was not re-evaluated when consolidating into `aiproxy`.
+
+**Data Source:**
+- `ai-rag-core` (FastAPI) — see [`docs/AI_PLATFORM.md`](./AI_PLATFORM.md)
 
 ---
 
 ## 5. Database Layer
+
+> Đây là phần **implementation patterns** (config mẫu, cách viết repository). Cho schema đầy đủ
+> (mọi bảng, ai sở hữu/ghi/đọc, Neo4j node/relationship, Redis key) xem tài liệu riêng
+> [`docs/DATABASE.md`](./DATABASE.md).
 
 ### 5.1 PostgreSQL (R2DBC)
 
@@ -528,9 +690,11 @@ public class RedisConfig {
 ```
 
 **Use Cases:**
-- Token blacklist (refresh tokens)
-- Caching frequently accessed data
-- Rate limiting
+- Token blacklist (logout/refresh) — `TokenBlacklistService`, key `blacklist:token:<hashCode>`
+- Chat rate limiting — `ChatRateLimiterService`, key `ratelimit:chat:<userId>` (fixed window `INCR`+`EXPIRE`)
+- Look-aside cache for `radar`/`salary`/`clustering`/**`company`**/**`job`** reads — generic `ReactiveRedisCache` (`getOrLoad`/`getOrLoadMono`); admin-evictable for company/job via `CacheAdminController` (§4.7)
+- **Cross-instance SSE fan-out (Pub/Sub, NEW)** — `MessageBroadcaster` (channel `live:messages`) and `NotificationService` (channel `live:notifications`) both publish via Redis instead of writing their local `Sinks.Many` directly, so every backend instance delivers to whichever SSE clients it's holding locally. This is what makes messaging/notification realtime actually work in a multi-instance deployment — see [`docs/DATABASE.md`](./DATABASE.md) §5.
+- **Not used** by `social`/`aiproxy`/`interview` — they read Neo4j/Postgres or proxy to `ai-rag-core` directly, uncached, on every request.
 - Session storage (optional)
 
 ---
@@ -939,6 +1103,14 @@ public class RagProxyService {
     }
 }
 ```
+
+> `RagProxyService` above is specific to `/chat` + `/chat/stream` (typed request/response,
+> §4.4). Every OTHER ai-rag-core capability (`/recommend /forecast /career /summarize /report
+> /agent /interview`) goes through the generic, untyped `PythonAiProxyClient`/`AiProxyPort`
+> described in §4.16 — one `WebClient.post()` forwarding a raw `Map<String,Object>`, no
+> per-endpoint DTOs. Don't use `RagProxyService` as a template for adding a new AI endpoint;
+> extend `aiproxy` instead unless the new endpoint genuinely needs typed request/response
+> handling like chat does.
 
 ### 8.2 ml-clustering Integration
 

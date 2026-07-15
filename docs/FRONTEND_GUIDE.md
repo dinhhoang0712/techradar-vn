@@ -73,72 +73,81 @@ Frontend TechRadar VN là Single Page Application (SPA) được xây dựng v�
 apps/web/src/
 ├── main.jsx                      # Application entry point
 ├── index.css                     # Global styles
-├── App.jsx                       # Root component
+├── App.jsx                       # Root component + route table
 ├── App.css                       # App styles
 │
-├── api/                          # API client layer
-│   ├── client.js                 # HTTP client with interceptors
-│   ├── auth.js                   # Auth API
-│   ├── radar.js                  # Radar API
-│   ├── graph.js                  # Graph API
-│   ├── chat.js                   # Chat API
-│   ├── clustering.js             # Clustering API
-│   ├── compare.js                # Compare API
-│   ├── career.js                 # Career API
-│   └── user.js                   # User API
+├── api/                          # API client layer (real file names)
+│   ├── apiClient.js               # HTTP client — bearer token, auto-refresh on 401
+│   ├── authService.js, userService.js
+│   ├── radarService.js, compareService.js, graphService.js, chatService.js, clusterService.js
+│   ├── careerService.js, reportService.js, summarizeService.js, salaryService.js
+│   ├── companyService.js          # NEW — Company Explorer
+│   ├── jobService.js               # NEW — Job Matching
+│   ├── messagingService.js         # NEW — direct messages (incl. manual SSE fetch/parse)
+│   ├── socialService.js            # NEW — feed/posts/follow/comments
+│   ├── interviewService.js         # NEW — AI mock interview
+│   └── agentService.js             # NEW — one-shot Agent-mode chat
 │
 ├── components/                   # Reusable components
-│   ├── layout/                   # Layout components
-│   │   ├── Header.jsx            # App header
-│   │   ├── Sidebar.jsx           # Navigation sidebar
-│   │   ├── Footer.jsx            # App footer
-│   │   └── Layout.jsx            # Main layout wrapper
-│   └── notifications/            # Notification components
-│       ├── NotificationBell.jsx  # Notification bell icon
-│       └── NotificationPanel.jsx # Notification dropdown
+│   ├── layout/
+│   │   ├── Header.jsx            # top nav — gained Bảng tin/Tin nhắn/Công ty/Phỏng vấn thử
+│   │   ├── AdminSidebar.jsx
+│   │   └── Footer.jsx
+│   ├── notifications/
+│   │   ├── NotificationBell.jsx
+│   │   └── NotificationPanel.jsx
+│   ├── social/                    # NEW
+│   │   └── PostCard.jsx            # shared like/comment/delete card (Feed + PublicProfile)
+│   └── common/
+│       ├── Avatar.jsx              # NEW — shared avatar-or-fallback-icon
+│       ├── Modal.jsx               # confirm dialogs
+│       └── ToastProvider.jsx / toastContext.js
 │
 ├── contexts/                     # React contexts
-│   └── AuthContext.jsx           # Authentication state
+│   ├── AppContext.jsx / appContextStore.js         # auth/app state
+│   └── MessagingContext.jsx / messagingStore.js    # NEW — app-wide SSE connection
 │
 ├── pages/                        # Page components
-│   ├── auth/                     # Auth pages
+│   ├── auth/                     # Auth pages (no shared layout)
 │   │   ├── LoginPage.jsx
-│   │   ├── RegisterPage.jsx
-│   │   └── ForgotPasswordPage.jsx
+│   │   └── RegisterPage.jsx
 │   ├── TrendDashboard.jsx        # Tech radar dashboard
-│   ├── GraphExplorer.jsx         # Knowledge graph explorer
-│   ├── ChatbotPage.jsx           # RAG chat interface
+│   ├── GraphExplorer.jsx         # Explore / Road Analysis / Browse Filters (NEW tab)
+│   ├── ChatbotPage.jsx           # RAG chat + Agent mode toggle (NEW)
 │   ├── ClusterDashboard.jsx      # Clustering visualization
 │   ├── ComparePage.jsx           # Technology comparison
-│   ├── CareerPage.jsx            # Career path assistant
-│   ├── ReportPage.jsx            # Trend reports
 │   ├── SalaryPage.jsx            # Salary analytics
-│   ├── UserProfile.jsx           # User profile
+│   ├── CompanyExplorer.jsx       # NEW — company directory + similar-company panel
+│   ├── CareerPage.jsx            # Career path assistant + job-match card (NEW)
+│   ├── InterviewPage.jsx         # NEW — AI mock interview (turn-based, /interview)
+│   ├── ReportPage.jsx            # Trend reports
+│   ├── FeedPage.jsx              # NEW — social feed
+│   ├── MessagesPage.jsx          # NEW — direct messaging (SSE)
+│   ├── PublicProfilePage.jsx     # NEW — /users/:id (follow + message entry point)
+│   ├── UserProfile.jsx           # Own profile
 │   ├── MaintenancePage.jsx       # Maintenance mode
-│   └── admin/                    # Admin pages
+│   └── admin/                    # Admin pages (AdminLayout)
 │       ├── AdminDashboard.jsx
-│       ├── UserManagement.jsx
-│       ├── CMSManagement.jsx
-│       └── SettingsPage.jsx
+│       ├── AdminUsers.jsx
+│       ├── AdminCMS.jsx
+│       └── AdminSettings.jsx
 │
 ├── layouts/                      # Page layouts
-│   ├── AuthLayout.jsx            # Auth page layout
-│   ├── MainLayout.jsx            # Main app layout
+│   ├── UserLayout.jsx            # wraps Header/Footer + <MessagingProvider> for all user pages
 │   └── AdminLayout.jsx           # Admin layout
 │
 ├── utils/                        # Utility functions
 │   ├── formatters.js             # Data formatting
 │   └── validators.js             # Form validation
 │
-├── data/                         # Static data
-│   └── mockData.js               # Development mock data
-│
-├── assets/                       # Static assets
-│   └── react.svg
-│
-└── styles/                       # Shared styles
-    └── global.css
+└── data/                         # Static data
+    └── mockData.js               # Development mock data
 ```
+
+> **Auth gating:** không có route-level guard (`<PrivateRoute>`) trong cây route — mọi trang dưới
+> `UserLayout` render kể cả chưa đăng nhập. "Yêu cầu đăng nhập" chỉ được enforce ở **tầng data**:
+> `apiClient` đính kèm `Authorization: Bearer <token>` nếu có trong `localStorage`; nếu backend
+> trả 401, client thử refresh 1 lần rồi mới điều hướng về `/login`.
 
 ---
 
@@ -245,6 +254,10 @@ const TrendDashboard = () => {
 ---
 
 ## 5. State Management
+
+> Tên context thật trong code là **`AppContext`** (`contexts/AppContext.jsx` +
+> `appContextStore.js`), không phải `AuthContext` — ví dụ dưới đây minh hoạ ý tưởng (auth state
+> qua React Context + localStorage), không phải copy nguyên văn từ source.
 
 ### 5.1 Auth Context
 
@@ -422,104 +435,103 @@ const ComparePage = () => {
 };
 ```
 
+### 5.4 Messaging Context (NEW — SSE, app-wide)
+
+`MessagingContext` (`contexts/MessagingContext.jsx` + `messagingStore.js`) mở **một** kết nối SSE
+duy nhất cho cả app (mount tại `UserLayout`, không phải per-page), dùng `fetch` +
+`ReadableStream` thủ công thay vì `new EventSource(...)` — trình duyệt không cho `EventSource`
+gắn header `Authorization`, nên phải tự đọc stream để gắn bearer token (cùng pattern với
+`notificationService`'s `streamNotifications`).
+
+Hành vi khi nhận tin nhắn mới qua SSE:
+1. Nếu thread đang mở → append trực tiếp vào `messagesByConversation[conversationId]`.
+2. Nếu conversation chưa có trong danh sách → gọi lại `refreshConversations()` để lấy đủ
+   `other_user`.
+3. Ngược lại → patch `last_message_*` + tăng `unread_count` (trừ khi đang mở đúng thread đó) và
+   đẩy conversation đó lên đầu danh sách.
+4. Nếu đang mở đúng thread đó → gọi luôn `markConversationRead`.
+
+Guard: bỏ qua hoàn toàn (không fetch, không mở SSE) nếu `localStorage.access_token` không tồn
+tại. API surface qua `useMessagingContext()`: `conversations, conversationsLoading,
+messagesByConversation, activeConversationId, refreshConversations, loadMessages,
+selectConversation, openConversationWith, send`.
+
 ---
 
 ## 6. Routing
 
 ### 6.1 Route Configuration
 
-```jsx
-// main.jsx
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { Layout } from './components/layout/Layout';
+> **Quan trọng — khác với ví dụ "lý tưởng" trước đây:** codebase thực tế **KHÔNG có** route-level
+> guard kiểu `<ProtectedRoute>`. Mọi route dưới `UserLayout` (và cả `/admin/*`) render bất kể đã
+> đăng nhập hay chưa; việc "cần đăng nhập" chỉ được enforce ở tầng gọi API (`apiClient` gắn bearer
+> token nếu có, 401 → thử refresh → điều hướng `/login` nếu thất bại). Bảng route thật, rút gọn từ
+> `App.jsx`:
 
-// Pages
+```jsx
+// App.jsx (rút gọn, đúng theo code thật — không có ProtectedRoute)
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import UserLayout from './layouts/UserLayout';
+import AdminLayout from './layouts/AdminLayout';
+
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
 import TrendDashboard from './pages/TrendDashboard';
-import GraphExplorer from './pages/GraphExplorer';
-import ChatbotPage from './pages/ChatbotPage';
-import ClusterDashboard from './pages/ClusterDashboard';
 import ComparePage from './pages/ComparePage';
-import CareerPage from './pages/CareerPage';
-import ReportPage from './pages/ReportPage';
+import GraphExplorer from './pages/GraphExplorer';
+import ClusterDashboard from './pages/ClusterDashboard';
 import SalaryPage from './pages/SalaryPage';
+import CompanyExplorer from './pages/CompanyExplorer';   // NEW
+import ChatbotPage from './pages/ChatbotPage';
 import UserProfile from './pages/UserProfile';
-import MaintenancePage from './pages/MaintenancePage';
-
-// Admin pages
+import CareerPage from './pages/CareerPage';
+import InterviewPage from './pages/InterviewPage';       // NEW
+import ReportPage from './pages/ReportPage';
+import NotificationsPage from './pages/NotificationsPage';
+import FeedPage from './pages/FeedPage';                 // NEW
+import PublicProfilePage from './pages/PublicProfilePage'; // NEW
+import MessagesPage from './pages/MessagesPage';         // NEW
 import AdminDashboard from './pages/admin/AdminDashboard';
-import UserManagement from './pages/admin/UserManagement';
-import CMSManagement from './pages/admin/CMSManagement';
-import SettingsPage from './pages/admin/SettingsPage';
+import AdminUsers from './pages/admin/AdminUsers';
+import AdminCMS from './pages/admin/AdminCMS';
+import AdminSettings from './pages/admin/AdminSettings';
 
-// Protected Route Component
-const ProtectedRoute = ({ children, requireAdmin = false }) => {
-  const { isAuthenticated, user, loading } = useAuth();
+const App = () => (
+  <BrowserRouter>
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
 
-  if (loading) return <div>Loading...</div>;
+      <Route element={<UserLayout />}>
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="dashboard" element={<TrendDashboard />} />
+        <Route path="compare" element={<ComparePage />} />
+        <Route path="graph" element={<GraphExplorer />} />
+        <Route path="clusters" element={<ClusterDashboard />} />
+        <Route path="salary" element={<SalaryPage />} />
+        <Route path="companies" element={<CompanyExplorer />} />   {/* NEW */}
+        <Route path="chat" element={<ChatbotPage />} />
+        <Route path="profile" element={<UserProfile />} />
+        <Route path="career" element={<CareerPage />} />
+        <Route path="interview" element={<InterviewPage />} />     {/* NEW */}
+        <Route path="report" element={<ReportPage />} />
+        <Route path="notifications" element={<NotificationsPage />} />
+        <Route path="feed" element={<FeedPage />} />                {/* NEW */}
+        <Route path="users/:id" element={<PublicProfilePage />} />  {/* NEW */}
+        <Route path="messages" element={<MessagesPage />} />        {/* NEW */}
+      </Route>
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
+      <Route path="admin" element={<AdminLayout />}>
+        <Route index element={<AdminDashboard />} />
+        <Route path="users" element={<AdminUsers />} />
+        <Route path="cms" element={<AdminCMS />} />
+        <Route path="settings" element={<AdminSettings />} />
+      </Route>
 
-  if (requireAdmin && user?.role !== 'ADMIN') {
-    return <Navigate to="/" replace="/" />;
-  }
-
-  return children;
-};
-
-const App = () => {
-  return (
-    <BrowserRouter>
-      <AuthProvider>
-        <Routes>
-          {/* Public routes */}
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          
-          {/* Protected routes */}
-          <Route path="/" element={
-            <ProtectedRoute>
-              <Layout />
-            </ProtectedRoute>
-          }>
-            <Route index element={<Navigate to="/radar" replace />} />
-            <Route path="radar" element={<TrendDashboard />} />
-            <Route path="graph" element={<GraphExplorer />} />
-            <Route path="chat" element={<ChatbotPage />} />
-            <Route path="clustering" element={<ClusterDashboard />} />
-            <Route path="compare" element={<ComparePage />} />
-            <Route path="career" element={<CareerPage />} />
-            <Route path="report" element={<ReportPage />} />
-            <Route path="salary" element={<SalaryPage />} />
-            <Route path="profile" element={<UserProfile />} />
-            
-            {/* Admin routes */}
-            <Route path="admin" element={
-              <ProtectedRoute requireAdmin>
-                <AdminDashboard />
-              </ProtectedRoute>
-            }>
-              <Route index element={<Navigate to="/admin/users" replace />} />
-              <Route path="users" element={<UserManagement />} />
-              <Route path="cms" element={<CMSManagement />} />
-              <Route path="settings" element={<SettingsPage />} />
-            </Route>
-          </Route>
-          
-          {/* Maintenance mode */}
-          <Route path="/maintenance" element={<MaintenancePage />} />
-          
-          {/* Catch all */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </AuthProvider>
-    </BrowserRouter>
-  );
-};
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+    </Routes>
+  </BrowserRouter>
+);
 
 export default App;
 ```
@@ -533,14 +545,23 @@ const NavigationMenu = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Thứ tự thật trong Header.jsx — thêm 4 mục mới (Bảng tin, Tin nhắn, Công ty, Phỏng vấn thử)
   const menuItems = [
-    { path: '/radar', label: 'Tech Radar', icon: '📊' },
-    { path: '/graph', label: 'Graph Explorer', icon: '🕸️' },
-    { path: '/chat', label: 'AI Chat', icon: '🤖' },
-    { path: '/clustering', label: 'Clustering', icon: '🎯' },
-    { path: '/compare', label: 'Compare', icon: '⚖️' },
+    { path: '/dashboard', label: 'Radar', icon: '📊' },
+    { path: '/feed', label: 'Bảng tin', icon: '📰' },        // NEW
+    { path: '/messages', label: 'Tin nhắn', icon: '💬' },    // NEW
+    { path: '/compare', label: 'So sánh', icon: '⚖️' },
+    { path: '/graph', label: 'Đồ thị', icon: '🕸️' },
+    { path: '/clusters', label: 'Cụm CN', icon: '🎯' },
+    { path: '/salary', label: 'Lương', icon: '💰' },
+    { path: '/companies', label: 'Công ty', icon: '🏢' },    // NEW
     { path: '/career', label: 'Career', icon: '🚀' },
+    { path: '/interview', label: 'Phỏng vấn thử', icon: '🎤' }, // NEW
+    { path: '/report', label: 'Báo cáo', icon: '📄' },
+    { path: '/chat', label: 'AI Chat', icon: '🤖' },
   ];
+  // `/users/:id` (PublicProfilePage) không có mục nav riêng — chỉ vào qua link tác giả
+  // bài đăng/gợi ý follow/thread tin nhắn.
 
   return (
     <nav className="navigation-menu">
@@ -757,6 +778,59 @@ export const graph = {
   
   filter: (filters) => 
     apiClient.post('/graph/filter', filters),
+};
+
+// api/companyService.js — NEW
+export const companyService = {
+  getCompanies: () => apiClient.get('/companies'),
+  getSimilarCompanies: (companyId, limit) =>
+    apiClient.get(`/companies/${companyId}/similar${limit ? `?limit=${limit}` : ''}`),
+};
+
+// api/jobService.js — NEW
+export const jobService = {
+  getJobMatches: ({ location, minSalary, limit } = {}) => {
+    const params = new URLSearchParams();
+    if (location) params.append('location', location);
+    if (minSalary) params.append('min_salary', minSalary);
+    if (limit) params.append('limit', limit);
+    return apiClient.get(`/jobs/matches?${params.toString()}`);
+  },
+};
+
+// api/socialService.js — NEW
+export const socialService = {
+  getFeed: (page = 0, size = 20) => apiClient.get(`/feed?page=${page}&size=${size}`),
+  createPost: (content) => apiClient.post('/posts', { content }),
+  deletePost: (id) => apiClient.delete(`/posts/${id}`),
+  likePost: (id) => apiClient.post(`/posts/${id}/like`),
+  unlikePost: (id) => apiClient.delete(`/posts/${id}/like`),
+  getComments: (postId, page = 0, size = 20) => apiClient.get(`/posts/${postId}/comments?page=${page}&size=${size}`),
+  addComment: (postId, content) => apiClient.post(`/posts/${postId}/comments`, { content }),
+  getProfileSummary: (userId) => apiClient.get(`/users/${userId}/profile-summary`),
+  getUserPosts: (userId, page = 0, size = 20) => apiClient.get(`/users/${userId}/posts?page=${page}&size=${size}`),
+  followUser: (userId) => apiClient.post(`/users/${userId}/follow`),
+  unfollowUser: (userId) => apiClient.delete(`/users/${userId}/follow`),
+  getSuggestedUsers: (limit = 10) => apiClient.get(`/users/suggested?limit=${limit}`),
+};
+
+// api/messagingService.js — NEW (streamConversations uses raw fetch+ReadableStream,
+// NOT `new EventSource(...)`, because EventSource can't set an Authorization header)
+export const messagingService = {
+  getConversations: () => apiClient.get('/conversations'),
+  getOrCreateConversation: (userId) => apiClient.post(`/conversations/with/${userId}`),
+  getMessages: (conversationId, page = 0, size = 30) =>
+    apiClient.get(`/conversations/${conversationId}/messages?page=${page}&size=${size}`),
+  sendMessage: (conversationId, content) =>
+    apiClient.post(`/conversations/${conversationId}/messages`, { content }),
+  markConversationRead: (conversationId) => apiClient.post(`/conversations/${conversationId}/read`),
+  streamConversations: (onMessage, onError) => { /* fetch + manual SSE line parsing */ },
+};
+
+// api/interviewService.js — NEW (stateless — client re-sends full `history` every turn)
+export const interviewService = {
+  runInterviewTurn: ({ targetRole, targetCompany, history }) =>
+    apiClient.post('/interview', { target_role: targetRole, target_company: targetCompany, history }),
 };
 ```
 

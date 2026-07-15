@@ -5,11 +5,14 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logoutUser } from '../../api/authService';
 import { getUserProfile } from '../../api/userService';
+import { getRecommendations } from '../../api/recommendService';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const [profile, setProfile] = useState<{ full_name?: string; email?: string; avatar_url?: string } | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
+  const [recommendations, setRecommendations] = useState<any[]>([]);
+  const [loadingRecs, setLoadingRecs] = useState(false);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -22,6 +25,15 @@ export default function ProfileScreen() {
             avatar_url: data.profile?.avatar_url || data.avatar_url || ''
         };
         setProfile(flatData);
+
+        const technologies = data.profile?.technologies || data.technologies || [];
+        if (technologies.length > 0) {
+          setLoadingRecs(true);
+          getRecommendations(technologies, 8)
+            .then((r) => setRecommendations(r?.data?.recommendations ?? r?.recommendations ?? []))
+            .catch(() => setRecommendations([]))
+            .finally(() => setLoadingRecs(false));
+        }
       } catch (e) {
         console.warn('[Profile] Failed to load user profile:', e);
       } finally {
@@ -96,14 +108,59 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.section}>
+          <Text style={styles.sectionTitle}>TÍNH NĂNG</Text>
+
+          <TouchableOpacity style={styles.item} onPress={() => router.push('/career')}>
+            <Text style={styles.itemText}>Lộ trình nghề nghiệp</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.item} onPress={() => router.push('/salary')}>
+            <Text style={styles.itemText}>Mức lương theo công nghệ</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.item} onPress={() => router.push('/report')}>
+            <Text style={styles.itemText}>Báo cáo xu hướng</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.item} onPress={() => router.push('/notifications')}>
+            <Text style={styles.itemText}>Thông báo</Text>
+          </TouchableOpacity>
+        </View>
+
+        {(loadingRecs || recommendations.length > 0) && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>CÔNG NGHỆ ĐƯỢC GỢI Ý</Text>
+            {loadingRecs ? (
+              <ActivityIndicator size="small" color={DM.text2} style={{ marginLeft: 24 }} />
+            ) : (
+              <View style={styles.recsWrap}>
+                {recommendations.map((rec) => (
+                  <View key={rec.tech_name} style={styles.recCard}>
+                    <View style={styles.recHeader}>
+                      <Text style={styles.recName}>{rec.tech_name}</Text>
+                      {rec.ring && <Text style={styles.recRing}>{rec.ring}</Text>}
+                    </View>
+                    {rec.reason && <Text style={styles.recReason}>{rec.reason}</Text>}
+                    <View style={styles.recMetaRow}>
+                      {rec.growth_rate != null && (
+                        <Text style={[styles.recGrowth, { color: rec.growth_rate >= 0 ? '#00d68f' : '#ff5252' }]}>
+                          {rec.growth_rate >= 0 ? '+' : ''}{Number(rec.growth_rate).toFixed(1)}%
+                        </Text>
+                      )}
+                      {rec.co_occurrence > 0 && <Text style={styles.recCooc}>Co-use: {rec.co_occurrence}</Text>}
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>CÀI ĐẶT</Text>
-          
+
           <TouchableOpacity style={styles.item} onPress={() => router.push('/personal-info')}>
             <Text style={styles.itemText}>Thông tin cá nhân</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.item} onPress={() => Alert.alert('Cài đặt thông báo', 'Tính năng đang được phát triển.')}>
-            <Text style={styles.itemText}>Cài đặt thông báo</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.item} onPress={() => Alert.alert('Bảo mật & Quyền riêng tư', 'Tính năng đang được phát triển.')}>
@@ -245,5 +302,55 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: DM.border,
     width: 200,
+  },
+  recsWrap: {
+    paddingHorizontal: 24,
+    gap: 10,
+  },
+  recCard: {
+    backgroundColor: DM.surface,
+    borderWidth: 1,
+    borderColor: DM.border,
+    borderRadius: DM.radiusSm,
+    padding: 14,
+  },
+  recHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  recName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: DM.text,
+  },
+  recRing: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: DM.primaryLight,
+    backgroundColor: DM.primaryGlow,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    textTransform: 'uppercase',
+  },
+  recReason: {
+    fontSize: 12,
+    color: DM.text3,
+    marginTop: 6,
+    lineHeight: 17,
+  },
+  recMetaRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  recGrowth: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  recCooc: {
+    fontSize: 12,
+    color: DM.text3,
   },
 });

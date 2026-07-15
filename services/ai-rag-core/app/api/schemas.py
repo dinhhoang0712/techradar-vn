@@ -173,6 +173,33 @@ class ReportResponse(BaseModel):
     generated_at: str
 
 
+# ── Mock Interview ────────────────────────────────────────────────────────────
+
+class InterviewTurn(BaseModel):
+    question: str
+    answer:   str
+
+
+class InterviewRequest(BaseModel):
+    user_id:        uuid.UUID | None = None
+    target_role:    str              = Field(..., min_length=1, max_length=120)
+    target_company: str | None       = None
+    history:        list[InterviewTurn] = []
+
+
+class InterviewFinalSummary(BaseModel):
+    score:   int   # 0-10
+    summary: str   # markdown: strengths, improvements, closing note
+
+
+class InterviewResponse(BaseModel):
+    next_question:          str | None = None
+    feedback_on_last_answer: str | None = None
+    is_final:               bool
+    turn:                    int
+    final_summary:           InterviewFinalSummary | None = None
+
+
 # ── AI Agent Workflow ─────────────────────────────────────────────────────────
 
 class AgentRequest(BaseModel):

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { loginUser, getCurrentUser, getSystemStatus, forgotPassword, resetPassword } from '../../api/authService';
 import Modal from '../../components/common/Modal';
-import { useToast } from '../../components/common/ToastProvider';
+import { useToast } from '../../components/common/toastContext';
 import './Auth.css';
 
 export default function LoginPage() {
@@ -107,7 +107,7 @@ export default function LoginPage() {
             } else {
                 setError('Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.');
             }
-        } catch (err) {
+        } catch {
             setError('Đăng nhập thất bại. Vui lòng thử lại.');
         } finally {
             setLoading(false);

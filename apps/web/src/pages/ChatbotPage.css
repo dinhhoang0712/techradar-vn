@@ -214,11 +214,11 @@
 /* Session error */
 .chat-status-err {
     font-size: 0.75rem;
-    color: #f87171;
-    background: rgba(248,113,113,0.1);
+    color: var(--danger-light);
+    background: var(--danger-glow);
     padding: 3px 8px;
     border-radius: var(--radius-sm);
-    border: 1px solid rgba(248,113,113,0.2);
+    border: 1px solid var(--danger);
 }
 
 
@@ -353,6 +353,32 @@
     font-size: 0.85rem;
     overflow-wrap: anywhere;
     word-break: normal;
+}
+
+.agent-steps {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--text-2);
+}
+
+.agent-steps summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--text-3);
+}
+
+.agent-steps ul {
+    margin: 8px 0 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.agent-steps li strong {
+    color: var(--text);
 }
 
 /* Markdown styles inside bubbles */

@@ -13,10 +13,15 @@ import GraphExplorer from './pages/GraphExplorer';
 import ChatbotPage from './pages/ChatbotPage';
 import ClusterDashboard from './pages/ClusterDashboard';
 import SalaryPage from './pages/SalaryPage';
+import CompanyExplorer from './pages/CompanyExplorer';
 import UserProfile from './pages/UserProfile';
 import CareerPage from './pages/CareerPage';
+import InterviewPage from './pages/InterviewPage';
 import ReportPage from './pages/ReportPage';
 import NotificationsPage from './pages/NotificationsPage';
+import FeedPage from './pages/FeedPage';
+import PublicProfilePage from './pages/PublicProfilePage';
+import MessagesPage from './pages/MessagesPage';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
 import './styles/global.css';
@@ -39,11 +44,16 @@ export default function App() {
           <Route path="/graph" element={<GraphExplorer />} />
           <Route path="/clusters" element={<ClusterDashboard />} />
           <Route path="/salary" element={<SalaryPage />} />
+          <Route path="/companies" element={<CompanyExplorer />} />
           <Route path="/chat" element={<ChatbotPage />} />
           <Route path="/profile" element={<UserProfile />} />
           <Route path="/career" element={<CareerPage />} />
+          <Route path="/interview" element={<InterviewPage />} />
           <Route path="/report" element={<ReportPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
+          <Route path="/feed" element={<FeedPage />} />
+          <Route path="/users/:id" element={<PublicProfilePage />} />
+          <Route path="/messages" element={<MessagesPage />} />
         </Route>
 
           <Route path="/admin" element={<AdminLayout />}>

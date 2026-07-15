@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { fetchAdminSettings, updateAdminSetting, triggerAnalyticsRebuild } from '../../api/adminService';
-import { useToast } from '../../components/common/ToastProvider';
+import { useToast } from '../../components/common/toastContext';
 import './AdminSettings.css';
 
 export default function AdminSettings() {

@@ -263,9 +263,14 @@ export default function ComparePage() {
 
             {loading && <div style={{ marginTop: 20, color: 'var(--text-2)' }}>Đang tải dữ liệu so sánh...</div>}
             {error && <div style={{ marginTop: 20, color: 'var(--danger-light)' }}>{error}</div>}
+            {!loading && !error && selectedTechs.length === 0 && (
+                <div className="card compare-empty" style={{ marginTop: 16 }}>
+                    Chọn ít nhất một công nghệ ở ô tìm kiếm phía trên để bắt đầu so sánh.
+                </div>
+            )}
 
             {/* Stats cards */}
-            {!loading && !error && (
+            {!loading && !error && selectedTechs.length > 0 && (
                 <div className="compare-stats-row" style={{ marginTop: 16 }}>
                     {statsArr.map(s => (
                         <div key={s.id} className="compare-stat-card" style={{ borderColor: s.color + '55' }}>

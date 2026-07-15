@@ -51,7 +51,7 @@
     background: rgba(15, 15, 15, 0.8);
     backdrop-filter: blur(8px);
     border: 1px solid rgba(255, 255, 255, 0.15);
-    color: #fff;
+    color: var(--text);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -220,7 +220,7 @@
 
 /* Detail Header */
 .cluster-detail-header {
-    border-left: 4px solid #FF6B6B; /* Pink accent like app */
+    border-left: 4px solid var(--primary);
     padding-left: 16px;
     margin-bottom: 24px;
 }

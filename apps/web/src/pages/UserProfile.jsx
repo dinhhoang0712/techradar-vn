@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getUserProfile, updateUserProfile, uploadAvatar } from '../api/userService';
 import { getRecommendations } from '../api/recommendService';
-import { useToast } from '../components/common/ToastProvider';
+import { useToast } from '../components/common/toastContext';
 import './UserProfile.css';
 
 /**
@@ -22,6 +22,8 @@ export default function UserProfile() {
 
     useEffect(() => {
         loadProfile();
+        // Mount-only: loadProfile is recreated every render, adding it here would refetch on every render.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const loadRecommendations = async (techs) => {
@@ -144,12 +146,6 @@ export default function UserProfile() {
             showToast('error', err.message || 'Tải ảnh thất bại');
         }
     };
-
-    const avatarLetter = profile.full_name
-        ? profile.full_name.charAt(0).toUpperCase()
-        : profile.email
-        ? profile.email.charAt(0).toUpperCase()
-        : 'U';
 
     return (
         <div className="user-profile-page">

@@ -167,28 +167,49 @@ Crawlers (8 sources)
     ▼  Kafka: raw_articles, raw_jobs
 Kafka Broker
     │
-    ├────────────────────────────────────┐
-    │                                    │
-    ▼                                    ▼
-Bronze Writer                    Silver Processor
-(Kafka consumer)                 (Kafka consumer)
-    │                                    │
-    ▼                                    ▼
-MinIO (immutable)               PostgreSQL (dp_processed_*)
-s3://techradar-bronze/          - dp_processed_articles
-    │                            - dp_processed_jobs
-    │                                    │
-    └────────────────────────────────────┘
-                 │
-                 ▼
-        Neo4j Knowledge Graph
-                 │
-                 ▼
-        Gold ETL (3:00 AM daily)
-                 │
-                 ▼
-        PostgreSQL tech_analytics
+    ├───────────────────┬──────────────────────────┐
+    │                   │                          │
+    ▼                   ▼                          ▼
+Bronze Writer      Silver Processor        KafkaExtractorService
+(Kafka consumer)   (Kafka consumer)*       (Spring Boot, LLM NER)
+    │                   │                          │
+    ▼                   ▼                          ▼  Kafka: extracted_articles, extracted_jobs
+MinIO (immutable)  PostgreSQL                  Kafka Broker
+s3://techradar-    (dp_processed_articles,          │
+bronze/             dp_processed_jobs)              │
+                        ▲                            │
+                        └──────────────*─────────────┤
+                                                      │
+                    ┌─────────────────────┬───────────┴──────────┐
+                    │                     │                      │
+                    ▼                     ▼                      ▼
+          KafkaNeo4jWriterService   embedding-service      (Silver Processor
+          (Spring Boot)             (Kafka consumer)        also consumes
+                    │                     │                  extracted_*, see *)
+                    ▼                     ▼  Kafka: article_vectors, job_vectors
+          Neo4j Knowledge Graph     Kafka Broker
+                    │                     │
+                    ▼                     ▼
+          Gold ETL (3:00 AM daily)  qdrant-writer (Kafka consumer)
+                    │                     │
+                    ▼                     ▼
+          PostgreSQL tech_analytics  Qdrant Vector DB
+                    │                (optional, --profile vector)
+                    ▼  MoM growth ≥ 20% threshold
+          Kafka: trend.alerts
+                    │
+                    ▼
+          TrendAlertDispatcher (feature notification)
+                    │
+                    ▼
+          Fan-out: in-app + email
+          (theo user_profile.technologies /
+           notify_inapp / notify_email)
 ```
+
+\* **Silver Processor đọc dual-topic**: cả `raw_*` (từ crawler, khi Spring Boot tắt) lẫn `extracted_*`
+(từ `KafkaExtractorService`, khi Spring Boot chạy) — tránh bỏ sót dữ liệu, xem chi tiết ở
+[DATA_PLATFORM.md §5](./DATA_PLATFORM.md).
 
 ### 4.2 RAG Query Pipeline
 

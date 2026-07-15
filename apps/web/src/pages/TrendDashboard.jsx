@@ -6,6 +6,7 @@ import {
 import Select from 'react-select';
 import { getRadarSearch, getRadarTop4, getRadarTop10 } from '../api/trendService';
 import { getForecast } from '../api/forecastService';
+import { summarizeTech } from '../api/summarizeService';
 import { CHART_PALETTE as PALETTE } from '../utils/chartPalette';
 import MaintenanceOverlay from '../components/common/MaintenanceOverlay';
 import './TrendDashboard.css';
@@ -154,6 +155,10 @@ export default function TrendDashboard() {
     const [forecast, setForecast] = useState(null);
     const [loadingForecast, setLoadingForecast] = useState(false);
     const [forecastTech, setForecastTech] = useState(null);
+    const [summary, setSummary] = useState(null);
+    const [loadingSummary, setLoadingSummary] = useState(false);
+    const [summaryTech, setSummaryTech] = useState(null);
+    const [summaryError, setSummaryError] = useState('');
 
     const colorMap = useMemo(() => {
         const map = {};
@@ -250,6 +255,27 @@ export default function TrendDashboard() {
             setLoadingForecast(false);
         }
     }, [forecastTech]);
+
+    const handleSummarize = useCallback(async (techName) => {
+        if (summaryTech === techName) {
+            setSummary(null);
+            setSummaryTech(null);
+            return;
+        }
+        setSummaryTech(techName);
+        setLoadingSummary(true);
+        setSummary(null);
+        setSummaryError('');
+        try {
+            const res = await summarizeTech(techName);
+            setSummary(res?.data ?? res);
+        } catch (err) {
+            console.error('Lỗi tóm tắt tin tức:', err);
+            setSummaryError('Không thể tạo tóm tắt lúc này.');
+        } finally {
+            setLoadingSummary(false);
+        }
+    }, [summaryTech]);
 
     const handleExportCSV = useCallback(() => {
         const headers = ['Month', ...activeTechIds];
@@ -424,10 +450,51 @@ export default function TrendDashboard() {
                             >
                                 {forecastTech === t.keyword && loadingForecast ? '...' : '📈'}
                             </button>
+                            <button
+                                className={`forecast-btn${summaryTech === t.keyword ? ' active' : ''}`}
+                                onClick={() => handleSummarize(t.keyword)}
+                                title="Tóm tắt tin tức gần đây"
+                            >
+                                {summaryTech === t.keyword && loadingSummary ? '...' : '📰'}
+                            </button>
                         </div>
                     ))}
                 </div>
             </div>
+
+            {/* Tóm tắt tin tức (POST /chat/summarize) */}
+            {summaryTech && (
+                <div className="card forecast-panel" style={{ marginTop: 16 }}>
+                    <div className="forecast-header">
+                        <h2 className="section-title">Tóm tắt tin tức: <span style={{ color: 'var(--primary)' }}>{summaryTech}</span></h2>
+                        <button className="forecast-close-btn" onClick={() => { setSummary(null); setSummaryTech(null); }}>✕</button>
+                    </div>
+
+                    {loadingSummary ? (
+                        <div className="forecast-loading">Đang tổng hợp tin tức gần đây...</div>
+                    ) : summaryError ? (
+                        <div className="forecast-loading" style={{ color: 'var(--danger-light)' }}>{summaryError}</div>
+                    ) : summary ? (
+                        <div className="forecast-content">
+                            {summary.period && (
+                                <span className="forecast-confidence">Giai đoạn: {summary.period} • {summary.sources_used ?? 0} nguồn tin</span>
+                            )}
+                            {summary.summary && <p className="forecast-reasoning">{summary.summary}</p>}
+                            {summary.key_points?.length > 0 && (
+                                <div className="forecast-signals">
+                                    {summary.key_points.map((p, i) => (
+                                        <div key={i} className="forecast-signal">
+                                            <span className="signal-label">{p}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="forecast-loading">Chưa có đủ tin tức gần đây cho công nghệ này.</div>
+                    )}
+                </div>
+            )}
 
             {/* Forecast panel */}
             {forecastTech && (

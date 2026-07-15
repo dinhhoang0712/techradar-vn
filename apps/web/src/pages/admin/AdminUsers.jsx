@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { fetchAdminUsers, createAdminUser, updateAdminUser, deleteAdminUser } from '../../api/adminService';
 import Modal from '../../components/common/Modal';
-import { useToast } from '../../components/common/ToastProvider';
+import { useToast } from '../../components/common/toastContext';
 import './AdminUsers.css';
 
 export default function AdminUsers() {
@@ -22,6 +22,8 @@ export default function AdminUsers() {
 
     useEffect(() => {
         loadUsers();
+        // Mount-only: loadUsers is recreated every render, adding it here would refetch on every render.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const loadUsers = async () => {

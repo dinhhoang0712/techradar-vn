@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { registerUser } from '../../api/authService';
-import { useToast } from '../../components/common/ToastProvider';
+import { useToast } from '../../components/common/toastContext';
 import './Auth.css';
 
 export default function RegisterPage() {
@@ -31,7 +31,7 @@ export default function RegisterPage() {
                 notify({ title: 'Khởi tạo tài khoản thành công! Vui lòng đăng nhập.', variant: 'success' });
                 navigate('/login');
             }
-        } catch (err) {
+        } catch {
             setError('Đăng ký thất bại. Email đã tồn tại.');
         } finally {
             setLoading(false);

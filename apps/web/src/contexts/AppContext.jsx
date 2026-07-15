@@ -1,6 +1,5 @@
-import { createContext, useContext, useState, useEffect } from 'react';
-
-const AppContext = createContext();
+import { useState, useEffect } from 'react';
+import { AppContext } from './appContextStore';
 
 export function AppProvider({ children }) {
     const [settings, setSettings] = useState(() => {
@@ -63,5 +62,3 @@ export function AppProvider({ children }) {
         </AppContext.Provider>
     );
 }
-
-export const useAppContext = () => useContext(AppContext);

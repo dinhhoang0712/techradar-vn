@@ -122,7 +122,7 @@ export const apiClient = async (endpoint, options = {}, _retried = false) => {
             try {
                 const errData = await response.json();
                 errorMsg = errData.message || errData.error || errData.detail || errorMsg;
-            } catch (e) {
+            } catch {
                 // Ignore json parse error for error responses
             }
             const apiError = new Error(errorMsg);

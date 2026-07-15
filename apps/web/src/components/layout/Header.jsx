@@ -7,11 +7,15 @@ import './Header.css';
 
 const navItems = [
     { path: '/dashboard', label: 'Radar' },
+    { path: '/feed', label: 'Bảng tin' },
+    { path: '/messages', label: 'Tin nhắn' },
     { path: '/compare', label: 'So sánh' },
     { path: '/graph', label: 'Đồ thị' },
     { path: '/clusters', label: 'Cụm CN' },
     { path: '/salary', label: 'Lương' },
+    { path: '/companies', label: 'Công ty' },
     { path: '/career', label: 'Career' },
+    { path: '/interview', label: 'Phỏng vấn thử' },
     { path: '/report', label: 'Báo cáo' },
     { path: '/chat', label: 'AI Chat' },
 ];
@@ -56,7 +60,7 @@ export default function Header() {
     const handleLogout = async () => {
         try {
             await logoutUser();
-        } catch (_) {
+        } catch {
             // Bỏ qua lỗi server, vẫn logout phía client
         } finally {
             localStorage.removeItem('access_token');
@@ -64,13 +68,6 @@ export default function Header() {
             navigate('/login');
         }
     };
-
-    // Lấy chữ cái đầu để hiển thị avatar
-    const avatarLetter = profile?.full_name
-        ? profile.full_name.charAt(0).toUpperCase()
-        : profile?.email
-        ? profile.email.charAt(0).toUpperCase()
-        : 'U';
 
     const displayName = profile?.full_name || 'Người dùng';
     const displayEmail = profile?.email || 'user@techradar.vn';

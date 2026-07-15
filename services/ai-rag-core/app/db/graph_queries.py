@@ -76,6 +76,27 @@ LIMIT 20
 """
 
 # ---------------------------------------------------------------------------
+# JOBS — matches title keyword AND hiring company name (mock interview grounding)
+# ---------------------------------------------------------------------------
+JOBS_BY_TITLE_AND_COMPANY = """
+UNWIND $keywords AS kw
+MATCH (j:Job)-[:HIRES_FOR]->(c:Company)
+WHERE toLower(j.title) CONTAINS kw AND toLower(c.name) CONTAINS toLower($company)
+OPTIONAL MATCH (j)-[:REQUIRES]->(t:Technology)
+WITH DISTINCT j, c, collect(DISTINCT t.name)[..3] AS techs
+RETURN
+    j.title       AS title,
+    j.salary      AS salary,
+    j.description AS description,
+    j.benefit     AS benefit,
+    j.requirement AS requirement,
+    techs         AS technology,
+    c.name        AS company,
+    c.location    AS location
+LIMIT 20
+"""
+
+# ---------------------------------------------------------------------------
 # JOBS — matches by hiring company name (NER ORG)
 # ---------------------------------------------------------------------------
 JOBS_BY_COMPANY = """

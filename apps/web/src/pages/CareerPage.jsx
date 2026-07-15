@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getCareerAdvice } from '../api/careerService';
 import { getUserProfile } from '../api/userService';
+import { getJobMatches } from '../api/jobService';
 import './CareerPage.css';
 
 const COMMON_ROLES = [
@@ -23,11 +24,19 @@ export default function CareerPage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [profileLoaded, setProfileLoaded] = useState(false);
+    const [hasToken, setHasToken] = useState(false);
+
+    const [jobMatches, setJobMatches] = useState(null);
+    const [jobsLoading, setJobsLoading] = useState(false);
+    const [jobsError, setJobsError] = useState('');
+    const [jobLocation, setJobLocation] = useState('');
+    const [jobMinSalary, setJobMinSalary] = useState('');
 
     // Tải kỹ năng từ profile nếu có
     useEffect(() => {
         const token = localStorage.getItem('access_token');
         if (!token) return;
+        setHasToken(true);
         getUserProfile()
             .then((res) => {
                 const data = res?.data ?? res ?? {};
@@ -39,6 +48,22 @@ export default function CareerPage() {
             })
             .catch(() => {});
     }, []);
+
+    const loadJobMatches = async () => {
+        setJobsLoading(true);
+        setJobsError('');
+        try {
+            const res = await getJobMatches({
+                location: jobLocation.trim() || undefined,
+                minSalary: jobMinSalary ? Number(jobMinSalary) : undefined,
+            });
+            setJobMatches(res?.data ?? res ?? []);
+        } catch (err) {
+            setJobsError(err.message || 'Không thể tải job phù hợp. Vui lòng thử lại.');
+        } finally {
+            setJobsLoading(false);
+        }
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -181,6 +206,7 @@ export default function CareerPage() {
                                     className="career-roadmap-content"
                                     dangerouslySetInnerHTML={{
                                         __html: result.roadmap
+                                            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
                                             .replace(/\n\n/g, '</p><p>')
                                             .replace(/\n/g, '<br/>')
                                             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
@@ -194,6 +220,95 @@ export default function CareerPage() {
                     </div>
                 )}
             </div>
+
+            {hasToken && (
+                <div className="card job-matches-card">
+                    <div className="job-matches-header">
+                        <div>
+                            <h2 className="section-title">Job phù hợp với hồ sơ của bạn</h2>
+                            <p className="career-target-role">
+                                Xếp hạng theo % kỹ năng trong hồ sơ trùng với yêu cầu tin tuyển dụng
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            className="btn btn-primary"
+                            onClick={loadJobMatches}
+                            disabled={jobsLoading}
+                        >
+                            {jobsLoading ? (
+                                <><span className="btn-spinner" /> Đang tìm...</>
+                            ) : 'Tìm job phù hợp'}
+                        </button>
+                    </div>
+
+                    <div className="job-matches-filters">
+                        <input
+                            type="text"
+                            className="form-input"
+                            value={jobLocation}
+                            onChange={e => setJobLocation(e.target.value)}
+                            placeholder="Địa điểm (VD: Hà Nội)"
+                        />
+                        <input
+                            type="number"
+                            className="form-input"
+                            value={jobMinSalary}
+                            onChange={e => setJobMinSalary(e.target.value)}
+                            placeholder="Lương tối thiểu (triệu VND)"
+                            min="0"
+                        />
+                    </div>
+
+                    {jobsError && <div className="career-error">{jobsError}</div>}
+
+                    {jobMatches && jobMatches.length === 0 && !jobsError && (
+                        <p className="job-matches-empty">
+                            Không tìm thấy job phù hợp. Hãy thêm công nghệ quan tâm trong Hồ sơ cá nhân
+                            hoặc nới lỏng bộ lọc.
+                        </p>
+                    )}
+
+                    {jobMatches && jobMatches.length > 0 && (
+                        <div className="job-match-list">
+                            {jobMatches.map((job, i) => (
+                                <div key={`${job.title}-${i}`} className="job-match-row">
+                                    <div className="job-match-score">{Math.round(job.score * 100)}%</div>
+                                    <div className="job-match-info">
+                                        <div className="job-match-title-row">
+                                            <span className="job-match-title">{job.title}</span>
+                                            {job.source_url && (
+                                                <a
+                                                    href={job.source_url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="job-match-link"
+                                                >
+                                                    Xem tin gốc ↗
+                                                </a>
+                                            )}
+                                        </div>
+                                        <div className="job-match-meta">
+                                            {[job.company, job.location].filter(Boolean).join(' · ') || 'Chưa rõ nhà tuyển dụng'}
+                                            {job.salary_min_mvnd != null && job.salary_max_mvnd != null
+                                                ? ` · ${job.salary_min_mvnd}–${job.salary_max_mvnd} triệu VND`
+                                                : job.salary_raw ? ` · ${job.salary_raw}` : ''}
+                                        </div>
+                                        <div className="skills-chips">
+                                            {(job.matched_skills || []).map(s => (
+                                                <span key={`m-${s}`} className="skill-chip skill-chip--have">{s}</span>
+                                            ))}
+                                            {(job.missing_skills || []).map(s => (
+                                                <span key={`x-${s}`} className="skill-chip skill-chip--missing">{s}</span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

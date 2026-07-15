@@ -1,0 +1,175 @@
+.post-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.post-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.post-author {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    padding: 0;
+}
+
+.post-author-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.post-author-name {
+    font-weight: 600;
+    font-size: 0.92rem;
+    color: var(--text);
+    transition: color var(--t);
+}
+
+.post-author:hover .post-author-name {
+    color: var(--primary-light);
+}
+
+.post-time {
+    font-size: 0.78rem;
+    color: var(--text-3);
+}
+
+.post-delete-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-3);
+    font-size: 0.85rem;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background var(--t), color var(--t);
+}
+
+.post-delete-btn:hover {
+    background: var(--danger-glow);
+    color: var(--danger-light);
+}
+
+.post-content {
+    color: var(--text);
+    font-size: 0.95rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+}
+
+.post-actions {
+    display: flex;
+    gap: 8px;
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+}
+
+.post-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: none;
+    color: var(--text-2);
+    font-size: 0.85rem;
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background var(--t), color var(--t);
+}
+
+.post-action-btn:hover {
+    background: var(--surface-2);
+    color: var(--text);
+}
+
+.post-action-btn.liked {
+    color: var(--danger-light);
+}
+
+.post-comments {
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.post-comments-loading,
+.post-comments-empty {
+    color: var(--text-3);
+    font-size: 0.85rem;
+}
+
+.post-comment-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.post-comment-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.post-comment-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: var(--surface-2);
+    border-radius: var(--radius-sm);
+    padding: 6px 10px;
+    flex: 1;
+}
+
+.post-comment-author {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.post-comment-text {
+    font-size: 0.85rem;
+    color: var(--text-2);
+    word-break: break-word;
+}
+
+.post-comment-time {
+    font-size: 0.7rem;
+    color: var(--text-3);
+    margin-top: 2px;
+}
+
+.post-comment-form {
+    display: flex;
+    gap: 8px;
+}
+
+.post-comment-input {
+    flex: 1;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    transition: border-color var(--t);
+}
+
+.post-comment-input:focus {
+    outline: none;
+    border-color: var(--primary);
+}

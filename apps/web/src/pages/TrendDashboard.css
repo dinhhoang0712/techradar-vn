@@ -347,9 +347,9 @@
     border-radius: 20px;
 }
 
-.forecast-direction--growing  { background: rgba(0,214,143,0.12); color: #00d68f; border: 1px solid rgba(0,214,143,0.3); }
-.forecast-direction--stable   { background: rgba(255,201,77,0.12); color: #ffc94d; border: 1px solid rgba(255,201,77,0.3); }
-.forecast-direction--declining{ background: rgba(255,82,82,0.10);  color: #ff5252; border: 1px solid rgba(255,82,82,0.25); }
+.forecast-direction--growing   { background: var(--green-glow);  color: var(--green);        border: 1px solid var(--green); }
+.forecast-direction--stable    { background: var(--yellow-glow); color: var(--yellow);       border: 1px solid var(--yellow); }
+.forecast-direction--declining { background: var(--danger-glow); color: var(--danger-light); border: 1px solid var(--danger); }
 
 .forecast-confidence {
     color: var(--text-2);

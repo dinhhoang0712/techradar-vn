@@ -104,6 +104,8 @@ def fetch_technologies(min_degree: int = 1) -> pd.DataFrame:
         """,
         {"min_degree": min_degree},
     )
+    if not rows:
+        return pd.DataFrame(columns=["tech_id", "name", "category", "description", "trend_score", "degree_total"])
     df = pd.DataFrame(rows)
     logger.info("fetch_technologies: %d rows", len(df))
     return df
@@ -126,6 +128,8 @@ def fetch_companies() -> pd.DataFrame:
             coalesce(c.rating, 0.0)         AS rating
         """
     )
+    if not rows:
+        return pd.DataFrame(columns=["company_id", "name", "industry", "location", "size", "rating"])
     df = pd.DataFrame(rows)
     logger.info("fetch_companies: %d rows", len(df))
     return df
@@ -184,6 +188,8 @@ def fetch_jobs() -> pd.DataFrame:
             coalesce(j.company_name, "")    AS company_name
         """
     )
+    if not rows:
+        return pd.DataFrame(columns=["job_id", "title", "level", "salary", "posted_date", "source_url", "company_name"])
     df = pd.DataFrame(rows)
     logger.info("fetch_jobs: %d rows", len(df))
     return df
@@ -204,6 +210,8 @@ def fetch_skills() -> pd.DataFrame:
             coalesce(s.demand_score, 0.0)   AS demand_score
         """
     )
+    if not rows:
+        return pd.DataFrame(columns=["skill_id", "name", "category", "demand_score"])
     df = pd.DataFrame(rows)
     logger.info("fetch_skills: %d rows", len(df))
     return df
@@ -221,6 +229,8 @@ def fetch_edges_article_mentions_tech() -> pd.DataFrame:
         RETURN elementId(a) AS article_id, elementId(t) AS tech_id
         """
     )
+    if not rows:
+        return pd.DataFrame(columns=["article_id", "tech_id"])
     df = pd.DataFrame(rows)
     logger.info("fetch_edges_article_mentions_tech: %d rows", len(df))
     return df
@@ -234,6 +244,8 @@ def fetch_edges_company_uses_tech() -> pd.DataFrame:
         RETURN elementId(c) AS company_id, elementId(t) AS tech_id
         """
     )
+    if not rows:
+        return pd.DataFrame(columns=["company_id", "tech_id"])
     df = pd.DataFrame(rows)
     logger.info("fetch_edges_company_uses_tech: %d rows", len(df))
     return df
@@ -247,6 +259,8 @@ def fetch_edges_job_requires_tech() -> pd.DataFrame:
         RETURN elementId(j) AS job_id, elementId(t) AS tech_id
         """
     )
+    if not rows:
+        return pd.DataFrame(columns=["job_id", "tech_id"])
     df = pd.DataFrame(rows)
     logger.info("fetch_edges_job_requires_tech: %d rows", len(df))
     return df
@@ -260,6 +274,8 @@ def fetch_edges_job_requires_skill() -> pd.DataFrame:
         RETURN elementId(j) AS job_id, elementId(s) AS skill_id
         """
     )
+    if not rows:
+        return pd.DataFrame(columns=["job_id", "skill_id"])
     df = pd.DataFrame(rows)
     logger.info("fetch_edges_job_requires_skill: %d rows", len(df))
     return df
@@ -279,6 +295,8 @@ def fetch_edges_tech_related_tech() -> pd.DataFrame:
         RETURN elementId(b) AS tech_id_a, elementId(a) AS tech_id_b
         """
     )
+    if not rows:
+        return pd.DataFrame(columns=["tech_id_a", "tech_id_b"])
     df = pd.DataFrame(rows).drop_duplicates()
     logger.info("fetch_edges_tech_related_tech: %d rows", len(df))
     return df
@@ -292,6 +310,8 @@ def fetch_edges_skill_is_technology() -> pd.DataFrame:
         RETURN elementId(s) AS skill_id, elementId(t) AS tech_id
         """
     )
+    if not rows:
+        return pd.DataFrame(columns=["skill_id", "tech_id"])
     df = pd.DataFrame(rows)
     logger.info("fetch_edges_skill_is_technology: %d rows", len(df))
     return df

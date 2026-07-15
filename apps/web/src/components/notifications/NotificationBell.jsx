@@ -7,7 +7,7 @@ import {
     markAllNotificationsRead,
     streamNotifications,
 } from '../../api/notificationService';
-import { useToast } from '../common/ToastProvider';
+import { useToast } from '../common/toastContext';
 import NotifIcon from './notifIcons';
 import './NotificationBell.css';
 

@@ -83,12 +83,12 @@
 
 .report-error {
     margin-top: 12px;
-    color: var(--error, #ff5252);
+    color: var(--danger-light);
     font-size: 0.9rem;
     padding: 10px 14px;
-    background: rgba(255, 82, 82, 0.08);
+    background: var(--danger-glow);
     border-radius: 8px;
-    border: 1px solid rgba(255, 82, 82, 0.25);
+    border: 1px solid var(--danger);
 }
 
 /* Result */
@@ -167,8 +167,8 @@
 }
 .job-count { font-size: 0.85rem; color: var(--text-2); }
 .growth-rate { font-size: 0.85rem; font-weight: 600; }
-.growth-rate.up { color: #00d68f; }
-.growth-rate.down { color: #ff5252; }
+.growth-rate.up { color: var(--green); }
+.growth-rate.down { color: var(--danger-light); }
 
 /* Report markdown */
 .report-content-card {

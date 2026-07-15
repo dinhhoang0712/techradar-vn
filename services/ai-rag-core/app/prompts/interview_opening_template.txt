@@ -1,0 +1,7 @@
+Bạn sắp bắt đầu một buổi phỏng vấn thử cho ứng viên nhắm tới vị trí: {target_role}.
+Công ty mục tiêu: {target_company}.
+
+Tin tuyển dụng thật liên quan (dùng làm ngữ cảnh, không đọc lại nguyên văn cho ứng viên):
+{job_context}
+
+Hãy đặt CÂU HỎI PHỎNG VẤN ĐẦU TIÊN — một câu hỏi kỹ thuật hoặc tình huống thực tế, tự nhiên như một người phỏng vấn thật sẽ hỏi, dựa trên yêu cầu công việc ở trên. Chỉ trả về đúng 1 câu hỏi bằng tiếng Việt, không thêm lời chào hay giải thích.

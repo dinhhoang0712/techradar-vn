@@ -1,0 +1,13 @@
+Buổi phỏng vấn thử cho vị trí {target_role} tại {target_company} đã kết thúc. Toàn bộ diễn biến:
+{transcript_so_far}
+
+Câu trả lời cuối cùng của ứng viên:
+{latest_answer}
+
+Hãy đưa ra ĐÁNH GIÁ TỔNG KẾT bằng tiếng Việt, gồm:
+1. 1-2 câu nhận xét câu trả lời cuối cùng.
+2. Điểm mạnh của ứng viên qua cả buổi (2-3 ý).
+3. Điểm cần cải thiện (2-3 ý).
+4. Một lời khuyên ngắn để chuẩn bị tốt hơn cho vị trí {target_role}.
+
+Kết thúc câu trả lời bằng đúng 1 dòng cuối cùng theo định dạng: SCORE: N/10 (N là số nguyên từ 0 đến 10, đánh giá tổng thể mức độ sẵn sàng của ứng viên cho vị trí này).

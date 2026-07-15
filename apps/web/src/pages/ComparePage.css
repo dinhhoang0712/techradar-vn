@@ -17,6 +17,12 @@
     }
 }
 
+.compare-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-2);
+}
+
 .control-group {
     display: flex;
     flex-direction: column;

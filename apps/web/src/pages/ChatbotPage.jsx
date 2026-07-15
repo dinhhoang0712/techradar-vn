@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createChatSession, streamChatMessage, getChatHistory, getChatSessions, deleteChatSession } from '../api/chatService';
-import { useAppContext } from '../contexts/AppContext';
+import { runAgent } from '../api/agentService';
+import { useAppContext } from '../contexts/appContextStore';
 import MaintenancePage from './MaintenancePage';
 import MaintenanceOverlay from '../components/common/MaintenanceOverlay';
+import Modal from '../components/common/Modal';
 import './ChatbotPage.css';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -74,10 +76,10 @@ function renderMarkdown(text) {
             const Tag = `h${Math.min(level + 2, 6)}`;
             elements.push(<Tag key={i} className="md-heading">{inlineMarkdown(content)}</Tag>);
             i++;
-        } else if (/^[*\-] /.test(line)) {
+        } else if (/^[*-] /.test(line)) {
             const items = [];
-            while (i < lines.length && /^[*\-] /.test(lines[i])) {
-                items.push(<li key={i}>{inlineMarkdown(lines[i].replace(/^[*\-] /, ''))}</li>);
+            while (i < lines.length && /^[*-] /.test(lines[i])) {
+                items.push(<li key={i}>{inlineMarkdown(lines[i].replace(/^[*-] /, ''))}</li>);
                 i++;
             }
             elements.push(<ul key={`ul-${i}`} className="md-list">{items}</ul>);
@@ -140,6 +142,8 @@ export default function ChatbotPage() {
     const [isStreaming,  setIsStreaming]  = useState(false);
     const [loadingHistory, setLoadingHistory] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState(null);
+    const [agentMode, setAgentMode] = useState(false);
     const chatWindowRef = useRef();
     const scrollNewSessionToTopRef = useRef(false);
     const shouldAutoScrollRef = useRef(true);
@@ -176,7 +180,6 @@ export default function ChatbotPage() {
             }
         };
         init();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {
@@ -243,10 +246,15 @@ export default function ChatbotPage() {
 
     // ── Delete a session ─────────────────────────────────────────────────────
 
-    const handleDeleteSession = async (sid, e) => {
+    const handleDeleteSession = (sid, e) => {
         e.stopPropagation();
         if (isStreaming) return;
-        if (!window.confirm('Xoá cuộc trò chuyện này?')) return;
+        setDeleteTarget(sid);
+    };
+
+    const confirmDeleteSession = async () => {
+        const sid = deleteTarget;
+        setDeleteTarget(null);
         setSessions(prev => prev.filter(s => s.id !== sid));
         if (sid === sessionId) clearSession();
         try {
@@ -314,10 +322,38 @@ export default function ChatbotPage() {
         }
     };
 
+    // ── Send message (Agent mode: no streaming, one-shot multi-tool answer) ──
+
+    const sendAgentMessage = async (text) => {
+        const userMsg = { id: msgId++, role: 'user', text };
+        const botMsg  = { id: msgId++, role: 'bot', text: '', streaming: true, agentThinking: true };
+        setMessages(prev => [...prev, userMsg, botMsg]);
+        setInput('');
+        setIsStreaming(true);
+        try {
+            const res = await runAgent(text);
+            const answer = res?.data?.answer || 'Không nhận được phản hồi từ Agent.';
+            const steps = res?.data?.steps || [];
+            setMessages(prev => prev.map(m => m.id === botMsg.id ? { ...m, text: answer, streaming: false, steps } : m));
+        } catch (err) {
+            console.error('[ChatbotPage] Agent error:', err);
+            setMessages(prev => prev.map(m => m.id === botMsg.id
+                ? { ...m, text: 'Không thể xử lý yêu cầu ở chế độ Agent lúc này. Vui lòng thử lại.', streaming: false }
+                : m));
+        } finally {
+            setIsStreaming(false);
+        }
+    };
+
     // ── Send message ─────────────────────────────────────────────────────────
 
     const sendMessage = (text) => {
         if (!text.trim() || isStreaming) return;
+
+        if (agentMode) {
+            sendAgentMessage(text);
+            return;
+        }
 
         const userMsg = { id: msgId++, role: 'user', text };
         const botMsg  = { id: msgId++, role: 'bot', text: '', streaming: true };
@@ -409,9 +445,9 @@ export default function ChatbotPage() {
 
     if (!settings) {
         return (
-            <div className="chat-page flex-center" style={{ minHeight: '100vh', background: '#000' }}>
+            <div className="chat-page flex-center" style={{ minHeight: '100vh', background: 'var(--bg)' }}>
                 <div className="loading-spinner"></div>
-                <span style={{ color: '#888', marginLeft: 12 }}>Đang kiểm tra trạng thái...</span>
+                <span style={{ color: 'var(--text-3)', marginLeft: 12 }}>Đang kiểm tra trạng thái...</span>
             </div>
         );
     }
@@ -446,6 +482,14 @@ export default function ChatbotPage() {
                     {sessionError && (
                         <span className="chat-status-err">Mất kết nối server</span>
                     )}
+                    <button
+                        className={`btn btn-ghost history-toggle-btn ${agentMode ? 'active' : ''}`}
+                        onClick={() => setAgentMode(a => !a)}
+                        disabled={isStreaming}
+                        title={agentMode ? 'Tắt chế độ Agent' : 'Bật chế độ Agent (suy luận đa bước, không streaming)'}
+                    >
+                        <span className="hide-mobile">{agentMode ? 'Chế độ Agent: Bật' : 'Chế độ Agent'}</span>
+                    </button>
                     <button
                         className="btn btn-ghost new-chat-btn"
                         onClick={clearSession}
@@ -509,9 +553,25 @@ export default function ChatbotPage() {
                                 {msg.role === 'bot' && <div className="bot-avatar text-avatar">AI</div>}
                                 <div className={`chat-bubble ${msg.role}`}>
                                     <div className="bubble-content">
-                                        {renderMarkdown(msg.text)}
-                                        {msg.streaming && <span className="cursor-blink" />}
+                                        {msg.agentThinking && msg.streaming ? (
+                                            <span className="dots-animation"><span>.</span><span>.</span><span>.</span></span>
+                                        ) : (
+                                            <>
+                                                {renderMarkdown(msg.text)}
+                                                {msg.streaming && <span className="cursor-blink" />}
+                                            </>
+                                        )}
                                     </div>
+                                    {msg.steps?.length > 0 && (
+                                        <details className="agent-steps">
+                                            <summary>Các bước đã thực hiện ({msg.steps.length})</summary>
+                                            <ul>
+                                                {msg.steps.map((s, i) => (
+                                                    <li key={i}><strong>{s.tool}</strong>: {s.input}</li>
+                                                ))}
+                                            </ul>
+                                        </details>
+                                    )}
                                 </div>
                                 {msg.role === 'user' && <div className="user-avatar text-avatar">U</div>}
                             </div>
@@ -563,6 +623,15 @@ export default function ChatbotPage() {
                 </div>
             </div>
 
+            {deleteTarget && (
+                <Modal title="Xác nhận xoá" onClose={() => setDeleteTarget(null)} width="380px">
+                    <p className="modal-body-text">Xoá cuộc trò chuyện này? Hành động này không thể hoàn tác.</p>
+                    <div className="modal-actions">
+                        <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)}>Hủy bỏ</button>
+                        <button className="btn btn-danger" onClick={confirmDeleteSession}>Xoá</button>
+                    </div>
+                </Modal>
+            )}
         </div>
     );
 }

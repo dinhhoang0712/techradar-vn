@@ -17,3 +17,19 @@ export const analyzeRoad = async (from, to) => {
     params.append('to', to);
     return await apiClient(`/graph/road_analysis?${params.toString()}`, { method: 'GET' });
 };
+
+// POST /graph/filter — browse the whole graph by facets, no seed keyword required.
+// Returns a flat node list (no edges). minSalary/maxSalary only affect nodes that carry
+// a `salary` property (Job nodes); sentiment is "positive" | "negative" | "neutral".
+export const filterGraph = async ({ locations, nodeTypes, minSalary, maxSalary, sentiment } = {}) => {
+    return await apiClient('/graph/filter', {
+        method: 'POST',
+        body: JSON.stringify({
+            locations: locations?.length ? locations : null,
+            nodeTypes: nodeTypes?.length ? nodeTypes : null,
+            minSalary: minSalary === '' || minSalary == null ? null : Number(minSalary),
+            maxSalary: maxSalary === '' || maxSalary == null ? null : Number(maxSalary),
+            sentiment: sentiment || null,
+        }),
+    });
+};

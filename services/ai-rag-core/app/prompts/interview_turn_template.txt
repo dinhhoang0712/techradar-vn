@@ -1,0 +1,14 @@
+Bạn đang phỏng vấn thử ứng viên cho vị trí: {target_role} tại {target_company}.
+
+Diễn biến buổi phỏng vấn cho tới giờ:
+{transcript_so_far}
+
+Câu trả lời mới nhất của ứng viên (cho câu hỏi cuối cùng ở trên):
+{latest_answer}
+
+Hãy trả lời theo ĐÚNG định dạng sau, không thêm gì khác:
+
+---FEEDBACK---
+(1-2 câu nhận xét ngắn gọn, thẳng thắn về câu trả lời trên — chỉ ra điểm được và điểm thiếu, bằng tiếng Việt)
+---QUESTION---
+(1 câu hỏi phỏng vấn tiếp theo, khác với các câu đã hỏi, đào sâu hơn hoặc chuyển sang khía cạnh khác của vị trí {target_role}, bằng tiếng Việt)

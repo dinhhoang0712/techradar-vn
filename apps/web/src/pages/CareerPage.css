@@ -113,12 +113,12 @@
 
 .career-error {
     margin-top: 12px;
-    color: var(--error, #ff5252);
+    color: var(--danger-light);
     font-size: 0.9rem;
     padding: 10px 14px;
-    background: rgba(255, 82, 82, 0.08);
+    background: var(--danger-glow);
     border-radius: 8px;
-    border: 1px solid rgba(255, 82, 82, 0.25);
+    border: 1px solid var(--danger);
 }
 
 /* Result */
@@ -186,9 +186,9 @@
 }
 
 .skill-chip--have {
-    background: rgba(0, 214, 143, 0.1);
-    border: 1px solid rgba(0, 214, 143, 0.35);
-    color: #00d68f;
+    background: var(--green-glow);
+    border: 1px solid var(--green);
+    color: var(--green);
 }
 
 /* Skill gap table */
@@ -270,3 +270,108 @@
 /* .card / .section-title / .btn / .btn-primary now come from the shared primitives in global.css.
    (This block used to redefine them locally with color:#fff on .btn-primary, which is white text
    on a white --primary background — invisible depending on cascade order.) */
+
+/* Job matches */
+.job-matches-card {
+    margin-top: 20px;
+    padding: 24px;
+}
+
+.job-matches-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.job-matches-filters {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 16px 0;
+}
+
+.job-matches-filters .form-input {
+    flex: 1;
+    min-width: 200px;
+}
+
+.job-matches-empty {
+    color: var(--text-3);
+    font-size: 0.9rem;
+    margin-top: 12px;
+}
+
+.job-match-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.job-match-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px;
+    background: var(--surface);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+
+.job-match-score {
+    background: var(--primary-glow);
+    border: 1px solid var(--primary);
+    border-radius: 20px;
+    color: var(--primary-light);
+    font-size: 0.85rem;
+    font-weight: 700;
+    padding: 4px 12px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.job-match-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.job-match-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.job-match-title {
+    font-weight: 600;
+    color: var(--text);
+    font-size: 0.95rem;
+}
+
+.job-match-link {
+    color: var(--primary);
+    font-size: 0.8rem;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.job-match-link:hover {
+    text-decoration: underline;
+}
+
+.job-match-meta {
+    color: var(--text-3);
+    font-size: 0.82rem;
+}
+
+.skill-chip--missing {
+    background: var(--surface-2, rgba(128, 128, 128, 0.12));
+    border: 1px solid var(--border);
+    color: var(--text-3);
+}

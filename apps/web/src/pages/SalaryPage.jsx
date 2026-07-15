@@ -27,18 +27,18 @@ function SalaryTooltip({ active, payload }) {
     if (!d) return null;
     return (
         <div className="salary-tooltip">
-            <p className="tooltip-tech-name">{d.techName}</p>
+            <p className="tooltip-tech-name">{d.tech_name}</p>
             <div className="tooltip-row">
                 <span>Median</span>
-                <span className="tooltip-val green">{formatM(d.medianSalaryMVnd)}</span>
+                <span className="tooltip-val green">{formatM(d.median_salary_mvnd)}</span>
             </div>
             <div className="tooltip-row">
                 <span>Range</span>
-                <span className="tooltip-val">{d.salaryRange}</span>
+                <span className="tooltip-val">{d.salary_range}</span>
             </div>
             <div className="tooltip-row">
                 <span>Jobs có lương</span>
-                <span className="tooltip-val">{d.jobsWithSalary?.toLocaleString()}</span>
+                <span className="tooltip-val">{d.jobs_with_salary?.toLocaleString()}</span>
             </div>
         </div>
     );
@@ -46,23 +46,23 @@ function SalaryTooltip({ active, payload }) {
 
 function DetailPanel({ tech, onClose }) {
     const [detail, setDetail] = useState(null);
+    // Loading starts true and this effect runs once per mount — SalaryPage
+    // remounts this component (via `key`) whenever the selected tech changes.
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!tech) return;
-        setLoading(true);
-        getSalaryByTech(tech.techName)
+        getSalaryByTech(tech.tech_name)
             .then(res => setDetail(res?.data ?? null))
             .catch(() => setDetail(null))
             .finally(() => setLoading(false));
-    }, [tech?.techName]);
+    }, [tech]);
 
     const data = detail ?? tech;
 
     return (
         <div className="detail-panel">
             <div className="detail-header">
-                <h3 className="detail-title">{tech.techName}</h3>
+                <h3 className="detail-title">{tech.tech_name}</h3>
                 <button className="detail-close" onClick={onClose}>✕</button>
             </div>
 
@@ -73,40 +73,40 @@ function DetailPanel({ tech, onClose }) {
                     <div className="detail-stats-grid">
                         <div className="detail-stat">
                             <span className="ds-label">Median</span>
-                            <span className="ds-value green">{formatM(data.medianSalaryMVnd)} VND</span>
+                            <span className="ds-value green">{formatM(data.median_salary_mvnd)} VND</span>
                         </div>
                         <div className="detail-stat">
                             <span className="ds-label">Trung bình</span>
-                            <span className="ds-value">{formatM(data.avgSalaryMVnd)} VND</span>
+                            <span className="ds-value">{formatM(data.avg_salary_mvnd)} VND</span>
                         </div>
                         <div className="detail-stat">
                             <span className="ds-label">P25 – P75</span>
-                            <span className="ds-value">{formatM(data.p25SalaryMVnd)} – {formatM(data.p75SalaryMVnd)}</span>
+                            <span className="ds-value">{formatM(data.p25_salary_mvnd)} – {formatM(data.p75_salary_mvnd)}</span>
                         </div>
                         <div className="detail-stat">
                             <span className="ds-label">Min – Max</span>
-                            <span className="ds-value">{formatM(data.minSalaryMVnd)} – {formatM(data.maxSalaryMVnd)}</span>
+                            <span className="ds-value">{formatM(data.min_salary_mvnd)} – {formatM(data.max_salary_mvnd)}</span>
                         </div>
                         <div className="detail-stat">
                             <span className="ds-label">Tổng jobs</span>
-                            <span className="ds-value">{data.totalJobs?.toLocaleString()}</span>
+                            <span className="ds-value">{data.total_jobs?.toLocaleString()}</span>
                         </div>
                         <div className="detail-stat">
                             <span className="ds-label">Jobs có lương</span>
                             <span className="ds-value">
-                                {data.jobsWithSalary?.toLocaleString()}
+                                {data.jobs_with_salary?.toLocaleString()}
                                 <span className="ds-pct">
-                                    ({data.totalJobs ? Math.round(data.jobsWithSalary / data.totalJobs * 100) : 0}%)
+                                    ({data.total_jobs ? Math.round(data.jobs_with_salary / data.total_jobs * 100) : 0}%)
                                 </span>
                             </span>
                         </div>
                     </div>
 
-                    {data.topCoTechs?.length > 0 && (
+                    {data.top_co_techs?.length > 0 && (
                         <div className="detail-cotechs">
                             <p className="detail-section-label">Thường yêu cầu cùng</p>
                             <div className="cotech-chips">
-                                {data.topCoTechs.map((t, i) => (
+                                {data.top_co_techs.map((t, i) => (
                                     <span key={t} className="cotech-chip" style={{ '--chip-color': SALARY_COLORS[i % SALARY_COLORS.length] }}>
                                         {t}
                                     </span>
@@ -121,20 +121,20 @@ function DetailPanel({ tech, onClose }) {
                             <div
                                 className="salary-bar-range"
                                 style={{
-                                    left: `${data.minSalaryMVnd / (data.maxSalaryMVnd || 1) * 100}%`,
-                                    width: `${(data.p75SalaryMVnd - data.p25SalaryMVnd) / (data.maxSalaryMVnd || 1) * 100}%`,
+                                    left: `${data.min_salary_mvnd / (data.max_salary_mvnd || 1) * 100}%`,
+                                    width: `${(data.p75_salary_mvnd - data.p25_salary_mvnd) / (data.max_salary_mvnd || 1) * 100}%`,
                                 }}
                             />
                             <div
                                 className="salary-bar-median"
-                                style={{ left: `${data.medianSalaryMVnd / (data.maxSalaryMVnd || 1) * 100}%` }}
-                                title={`Median: ${formatM(data.medianSalaryMVnd)}`}
+                                style={{ left: `${data.median_salary_mvnd / (data.max_salary_mvnd || 1) * 100}%` }}
+                                title={`Median: ${formatM(data.median_salary_mvnd)}`}
                             />
                         </div>
                         <div className="salary-bar-labels">
-                            <span>{formatM(data.minSalaryMVnd)}</span>
-                            <span>Median: {formatM(data.medianSalaryMVnd)}</span>
-                            <span>{formatM(data.maxSalaryMVnd)}</span>
+                            <span>{formatM(data.min_salary_mvnd)}</span>
+                            <span>Median: {formatM(data.median_salary_mvnd)}</span>
+                            <span>{formatM(data.max_salary_mvnd)}</span>
                         </div>
                     </div>
                 </>
@@ -163,18 +163,18 @@ export default function SalaryPage() {
     }, []);
 
     const filtered = useMemo(() => {
-        let list = data.filter(d => d.jobsWithSalary > 0);
+        let list = data.filter(d => d.jobs_with_salary > 0);
         if (search.trim()) {
             const q = search.trim().toLowerCase();
-            list = list.filter(d => d.techName.toLowerCase().includes(q));
+            list = list.filter(d => d.tech_name.toLowerCase().includes(q));
         }
-        if (sortBy === 'median') list = [...list].sort((a, b) => b.medianSalaryMVnd - a.medianSalaryMVnd);
-        else if (sortBy === 'jobs') list = [...list].sort((a, b) => b.totalJobs - a.totalJobs);
-        else if (sortBy === 'max') list = [...list].sort((a, b) => b.maxSalaryMVnd - a.maxSalaryMVnd);
+        if (sortBy === 'median') list = [...list].sort((a, b) => b.median_salary_mvnd - a.median_salary_mvnd);
+        else if (sortBy === 'jobs') list = [...list].sort((a, b) => b.total_jobs - a.total_jobs);
+        else if (sortBy === 'max') list = [...list].sort((a, b) => b.max_salary_mvnd - a.max_salary_mvnd);
         return list;
     }, [data, search, sortBy]);
 
-    const topMedian = useMemo(() => Math.max(0, ...filtered.map(d => d.medianSalaryMVnd)), [filtered]);
+    const topMedian = useMemo(() => Math.max(0, ...filtered.map(d => d.median_salary_mvnd)), [filtered]);
     const chartData = useMemo(() => filtered.slice(0, 20), [filtered]);
 
     if (loading) return (
@@ -206,15 +206,15 @@ export default function SalaryPage() {
             <div className="salary-hero">
                 <div>
                     <h1 className="salary-page-title">Salary Insights</h1>
-                    <p className="salary-page-sub">Mức lương theo công nghệ — phân tích từ {data.reduce((s, d) => s + d.totalJobs, 0).toLocaleString()} job postings</p>
+                    <p className="salary-page-sub">Mức lương theo công nghệ — phân tích từ {data.reduce((s, d) => s + d.total_jobs, 0).toLocaleString()} job postings</p>
                 </div>
                 <div className="salary-top3">
                     {topThree.map((t, i) => (
-                        <button type="button" key={t.techName} className={`top3-card rank-${i + 1}`} onClick={() => setSelected(t)}>
+                        <button type="button" key={t.tech_name} className={`top3-card rank-${i + 1}`} onClick={() => setSelected(t)}>
                             <span className="top3-rank">#{i + 1}</span>
-                            <span className="top3-name">{t.techName}</span>
-                            <span className="top3-salary">{formatM(t.medianSalaryMVnd)} VND</span>
-                            <span className="top3-range">{t.salaryRange}</span>
+                            <span className="top3-name">{t.tech_name}</span>
+                            <span className="top3-salary">{formatM(t.median_salary_mvnd)} VND</span>
+                            <span className="top3-range">{t.salary_range}</span>
                         </button>
                     ))}
                 </div>
@@ -228,11 +228,11 @@ export default function SalaryPage() {
                         <BarChart data={chartData} layout="vertical" margin={{ top: 4, right: 40, left: 80, bottom: 4 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
                             <XAxis type="number" tick={{ fill: 'var(--text-3)', fontSize: 11 }} unit="M" />
-                            <YAxis type="category" dataKey="techName" tick={{ fill: 'var(--text-2)', fontSize: 11 }} width={78} />
+                            <YAxis type="category" dataKey="tech_name" tick={{ fill: 'var(--text-2)', fontSize: 11 }} width={78} />
                             <Tooltip content={<SalaryTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
-                            <Bar dataKey="medianSalaryMVnd" radius={[0, 4, 4, 0]} maxBarSize={18}>
+                            <Bar dataKey="median_salary_mvnd" radius={[0, 4, 4, 0]} maxBarSize={18}>
                                 {chartData.map((entry) => (
-                                    <Cell key={entry.techName} fill={salaryColor(entry.medianSalaryMVnd, topMedian)} />
+                                    <Cell key={entry.tech_name} fill={salaryColor(entry.median_salary_mvnd, topMedian)} />
                                 ))}
                             </Bar>
                         </BarChart>
@@ -272,24 +272,24 @@ export default function SalaryPage() {
                                 <tbody>
                                     {filtered.map((item, i) => (
                                         <tr
-                                            key={item.techName}
-                                            className={`salary-row${selected?.techName === item.techName ? ' selected' : ''}`}
-                                            onClick={() => setSelected(selected?.techName === item.techName ? null : item)}
+                                            key={item.tech_name}
+                                            className={`salary-row${selected?.tech_name === item.tech_name ? ' selected' : ''}`}
+                                            onClick={() => setSelected(selected?.tech_name === item.tech_name ? null : item)}
                                         >
                                             <td className="rank-cell">{i + 1}</td>
                                             <td className="tech-cell">
-                                                <span className="tech-dot" style={{ background: salaryColor(item.medianSalaryMVnd, topMedian) }} />
-                                                {item.techName}
+                                                <span className="tech-dot" style={{ background: salaryColor(item.median_salary_mvnd, topMedian) }} />
+                                                {item.tech_name}
                                             </td>
-                                            <td className="salary-cell" style={{ color: salaryColor(item.medianSalaryMVnd, topMedian) }}>
-                                                {formatM(item.medianSalaryMVnd)}
+                                            <td className="salary-cell" style={{ color: salaryColor(item.median_salary_mvnd, topMedian) }}>
+                                                {formatM(item.median_salary_mvnd)}
                                             </td>
-                                            <td className="range-cell">{item.salaryRange}</td>
-                                            <td className="max-cell">{formatM(item.maxSalaryMVnd)}</td>
+                                            <td className="range-cell">{item.salary_range}</td>
+                                            <td className="max-cell">{formatM(item.max_salary_mvnd)}</td>
                                             <td className="jobs-cell">
-                                                {item.jobsWithSalary?.toLocaleString()}
+                                                {item.jobs_with_salary?.toLocaleString()}
                                                 <span className="jobs-pct">
-                                                    /{item.totalJobs?.toLocaleString()}
+                                                    /{item.total_jobs?.toLocaleString()}
                                                 </span>
                                             </td>
                                         </tr>
@@ -304,7 +304,7 @@ export default function SalaryPage() {
                         </div>
 
                         {selected && (
-                            <DetailPanel tech={selected} onClose={() => setSelected(null)} />
+                            <DetailPanel key={selected.tech_name} tech={selected} onClose={() => setSelected(null)} />
                         )}
                     </div>
                 </div>

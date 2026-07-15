@@ -1,4 +1,5 @@
 .salary-page {
+    --rank2-color: #54c5f8;
     padding: 24px;
     max-width: 1400px;
     margin: 0 auto;
@@ -47,7 +48,7 @@
 
 .top3-card:hover { border-color: var(--border-2); transform: translateY(-2px); }
 .top3-card.rank-1 { border-color: var(--green); }
-.top3-card.rank-2 { border-color: #54C5F8; }
+.top3-card.rank-2 { border-color: var(--rank2-color); }
 .top3-card.rank-3 { border-color: var(--yellow); }
 
 .top3-rank { font-size: 0.7rem; color: var(--text-3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }

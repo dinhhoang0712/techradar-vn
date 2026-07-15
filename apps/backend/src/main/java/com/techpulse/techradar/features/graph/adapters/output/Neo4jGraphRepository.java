@@ -4,6 +4,8 @@ import com.techpulse.techradar.features.graph.domain.GraphData;
 import com.techpulse.techradar.features.graph.domain.GraphEdge;
 import com.techpulse.techradar.features.graph.domain.GraphFilter;
 import com.techpulse.techradar.features.graph.domain.GraphNode;
+import com.techpulse.techradar.features.graph.domain.SalaryOverlap;
+import com.techpulse.techradar.features.graph.domain.SentimentBand;
 import com.techpulse.techradar.features.graph.ports.GraphRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -170,31 +172,37 @@ public class Neo4jGraphRepository implements GraphRepository {
         return Mono.fromCallable(() -> {
             List<GraphNode> nodes = new ArrayList<>();
 
-            // Note: job salary is stored as free-text in the graph, so numeric salary
-            // filtering is not reliable and is intentionally not applied here.
+            SentimentBand sentimentBand = SentimentBand.forLabel(filter.getSentiment());
             Map<String, Object> params = new HashMap<>();
             params.put("nodeTypes", (filter.getNodeTypes() == null || filter.getNodeTypes().isEmpty())
                     ? null : filter.getNodeTypes());
             params.put("locations", (filter.getLocations() == null || filter.getLocations().isEmpty())
                     ? null : filter.getLocations());
-            params.put("minSentiment", minSentimentFor(filter.getSentiment()));
+            params.put("sentimentMin", sentimentBand == null ? null : sentimentBand.min());
+            params.put("sentimentMax", sentimentBand == null ? null : sentimentBand.max());
 
+            // Salary is free-text in the graph (e.g. "15-25 triệu"), so it can't be filtered
+            // reliably in Cypher — matched here, then narrowed by salaryOverlaps() in Java below.
             String query = "MATCH (n) " +
                     "WHERE ($nodeTypes IS NULL OR any(l IN labels(n) WHERE l IN $nodeTypes)) " +
                     "AND ($locations IS NULL OR n.location IN $locations) " +
-                    "AND ($minSentiment IS NULL OR " +
-                    "     (n.sentiment_score IS NOT NULL AND n.sentiment_score >= $minSentiment)) " +
+                    "AND ($sentimentMin IS NULL OR " +
+                    "     (n.sentiment_score IS NOT NULL AND n.sentiment_score >= $sentimentMin AND n.sentiment_score <= $sentimentMax)) " +
                     "RETURN DISTINCT n LIMIT 100";
 
             try (Session session = driver.session()) {
                 var result = session.run(query, params);
                 for (Record record : result.list()) {
                     var node = record.get("n").asNode();
+                    Map<String, Object> properties = new HashMap<>(node.asMap());
+                    if (!SalaryOverlap.matches(properties.get("salary"), filter.getMinSalary(), filter.getMaxSalary())) {
+                        continue;
+                    }
                     nodes.add(GraphNode.builder()
                             .id(String.valueOf(node.id()))
                             .type(String.join(",", node.labels()))
                             .name(node.get("name").isNull() ? null : node.get("name").asString())
-                            .properties(new HashMap<>(node.asMap()))
+                            .properties(properties)
                             .build());
                 }
             }
@@ -204,17 +212,6 @@ public class Neo4jGraphRepository implements GraphRepository {
                 .subscribeOn(Schedulers.boundedElastic())
                 .doOnError(e -> log.error("Neo4j filterNodes failed for filter={}", filter, e))
                 .flatMapIterable(nodes -> nodes);
-    }
-
-    /**
-     * Maps a sentiment label to a minimum {@code sentiment_score} threshold.
-     * {@code positive} requires a non-negative score; anything else applies no threshold.
-     */
-    private static Double minSentimentFor(String sentiment) {
-        if (sentiment == null || sentiment.isBlank()) {
-            return null;
-        }
-        return "positive".equalsIgnoreCase(sentiment.trim()) ? 0.0 : null;
     }
 
     @Override

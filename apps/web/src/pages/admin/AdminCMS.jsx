@@ -6,7 +6,7 @@ import {
     deleteCmsContent,
 } from '../../api/adminService';
 import Modal from '../../components/common/Modal';
-import { useToast } from '../../components/common/ToastProvider';
+import { useToast } from '../../components/common/toastContext';
 import './AdminCMS.css';
 
 const today = () => new Date().toISOString().slice(0, 10);

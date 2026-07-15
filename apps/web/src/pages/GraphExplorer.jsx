@@ -1,10 +1,13 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
-import { exploreGraph, analyzeRoad } from '../api/graphService';
-import { useAppContext } from '../contexts/AppContext';
+import { exploreGraph, analyzeRoad, filterGraph } from '../api/graphService';
+import { useAppContext } from '../contexts/appContextStore';
+import { useToast } from '../components/common/toastContext';
 import MaintenancePage from './MaintenancePage';
 import MaintenanceOverlay from '../components/common/MaintenanceOverlay';
 import './GraphExplorer.css';
+
+const PATH_HIGHLIGHT_COLOR = '#FFD700';
 
 const LINK_TYPE_COLORS = {
     USES: '#6C63FF',
@@ -26,6 +29,7 @@ const NODE_TYPES = {
 export default function GraphExplorer() {
     const context = useAppContext();
     const settings = context?.settings;
+    const notify = useToast();
     const fgRef = useRef();
 
     // -- KHAI BÁO TẤT CẢ HOOKS Ở ĐÂY (TRƯỚC KHI RETURN) --
@@ -37,7 +41,6 @@ export default function GraphExplorer() {
     
     const [selectedEdge, setSelectedEdge] = useState(null);
     const [hoveredNode, setHoveredNode] = useState(null);
-    const [filterOpen, setFilterOpen] = useState(false);
     const [filters, setFilters] = useState({ salary: 0, location: 'all' });
     
     const [focusNodeIds, setFocusNodeIds] = useState(['Golang']); 
@@ -53,6 +56,13 @@ export default function GraphExplorer() {
     
     const [journeyStartQuery, setJourneyStartQuery] = useState('');
     const [journeyEndQuery, setJourneyEndQuery] = useState('');
+
+    // -- Chế độ "Duyệt bộ lọc" (/graph/filter — không cần từ khóa gốc) --
+    const [browseFilters, setBrowseFilters] = useState({ locations: [], nodeTypes: [], sentiment: '', minSalary: '', maxSalary: '' });
+    const [browseResults, setBrowseResults] = useState([]);
+    const [browseLoading, setBrowseLoading] = useState(false);
+    const [browseError, setBrowseError] = useState('');
+    const [browseSearched, setBrowseSearched] = useState(false);
 
     // -- TẤT CẢ EFFECT VÀ CALLBACK PHẢI Ở ĐÂY --
 
@@ -91,12 +101,17 @@ export default function GraphExplorer() {
                 console.error("Lỗi lấy dữ liệu graph:", err);
                 if (err.message?.includes('403') || err.message?.includes('503')) {
                     context.updateSettings({ isGraphEnabled: false });
+                } else {
+                    notify({ title: 'Không tải được dữ liệu đồ thị', body: 'Vui lòng thử lại sau.', variant: 'error' });
                 }
             } finally {
                 setLoading(false);
             }
         };
         fetchGraph();
+        // context/settings intentionally omitted: context is a new object every render
+        // and would refetch on every render; settings?.isGraphEnabled already covers the one field that matters.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [focusNodeIds, depth, location, minSalary, settings?.isGraphEnabled]);
 
     // Điều chỉnh lực đẩy
@@ -169,6 +184,42 @@ export default function GraphExplorer() {
         }
     };
 
+    const toggleBrowseLocation = (loc) => {
+        setBrowseFilters(f => ({
+            ...f,
+            locations: f.locations.includes(loc) ? f.locations.filter(l => l !== loc) : [...f.locations, loc],
+        }));
+    };
+
+    const toggleBrowseNodeType = (nt) => {
+        setBrowseFilters(f => ({
+            ...f,
+            nodeTypes: f.nodeTypes.includes(nt) ? f.nodeTypes.filter(t => t !== nt) : [...f.nodeTypes, nt],
+        }));
+    };
+
+    const handleBrowseSearch = async () => {
+        setBrowseLoading(true);
+        setBrowseError('');
+        setBrowseSearched(true);
+        try {
+            const res = await filterGraph(browseFilters);
+            setBrowseResults(res?.data || []);
+        } catch (err) {
+            console.error('Lỗi duyệt bộ lọc:', err);
+            setBrowseError('Không thể tải kết quả. Vui lòng thử lại.');
+            setBrowseResults([]);
+        } finally {
+            setBrowseLoading(false);
+        }
+    };
+
+    const handleBrowseResultClick = (node) => {
+        const keyword = node.name || node.properties?.title || node.id;
+        setFocusNodeIds([keyword]);
+        setActiveFeature('explore');
+    };
+
     const handleJourneySelectStart = (node) => {
         setPathStart(node);
         setJourneyStartQuery(node.label || node.id);
@@ -217,16 +268,20 @@ export default function GraphExplorer() {
                         }, 500);
                     } else {
                         setActivePath(null);
+                        notify({ title: 'Không tìm thấy đường đi', body: `Không có kết nối nào giữa "${pathStart.label || pathStart.id}" và "${pathEnd.label || pathEnd.id}".`, variant: 'error' });
                     }
                 } catch (error) {
                     console.error("Lỗi tìm đường đi:", error);
                     setActivePath(null);
+                    notify({ title: 'Không thể tìm đường đi', body: 'Vui lòng thử lại sau.', variant: 'error' });
                 } finally {
                     setLoading(false);
                 }
             };
             fetchPath();
         }
+        // settings intentionally omitted: only settings?.isGraphEnabled matters here.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pathStart, pathEnd, activeFeature, settings?.isGraphEnabled]);
 
 
@@ -250,9 +305,9 @@ export default function GraphExplorer() {
             ctx.shadowBlur = 16; ctx.shadowColor = nt.color;
         }
         if (isPathNode) {
-            ctx.shadowBlur = 20; ctx.shadowColor = '#FFD700';
+            ctx.shadowBlur = 20; ctx.shadowColor = PATH_HIGHLIGHT_COLOR;
             ctx.lineWidth = 2 / globalScale;
-            ctx.strokeStyle = '#FFD700';
+            ctx.strokeStyle = PATH_HIGHLIGHT_COLOR;
         }
 
         ctx.beginPath();
@@ -316,7 +371,7 @@ export default function GraphExplorer() {
         });
     }, [activePath, activeFeature]);
 
-    const linkColor = useCallback((link) => isLinkInPath(link) ? '#FFD700' : (LINK_TYPE_COLORS[link.type] || '#5c6494'), [isLinkInPath]);
+    const linkColor = useCallback((link) => isLinkInPath(link) ? PATH_HIGHLIGHT_COLOR : (LINK_TYPE_COLORS[link.type] || '#5c6494'), [isLinkInPath]);
     const linkWidth = useCallback((link) => isLinkInPath(link) ? 5 : (selectedEdge === link ? 3 : 1.2), [selectedEdge, isLinkInPath]);
 
     const paintLink = useCallback((link, ctx, globalScale) => {
@@ -365,9 +420,9 @@ export default function GraphExplorer() {
 
     if (!settings) {
         return (
-            <div className="graph-page flex-center" style={{ minHeight: '100vh', background: '#000' }}>
+            <div className="graph-page flex-center" style={{ minHeight: '100vh', background: 'var(--bg)' }}>
                 <div className="loading-spinner"></div>
-                <span style={{ color: '#888', marginLeft: 12 }}>Đang kiểm tra trạng thái...</span>
+                <span style={{ color: 'var(--text-3)', marginLeft: 12 }}>Đang kiểm tra trạng thái...</span>
             </div>
         );
     }
@@ -380,17 +435,20 @@ export default function GraphExplorer() {
         );
     }
 
-    const locations = ['all', 'Hồ Chí Minh', 'Hà Nội', 'Đà Nẵng'];
-
     return (
         <div className="graph-page">
             <div className="graph-search-bar card">
                 <div className="feature-switcher-tabs">
                     <button className={`feat-tab${activeFeature === 'explore' ? ' active' : ''}`} onClick={() => toggleFeature('explore')}>Khám phá</button>
                     <button className={`feat-tab${activeFeature === 'journey' ? ' active' : ''}`} onClick={() => toggleFeature('journey')}>Phân tích lộ trình</button>
+                    <button className={`feat-tab${activeFeature === 'browse' ? ' active' : ''}`} onClick={() => toggleFeature('browse')}>Duyệt bộ lọc</button>
                 </div>
 
-                {activeFeature === 'explore' ? (
+                {activeFeature === 'browse' ? (
+                    <p style={{ color: 'var(--text-3)', fontSize: '0.85rem', margin: 0 }}>
+                        Duyệt toàn bộ đồ thị theo địa điểm, loại node và cảm xúc — không cần nhập từ khóa gốc.
+                    </p>
+                ) : activeFeature === 'explore' ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                         <div className="search-input-wrap">
                             <input
@@ -469,6 +527,7 @@ export default function GraphExplorer() {
                     </div>
                 )}
 
+                {activeFeature !== 'browse' && (
                 <div className="graph-controls">
                     {activeFeature !== 'journey' && (
                         <div className="control-group-inline">
@@ -482,11 +541,99 @@ export default function GraphExplorer() {
                     <button className="btn btn-ghost" onClick={handleFocusNode}>Focus</button>
                     <button className="btn btn-secondary" onClick={handleReset}>Reset</button>
                 </div>
+                )}
             </div>
 
             <div className="graph-body">
+                {activeFeature === 'browse' ? (
+                    <>
+                        <div className="filter-panel card">
+                            <h3 className="filter-title">Bộ lọc</h3>
+                            <div className="filter-group">
+                                <label className="filter-label">Địa điểm</label>
+                                {['Hồ Chí Minh', 'Hà Nội', 'Đà Nẵng'].map(loc => (
+                                    <label key={loc} className="filter-checkbox-row">
+                                        <input type="checkbox" checked={browseFilters.locations.includes(loc)} onChange={() => toggleBrowseLocation(loc)} />
+                                        {loc}
+                                    </label>
+                                ))}
+                            </div>
+                            <div className="filter-group">
+                                <label className="filter-label">Loại node</label>
+                                {['Technology', 'Company', 'Job', 'Skill', 'Article'].map(nt => (
+                                    <label key={nt} className="filter-checkbox-row">
+                                        <input type="checkbox" checked={browseFilters.nodeTypes.includes(nt)} onChange={() => toggleBrowseNodeType(nt)} />
+                                        {nt}
+                                    </label>
+                                ))}
+                            </div>
+                            <div className="filter-group">
+                                <label className="filter-label">Cảm xúc</label>
+                                {[['', 'Tất cả'], ['positive', 'Tích cực'], ['negative', 'Tiêu cực'], ['neutral', 'Trung lập']].map(([val, label]) => (
+                                    <label key={val || 'all'} className="filter-checkbox-row">
+                                        <input
+                                            type="radio"
+                                            name="browse-sentiment"
+                                            checked={browseFilters.sentiment === val}
+                                            onChange={() => setBrowseFilters(f => ({ ...f, sentiment: val }))}
+                                        />
+                                        {label}
+                                    </label>
+                                ))}
+                            </div>
+                            <div className="filter-group">
+                                <label className="filter-label">Mức lương (triệu/tháng)</label>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    <input
+                                        className="search-input" type="number" placeholder="Từ"
+                                        value={browseFilters.minSalary}
+                                        onChange={e => setBrowseFilters(f => ({ ...f, minSalary: e.target.value }))}
+                                    />
+                                    <input
+                                        className="search-input" type="number" placeholder="Đến"
+                                        value={browseFilters.maxSalary}
+                                        onChange={e => setBrowseFilters(f => ({ ...f, maxSalary: e.target.value }))}
+                                    />
+                                </div>
+                                <span className="form-hint">Chỉ áp dụng cho node Job có lương ghi rõ số</span>
+                            </div>
+                            <button className="btn btn-primary w-full" onClick={handleBrowseSearch} disabled={browseLoading}>
+                                {browseLoading ? 'Đang tìm...' : 'Áp dụng bộ lọc'}
+                            </button>
+                        </div>
+
+                        <div className="graph-canvas-wrapper browse-results-wrapper">
+                            {browseError && <p style={{ color: 'var(--danger-light)', padding: 16 }}>{browseError}</p>}
+                            {!browseError && browseSearched && !browseLoading && browseResults.length === 0 && (
+                                <p style={{ color: 'var(--text-3)', padding: 16 }}>Không tìm thấy node nào phù hợp.</p>
+                            )}
+                            {!browseSearched && !browseLoading && (
+                                <p style={{ color: 'var(--text-3)', padding: 16 }}>Chọn bộ lọc bên trái rồi bấm "Áp dụng bộ lọc".</p>
+                            )}
+                            <div className="browse-results-grid">
+                                {browseResults.map(node => {
+                                    const nt = NODE_TYPES[(node.type || '').toLowerCase()] || { color: '#9FA8C7' };
+                                    return (
+                                        <button
+                                            type="button"
+                                            key={node.id}
+                                            className="browse-result-card"
+                                            style={{ borderLeftColor: nt.color }}
+                                            onClick={() => handleBrowseResultClick(node)}
+                                        >
+                                            <span className="browse-result-type" style={{ background: nt.color + '22', color: nt.color }}>{node.type}</span>
+                                            <strong className="browse-result-name">{node.name || node.properties?.title || '(không tên)'}</strong>
+                                            {node.properties?.salary && <span className="browse-result-meta">💰 {node.properties.salary}</span>}
+                                            {node.properties?.location && <span className="browse-result-meta">📍 {node.properties.location}</span>}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </>
+                ) : (
                 <div className="graph-canvas-wrapper">
-                    {loading && <div style={{ position: 'absolute', top: 20, left: 20, zIndex: 10, color: 'white' }}>Đang tải đồ thị...</div>}
+                    {loading && <div style={{ position: 'absolute', top: 20, left: 20, zIndex: 10, color: 'var(--text)' }}>Đang tải đồ thị...</div>}
                     <ForceGraph2D
                         ref={fgRef}
                         graphData={graphData}
@@ -528,8 +675,9 @@ export default function GraphExplorer() {
                         ))}
                     </div>
                 </div>
+                )}
 
-                {(activePath || selectedEdge) && (
+                {activeFeature !== 'browse' && (activePath || selectedEdge) && (
                     <div className="graph-side-panels">
                         {activePath && (
                             <div className="journey-panel card">

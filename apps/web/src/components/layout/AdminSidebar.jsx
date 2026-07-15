@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { logoutUser } from '../../api/authService';
+import Modal from '../common/Modal';
 import './AdminSidebar.css';
 
 const NAV_ITEMS = [
@@ -11,18 +13,17 @@ const NAV_ITEMS = [
 
 export default function AdminSidebar({ collapsed, onToggle }) {
     const navigate = useNavigate();
+    const [confirmingLogout, setConfirmingLogout] = useState(false);
 
-    const handleLogout = async () => {
-        if (window.confirm('Bạn có chắc chắn muốn đăng xuất?')) {
-            try {
-                await logoutUser();
-            } catch (error) {
-                console.error('Logout API failed:', error);
-            } finally {
-                localStorage.removeItem('access_token');
-                localStorage.removeItem('refresh_token');
-                navigate('/login');
-            }
+    const confirmLogout = async () => {
+        try {
+            await logoutUser();
+        } catch (error) {
+            console.error('Logout API failed:', error);
+        } finally {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            navigate('/login');
         }
     };
 
@@ -53,10 +54,20 @@ export default function AdminSidebar({ collapsed, onToggle }) {
             </nav>
 
             <div className="sidebar-footer">
-                <button className="logout-btn" onClick={handleLogout}>
+                <button className="logout-btn" onClick={() => setConfirmingLogout(true)}>
                     {!collapsed && <span className="nav-label">Đăng xuất</span>}
                 </button>
             </div>
+
+            {confirmingLogout && (
+                <Modal title="Xác nhận đăng xuất" onClose={() => setConfirmingLogout(false)} width="380px">
+                    <p className="modal-body-text">Bạn có chắc chắn muốn đăng xuất?</p>
+                    <div className="modal-actions">
+                        <button className="btn btn-ghost" onClick={() => setConfirmingLogout(false)}>Hủy bỏ</button>
+                        <button className="btn btn-primary" onClick={confirmLogout}>Đăng xuất</button>
+                    </div>
+                </Modal>
+            )}
         </aside>
     );
 }

@@ -12,6 +12,8 @@ export default function AdminDashboard() {
 
     useEffect(() => {
         loadData();
+        // Mount-only: loadData is recreated every render, adding it here would refetch on every render.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const loadData = async () => {

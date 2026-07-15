@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { createChatSession, streamChatMessage, getChatHistory, getChatSessions, deleteChatSession } from '../api/chatService';
 import { useAppContext } from '../contexts/AppContext';
 import MaintenancePage from './MaintenancePage';
+import MaintenanceOverlay from '../components/common/MaintenanceOverlay';
 import './ChatbotPage.css';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -417,17 +418,9 @@ export default function ChatbotPage() {
 
     if (settings.isChatEnabled === false) {
         return (
-            <div style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                width: '100vw',
-                height: '100vh',
-                zIndex: 9999,
-                background: '#000'
-            }}>
+            <MaintenanceOverlay>
                 <MaintenancePage message="Chúng tôi đang bảo trì tính năng AI Chat theo định kỳ. Vui lòng quay lại sau." />
-            </div>
+            </MaintenanceOverlay>
         );
     }
 

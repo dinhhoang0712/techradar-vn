@@ -68,6 +68,11 @@
     color: var(--primary-light);
 }
 
+.footer-static-text {
+    font-size: 0.85rem;
+    color: var(--text-3);
+}
+
 /* ─── Bottom Bar ──────────────────────────────────────────────────── */
 .footer-bottom {
     max-width: 1280px;

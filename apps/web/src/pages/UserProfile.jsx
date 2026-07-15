@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getUserProfile, updateUserProfile, uploadAvatar } from '../api/userService';
 import { getRecommendations } from '../api/recommendService';
+import { useToast } from '../components/common/ToastProvider';
 import './UserProfile.css';
 
 /**
@@ -15,9 +16,9 @@ export default function UserProfile() {
     const [saving, setSaving] = useState(false);
     const [editMode, setEditMode] = useState(false);
     const [form, setForm] = useState({ full_name: '', email: '', avatar_url: '', bio: '', job_role: '', location: '', password: '', technologies: '', notify_inapp: true, notify_email: true });
-    const [toast, setToast] = useState(null); // { type: 'success' | 'error', message: string }
     const [recommendations, setRecommendations] = useState([]);
     const [loadingRecs, setLoadingRecs] = useState(false);
+    const notify = useToast();
 
     useEffect(() => {
         loadProfile();
@@ -114,8 +115,7 @@ export default function UserProfile() {
     };
 
     const showToast = (type, message) => {
-        setToast({ type, message });
-        setTimeout(() => setToast(null), 3500);
+        notify({ title: message, variant: type === 'error' ? 'error' : 'success' });
     };
 
     const handleAvatarChange = async (e) => {
@@ -123,7 +123,7 @@ export default function UserProfile() {
         e.target.value = ''; // allow re-selecting the same file
         if (!file) return;
         if (file.size > 3 * 1024 * 1024) {
-            alert('Ảnh quá lớn (tối đa 3MB).');
+            showToast('error', 'Ảnh quá lớn (tối đa 3MB).');
             return;
         }
         try {
@@ -141,7 +141,7 @@ export default function UserProfile() {
                 setForm(f => ({ ...f, avatar_url: busted }));
             }
         } catch (err) {
-            alert(err.message || 'Tải ảnh thất bại');
+            showToast('error', err.message || 'Tải ảnh thất bại');
         }
     };
 
@@ -153,13 +153,6 @@ export default function UserProfile() {
 
     return (
         <div className="user-profile-page">
-            {/* Toast notification */}
-            {toast && (
-                <div className={`profile-toast profile-toast--${toast.type}`}>
-                    {toast.message}
-                </div>
-            )}
-
             <div className="profile-container">
                 {/* Header */}
                 <div className="profile-header">
@@ -284,22 +277,34 @@ export default function UserProfile() {
 
                                 <div className="form-group">
                                     <label className="form-label">Thông báo</label>
-                                    <label className="notif-pref">
-                                        <input
-                                            type="checkbox"
-                                            checked={form.notify_inapp}
-                                            onChange={(e) => setForm(prev => ({ ...prev, notify_inapp: e.target.checked }))}
-                                        />
-                                        <span>Nhận thông báo trong ứng dụng (chuông)</span>
-                                    </label>
-                                    <label className="notif-pref">
-                                        <input
-                                            type="checkbox"
-                                            checked={form.notify_email}
-                                            onChange={(e) => setForm(prev => ({ ...prev, notify_email: e.target.checked }))}
-                                        />
-                                        <span>Nhận thông báo qua email</span>
-                                    </label>
+                                    <div className="notif-pref">
+                                        <label className="switch">
+                                            <input
+                                                type="checkbox"
+                                                checked={form.notify_inapp}
+                                                onChange={(e) => setForm(prev => ({ ...prev, notify_inapp: e.target.checked }))}
+                                            />
+                                            <span className="slider" />
+                                        </label>
+                                        <div className="notif-pref-text">
+                                            <span>Thông báo trong ứng dụng</span>
+                                            <p>Hiện thông báo trên biểu tượng chuông và trang "Thông báo" khi có cập nhật mới.</p>
+                                        </div>
+                                    </div>
+                                    <div className="notif-pref">
+                                        <label className="switch">
+                                            <input
+                                                type="checkbox"
+                                                checked={form.notify_email}
+                                                onChange={(e) => setForm(prev => ({ ...prev, notify_email: e.target.checked }))}
+                                            />
+                                            <span className="slider" />
+                                        </label>
+                                        <div className="notif-pref-text">
+                                            <span>Thông báo qua email</span>
+                                            <p>Gửi email tóm tắt khi có xu hướng công nghệ hoặc cập nhật liên quan đến bạn.</p>
+                                        </div>
+                                    </div>
                                 </div>
 
 

@@ -3,6 +3,7 @@ import ForceGraph2D from 'react-force-graph-2d';
 import { exploreGraph, analyzeRoad } from '../api/graphService';
 import { useAppContext } from '../contexts/AppContext';
 import MaintenancePage from './MaintenancePage';
+import MaintenanceOverlay from '../components/common/MaintenanceOverlay';
 import './GraphExplorer.css';
 
 const LINK_TYPE_COLORS = {
@@ -373,17 +374,9 @@ export default function GraphExplorer() {
 
     if (settings.isGraphEnabled === false) {
         return (
-            <div style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                width: '100vw',
-                height: '100vh',
-                zIndex: 9999,
-                background: '#000'
-            }}>
+            <MaintenanceOverlay>
                 <MaintenancePage message="Chúng tôi đang bảo trì graph theo định kỳ. Vui lòng quay lại sau." />
-            </div>
+            </MaintenanceOverlay>
         );
     }
 

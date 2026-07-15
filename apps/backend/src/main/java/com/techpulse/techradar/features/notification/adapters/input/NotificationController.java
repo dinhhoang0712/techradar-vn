@@ -28,11 +28,15 @@ public class NotificationController {
 
     private final NotificationService notificationService;
 
-    @Operation(summary = "List the current user's notifications (newest first)")
+    @Operation(summary = "List the current user's notifications (newest first, paginated)")
     @GetMapping
-    public Mono<ResponseEntity<ApiResponse<List<NotificationView>>>> list() {
+    public Mono<ResponseEntity<ApiResponse<List<NotificationView>>>> list(
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(defaultValue = "0") int offset) {
+        int cappedLimit = Math.min(Math.max(limit, 1), 100);
+        int safeOffset = Math.max(offset, 0);
         return SecurityUtils.currentUserId()
-                .flatMapMany(userId -> notificationService.list(userId, 50))
+                .flatMapMany(userId -> notificationService.list(userId, cappedLimit, safeOffset))
                 .map(NotificationView::from)
                 .collectList()
                 .map(items -> ResponseEntity.ok(ApiResponse.success(items, "Notifications retrieved")));

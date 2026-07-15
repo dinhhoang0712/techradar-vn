@@ -2,41 +2,9 @@
 
 .user-profile-page {
     min-height: 100vh;
-    background: var(--bg-primary, #0d0d0d);
+    background: var(--bg);
     padding: 2.5rem 1.5rem;
     position: relative;
-}
-
-/* Toast */
-.profile-toast {
-    position: fixed;
-    top: 1.5rem;
-    right: 1.5rem;
-    z-index: 9999;
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    padding: 0.85rem 1.4rem;
-    border-radius: 12px;
-    font-size: 0.875rem;
-    font-weight: 600;
-    backdrop-filter: blur(16px);
-    animation: toastSlideIn 0.3s ease;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-}
-.profile-toast--success {
-    background: rgba(16, 185, 129, 0.18);
-    border: 1px solid rgba(16, 185, 129, 0.4);
-    color: #34d399;
-}
-.profile-toast--error {
-    background: rgba(239, 68, 68, 0.18);
-    border: 1px solid rgba(239, 68, 68, 0.4);
-    color: #f87171;
-}
-@keyframes toastSlideIn {
-    from { opacity: 0; transform: translateX(24px); }
-    to { opacity: 1; transform: translateX(0); }
 }
 
 /* Container */
@@ -58,21 +26,21 @@
 .profile-title {
     font-size: 1.75rem;
     font-weight: 800;
-    color: #fff;
+    color: var(--text);
     margin: 0 0 0.35rem;
     letter-spacing: -0.5px;
 }
 .profile-subtitle {
     font-size: 0.875rem;
-    color: rgba(255, 255, 255, 0.45);
+    color: var(--text-2);
     margin: 0;
 }
 
 /* Skeleton loader */
 .profile-skeleton {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
     padding: 2.5rem;
     display: flex;
     align-items: center;
@@ -105,11 +73,10 @@
 
 /* Main card */
 .profile-card {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
     padding: 2.5rem;
-    backdrop-filter: blur(12px);
 }
 
 @media (max-width: 640px) {
@@ -125,19 +92,19 @@
     gap: 1.25rem;
     margin-bottom: 2.5rem;
     padding-bottom: 2rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    border-bottom: 1px solid var(--border);
 }
 .profile-avatar {
     width: 72px;
     height: 72px;
     border-radius: 50%;
-    background: #1a1a1a;
+    background: var(--surface-2);
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
     overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--border);
 }
 
 .profile-avatar-img {
@@ -152,18 +119,18 @@
     justify-content: center;
     width: 100%;
     height: 100%;
-    color: #fff;
+    color: var(--text);
 }
 .profile-identity {}
 .profile-name {
     font-size: 1.2rem;
     font-weight: 700;
-    color: #fff;
+    color: var(--text);
     margin: 0 0 0.3rem;
 }
 .profile-email {
     font-size: 0.875rem;
-    color: rgba(255,255,255,0.45);
+    color: var(--text-2);
     margin: 0;
 }
 
@@ -173,40 +140,40 @@
 .form-label {
     font-size: 0.75rem;
     font-weight: 700;
-    color: rgba(255, 255, 255, 0.45);
+    color: var(--text-2);
     text-transform: uppercase;
     letter-spacing: 0.6px;
 }
 .form-input {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
     padding: 0.75rem 1rem;
     font-size: 0.9rem;
-    color: #fff;
+    color: var(--text);
     outline: none;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    transition: border-color var(--t), box-shadow var(--t);
     font-family: inherit;
 }
 .form-input:focus {
-    border-color: #fff;
-    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-glow);
 }
-.form-input::placeholder { color: rgba(255,255,255,0.25); }
+.form-input::placeholder { color: var(--text-3); }
 .form-value {
     font-size: 0.9rem;
-    color: rgba(255,255,255,0.82);
+    color: var(--text);
     margin: 0;
     padding: 0.75rem 0;
-    border-bottom: 1px solid rgba(255,255,255,0.06);
+    border-bottom: 1px solid var(--border);
 }
 .form-value--url a {
-    color: #fff;
+    color: var(--text);
     text-decoration: underline;
     word-break: break-all;
 }
 .form-value--url a:hover { opacity: 0.8; }
-.form-empty { color: rgba(255,255,255,0.25); font-style: italic; }
+.form-empty { color: var(--text-3); font-style: italic; }
 
 /* Buttons */
 .profile-actions {
@@ -214,7 +181,7 @@
     gap: 0.75rem;
     margin-top: 0.5rem;
     padding-top: 1.5rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    border-top: 1px solid var(--border);
 }
 
 @media (max-width: 480px) {
@@ -225,47 +192,16 @@
         width: 100%;
     }
 }
-.btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0.7rem 1.5rem;
-    border-radius: 10px;
-    font-size: 0.875rem;
-    font-weight: 600;
-    font-family: inherit;
-    cursor: pointer;
-    border: none;
-    transition: all 0.2s;
-    letter-spacing: 0.2px;
-}
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-primary {
-    background: #fff;
-    color: #000;
-}
-.btn-primary:hover:not(:disabled) {
-    transform: translateY(-1px);
-    background: #e2e2e2;
-}
-.btn-ghost {
-    background: rgba(255, 255, 255, 0.07);
-    color: rgba(255, 255, 255, 0.65);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-}
-.btn-ghost:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.12);
-    color: #fff;
-}
 
-/* Avatar upload button (added) */
+/* Avatar upload button */
 .profile-avatar { position: relative; }
 .profile-avatar-edit {
     position: absolute;
     bottom: 0;
     right: 0;
-    background: #2563eb;
-    color: #fff;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text);
     border-radius: 50%;
     width: 30px;
     height: 30px;
@@ -274,25 +210,38 @@
     justify-content: center;
     cursor: pointer;
     font-size: 15px;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    transition: border-color var(--t);
+}
+.profile-avatar-edit:hover {
+    border-color: var(--primary);
 }
 
 /* Notification preference toggles */
 .notif-pref {
     display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 6px 0;
-    cursor: pointer;
-    font-size: 14px;
-    color: var(--text, #e5e7eb);
+    align-items: flex-start;
+    gap: 14px;
+    padding: 10px 0;
 }
 
-.notif-pref input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
-    accent-color: var(--primary, #6366f1);
-    cursor: pointer;
+.notif-pref-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-top: 2px;
+}
+
+.notif-pref-text span {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.notif-pref-text p {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-2);
+    line-height: 1.4;
 }
 
 /* ── Recommendations ─────────────────────────────────────────────────────── */
@@ -305,12 +254,12 @@
 .profile-recs-title {
     font-size: 1rem;
     font-weight: 600;
-    color: var(--text, #e5e7eb);
+    color: var(--text);
     margin: 0 0 14px;
 }
 
 .recs-loading {
-    color: var(--text-3, #6b7280);
+    color: var(--text-3);
     font-size: 0.88rem;
     padding: 12px 0;
 }
@@ -322,8 +271,8 @@
 }
 
 .rec-card {
-    background: var(--surface-2, #1a1a2e);
-    border: 1px solid var(--border, #2a2a3e);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
     border-radius: 10px;
     padding: 14px 16px;
     display: flex;
@@ -332,7 +281,7 @@
     transition: border-color 0.15s;
 }
 
-.rec-card:hover { border-color: var(--primary, #6c63ff); }
+.rec-card:hover { border-color: var(--primary); }
 
 .rec-header {
     display: flex;
@@ -343,7 +292,7 @@
 
 .rec-name {
     font-weight: 600;
-    color: var(--text, #e5e7eb);
+    color: var(--text);
     font-size: 0.9rem;
 }
 
@@ -362,7 +311,7 @@
 
 .rec-reason {
     font-size: 0.78rem;
-    color: var(--text-3, #6b7280);
+    color: var(--text-3);
     margin: 0;
     line-height: 1.4;
 }
@@ -384,5 +333,5 @@
 
 .rec-cooc {
     font-size: 0.75rem;
-    color: var(--text-3, #6b7280);
+    color: var(--text-3);
 }

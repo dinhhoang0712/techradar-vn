@@ -1,15 +1,8 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
-import { getClusters, getClusterById } from '../api/clusterService';
+import { getClusters, getClusterById, getClusterByTech } from '../api/clusterService';
+import { CHART_PALETTE as COLORS } from '../utils/chartPalette';
 import './ClusterDashboard.css';
-
-const COLORS = [
-    '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEEAD',
-    '#D4A5A5', '#9B59B6', '#3498DB', '#E67E22', '#2ECC71',
-    '#F1C40F', '#E74C3C', '#1ABC9C', '#34495E', '#FF9FF3',
-    '#00D2D3', '#54A0FF', '#5F27CD', '#C8D6E5', '#FF9F43',
-    '#01A3A4', '#EE5253'
-];
 
 export default function ClusterDashboard() {
     const fgRef = useRef();
@@ -21,6 +14,8 @@ export default function ClusterDashboard() {
     const [clusterData, setClusterData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [techLookupLoading, setTechLookupLoading] = useState(false);
+    const [techLookupError, setTechLookupError] = useState('');
 
     useEffect(() => {
         const fetchClusters = async () => {
@@ -74,6 +69,27 @@ export default function ClusterDashboard() {
             return false;
         });
     }, [searchQuery, clusterData]);
+
+    // --- Tra cứu cụm theo tên công nghệ khi tìm kiếm không khớp cụm nào ---
+    const handleLookupTech = async () => {
+        if (!searchQuery.trim()) return;
+        setTechLookupLoading(true);
+        setTechLookupError('');
+        try {
+            const res = await getClusterByTech(searchQuery.trim());
+            const clusterId = res?.data?.cluster_id ?? res?.cluster_id;
+            if (clusterId === undefined || clusterId === null) {
+                setTechLookupError('Không tìm thấy cụm cho công nghệ này.');
+                return;
+            }
+            setSelectedClusterId(clusterId);
+        } catch (err) {
+            console.error('Lỗi tra cứu cụm theo công nghệ:', err);
+            setTechLookupError('Không thể tra cứu lúc này.');
+        } finally {
+            setTechLookupLoading(false);
+        }
+    };
 
     // --- Tạo Graph Data chỉ dành riêng cho Cụm đang chọn ---
     const graphData = useMemo(() => {
@@ -248,12 +264,13 @@ export default function ClusterDashboard() {
             {loading ? (
                 <div style={{ textAlign: 'center', padding: '60px', color: 'var(--text-3)' }}>Đang tải dữ liệu cụm...</div>
             ) : error ? (
-                <div style={{ textAlign: 'center', padding: '60px', color: '#ff6b6b' }}>Lỗi: {error}</div>
+                <div style={{ textAlign: 'center', padding: '60px', color: 'var(--danger-light)' }}>Lỗi: {error}</div>
             ) : selectedClusterId === null ? (
                 <div className="cluster-grid">
                     {filteredClusters.map(cluster => (
-                        <div 
-                            key={cluster.cluster_id} 
+                        <button
+                            type="button"
+                            key={cluster.cluster_id}
                             className="cluster-grid-item"
                             onClick={() => setSelectedClusterId(cluster.cluster_id)}
                             style={{ borderTop: `4px solid ${COLORS[cluster.cluster_id % COLORS.length]}` }}
@@ -267,11 +284,27 @@ export default function ClusterDashboard() {
                                 <span><strong>{cluster.n_members || cluster.member_count || 0}</strong> công nghệ</span>
                                 <span>Tin cậy: <strong>{cluster.confidence ? Math.round(cluster.confidence * 100) : 0}%</strong></span>
                             </div>
-                        </div>
+                        </button>
                     ))}
                     {filteredClusters.length === 0 && (
                         <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '60px', color: 'var(--text-3)' }}>
-                            Không tìm thấy cụm nào phù hợp.
+                            <p>Không tìm thấy cụm nào phù hợp.</p>
+                            {searchQuery.trim() && (
+                                <>
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        style={{ marginTop: 16 }}
+                                        onClick={handleLookupTech}
+                                        disabled={techLookupLoading}
+                                    >
+                                        {techLookupLoading ? 'Đang tra cứu...' : `Tìm cụm chứa công nghệ "${searchQuery.trim()}"`}
+                                    </button>
+                                    {techLookupError && (
+                                        <p style={{ color: 'var(--danger-light)', marginTop: 12 }}>{techLookupError}</p>
+                                    )}
+                                </>
+                            )}
                         </div>
                     )}
                 </div>

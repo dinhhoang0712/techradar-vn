@@ -38,7 +38,10 @@ const tryRefreshToken = async () => {
 
 export const apiClient = async (endpoint, options = {}, _retried = false) => {
     // 1. Kiểm tra thời gian phiên đăng nhập (900 giây = 15 phút)
-    const loginTimestamp = localStorage.getItem('login_timestamp');
+    // Bỏ qua /auth/* (login, register, refresh...): các endpoint này không cần token
+    // hợp lệ để gọi, và việc chặn ở đây khiến chính request login bị lỗi giả trước khi
+    // kịp gửi lên server.
+    const loginTimestamp = endpoint.startsWith('/auth/') ? null : localStorage.getItem('login_timestamp');
     if (loginTimestamp) {
         const diffSeconds = (Date.now() - parseInt(loginTimestamp)) / 1000;
         if (diffSeconds > 900) {

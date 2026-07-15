@@ -4,8 +4,12 @@ spring:
       validation-query: SELECT 1
 
   # Dev profile additionally applies the dev-only seed (default admin account).
+  # out-of-order: true because the seed migrations (V900/V901) always sort after real
+  # schema migrations - a real migration added later (lower version) must still be able
+  # to apply on a dev DB where the seed has already run.
   flyway:
     locations: classpath:db/migration,classpath:db/dev
+    out-of-order: true
 
 logging:
   level:

@@ -17,5 +17,3 @@ export const getRadarSearch = async (keywords = [], months = 6) => {
     params.append('months', months);
     return await apiClient(`/radar/search?${params.toString()}`, { method: 'GET' });
 };
-
-export const fetchTrends = getRadarTop4;

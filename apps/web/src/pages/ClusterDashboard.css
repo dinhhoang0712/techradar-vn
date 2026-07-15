@@ -125,6 +125,8 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    text-align: left;
+    width: 100%;
 }
 
 .cluster-grid-item:hover {

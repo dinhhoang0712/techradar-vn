@@ -53,22 +53,10 @@
     gap: 8px;
 }
 
+/* Base look comes from the shared .chip primitive in global.css; only the size differs here. */
 .period-chip {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    color: var(--text-2);
-    cursor: pointer;
     font-size: 0.82rem;
     padding: 4px 14px;
-    transition: all 0.15s;
-}
-
-.period-chip:hover { border-color: var(--primary); color: var(--primary); }
-.period-chip.active {
-    background: var(--primary-glow);
-    border-color: var(--primary);
-    color: var(--primary-light);
 }
 
 .period-input {
@@ -220,39 +208,9 @@
 }
 .report-markdown strong { color: var(--text); }
 
-/* Shared */
-.card {
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 20px 24px;
-}
-
-.section-title {
-    color: var(--text);
-    font-size: 1rem;
-    font-weight: 600;
-    margin: 0 0 4px;
-}
-
-.btn {
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: 600;
-    padding: 10px 22px;
-    font-size: 0.9rem;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    transition: opacity 0.15s;
-}
-
-.btn:disabled { opacity: 0.55; cursor: not-allowed; }
-.btn-primary { background: var(--primary); color: #fff; }
-.btn-primary:hover:not(:disabled) { opacity: 0.88; }
-.btn-secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text-2); }
-.btn-secondary:hover { border-color: var(--primary); color: var(--primary); }
+/* .card / .section-title / .btn / .btn-primary / .btn-secondary now come from the shared
+   primitives in global.css. (This block used to redefine .btn-primary with color:#fff on a
+   white --primary background — invisible depending on cascade order.) */
 
 .btn-spinner {
     width: 15px;

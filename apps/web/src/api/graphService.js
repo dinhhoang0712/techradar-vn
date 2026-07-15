@@ -10,8 +10,6 @@ export const exploreGraph = async (keywords = [], depth = 1, location = '', minS
     return await apiClient(`/graph/explore?${params.toString()}`, { method: 'GET' });
 };
 
-export const fetchGraphData = exploreGraph;
-
 // GET /graph/road_analysis — from: string, to: string
 export const analyzeRoad = async (from, to) => {
     const params = new URLSearchParams();

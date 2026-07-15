@@ -5,9 +5,14 @@ const API_BASE_URL = '/api/v1';
 // ─────────────────────────────────────────────
 // GET /notifications — danh sách thông báo (mới nhất trước)
 // Returns: array of { id, type, title, body, link, read, created_at }
+// Tuỳ chọn { limit, offset } để phân trang (mặc định giữ nguyên hành vi cũ).
 // ─────────────────────────────────────────────
-export const getNotifications = async () => {
-    const res = await apiClient('/notifications');
+export const getNotifications = async ({ limit, offset } = {}) => {
+    const params = new URLSearchParams();
+    if (limit != null) params.set('limit', limit);
+    if (offset != null) params.set('offset', offset);
+    const qs = params.toString();
+    const res = await apiClient(`/notifications${qs ? `?${qs}` : ''}`);
     return res?.data ?? res ?? [];
 };
 

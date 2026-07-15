@@ -227,34 +227,6 @@
     white-space: nowrap;
 }
 
-.pill-group {
-    display: flex;
-    gap: 4px;
-}
-
-.pill {
-    padding: 5px 12px;
-    border-radius: 99px;
-    border: 1px solid var(--border);
-    background: var(--surface-2);
-    color: var(--text-2);
-    font-size: 0.8rem;
-    font-weight: 500;
-    transition: all var(--t);
-}
-
-.pill:hover {
-    border-color: var(--primary);
-    color: var(--primary-light);
-}
-
-.pill.active {
-    background: var(--primary-glow);
-    border-color: var(--primary);
-    color: var(--primary-light);
-    font-weight: 600;
-}
-
 /* Body */
 .graph-body {
     flex: 1;

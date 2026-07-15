@@ -21,9 +21,9 @@ export default function Footer() {
                     </div>
                     <div className="footer-col">
                         <span className="footer-col-title">Dữ liệu</span>
-                        <a href="#">Nguồn dữ liệu</a>
-                        <a href="#">Cập nhật realtime</a>
-                        <a href="#">Báo cáo xu hướng</a>
+                        <span className="footer-static-text">Nguồn: VNExpress, GenK, TopCV, ITviec, v.v.</span>
+                        <span className="footer-static-text">Cập nhật realtime từ crawler</span>
+                        <a href="/report">Báo cáo xu hướng</a>
                     </div>
                 </div>
             </div>

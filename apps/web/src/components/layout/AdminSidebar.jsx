@@ -1,11 +1,11 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { logoutUser } from '../../api/authService';
-import './Sidebar.css';
+import './AdminSidebar.css';
 
 const NAV_ITEMS = [
     { to: '/admin/dashboard', label: 'Dashboard' },
     { to: '/admin/users', label: 'Quản lý người dùng' },
-    // { to: '/admin/cms', label: 'Quản lý dữ liệu (CMS)' },
+    { to: '/admin/cms', label: 'Quản lý dữ liệu (CMS)' },
     { to: '/admin/settings', label: 'Cài đặt hệ thống' },
 ];
 

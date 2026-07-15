@@ -150,35 +150,6 @@
     letter-spacing: 0.06em;
 }
 
-.pill-group {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-}
-
-.pill {
-    padding: 5px 12px;
-    border-radius: 99px;
-    border: 1px solid var(--border);
-    background: var(--surface-2);
-    color: var(--text-2);
-    font-size: 0.8rem;
-    font-weight: 500;
-    transition: all var(--t);
-}
-
-.pill:hover {
-    border-color: var(--primary);
-    color: var(--primary-light);
-}
-
-.pill.active {
-    background: var(--primary-glow);
-    border-color: var(--primary);
-    color: var(--primary-light);
-    font-weight: 600;
-}
-
 /* Tooltip */
 .chart-tooltip {
     background: var(--bg-2);

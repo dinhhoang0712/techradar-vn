@@ -117,7 +117,8 @@ export default function Header() {
                     </button>
                     <NotificationBell />
                     <div className="avatar-wrap" ref={menuRef}>
-                        <div
+                        <button
+                            type="button"
                             className={`header-avatar${menuOpen ? ' active' : ''}`}
                             title="Tài khoản"
                             onClick={() => setMenuOpen(o => !o)}
@@ -128,7 +129,7 @@ export default function Header() {
                                     <circle cx="12" cy="7" r="4"></circle>
                                 </svg>
                             </div>
-                        </div>
+                        </button>
                         {menuOpen && (
                             <div className="avatar-dropdown">
                                 <div className="dropdown-header">
@@ -151,9 +152,6 @@ export default function Header() {
                                     onClick={() => { setMenuOpen(false); navigate('/profile'); }}
                                 >
                                     <span>Thông tin cá nhân</span>
-                                </button>
-                                <button className="dropdown-item">
-                                    <span>Cài đặt</span>
                                 </button>
                                 <div className="dropdown-divider" />
                                 <button className="dropdown-item danger" onClick={handleLogout}>

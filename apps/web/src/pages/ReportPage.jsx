@@ -75,7 +75,7 @@ export default function ReportPage() {
                                 <button
                                     key={p.value}
                                     type="button"
-                                    className={`period-chip${period === p.value ? ' active' : ''}`}
+                                    className={`chip period-chip${period === p.value ? ' active' : ''}`}
                                     onClick={() => setPeriod(p.value)}
                                 >
                                     {p.label}
@@ -98,7 +98,7 @@ export default function ReportPage() {
                                 <button
                                     key={n}
                                     type="button"
-                                    className={`period-chip${topN === n ? ' active' : ''}`}
+                                    className={`chip period-chip${topN === n ? ' active' : ''}`}
                                     onClick={() => setTopN(n)}
                                 >
                                     Top {n}

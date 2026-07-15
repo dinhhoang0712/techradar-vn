@@ -210,12 +210,12 @@ export default function SalaryPage() {
                 </div>
                 <div className="salary-top3">
                     {topThree.map((t, i) => (
-                        <div key={t.techName} className={`top3-card rank-${i + 1}`} onClick={() => setSelected(t)}>
+                        <button type="button" key={t.techName} className={`top3-card rank-${i + 1}`} onClick={() => setSelected(t)}>
                             <span className="top3-rank">#{i + 1}</span>
                             <span className="top3-name">{t.techName}</span>
                             <span className="top3-salary">{formatM(t.medianSalaryMVnd)} VND</span>
                             <span className="top3-range">{t.salaryRange}</span>
-                        </div>
+                        </button>
                     ))}
                 </div>
             </div>

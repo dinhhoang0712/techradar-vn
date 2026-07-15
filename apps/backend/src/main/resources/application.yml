@@ -53,16 +53,18 @@ spring:
           timeout: 3000
           writetimeout: 3000
 
-  redis:
-    host: ${REDIS_HOST:localhost}
-    port: ${REDIS_PORT:6379}
-    password: ${REDIS_PASSWORD:}
-    timeout: 2000ms
-    lettuce:
-      pool:
-        max-active: 8
-        max-idle: 4
-        min-idle: 1
+  # Spring Boot 3.0+ moved these properties from spring.redis.* to spring.data.redis.*.
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 4
+          min-idle: 1
 
   # Flyway runs migrations over a dedicated JDBC connection at startup.
   # The application itself talks to Postgres reactively via R2DBC above.

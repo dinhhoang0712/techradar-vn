@@ -88,19 +88,7 @@
     margin-bottom: 4px;
 }
 
-.role-chip {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    color: var(--text-2);
-    cursor: pointer;
-    font-size: 0.8rem;
-    padding: 4px 12px;
-    transition: all 0.15s;
-}
-
-.role-chip:hover { border-color: var(--primary); color: var(--primary); }
-.role-chip.active { background: var(--primary-glow); border-color: var(--primary); color: var(--primary-light); }
+/* .role-chip base styling now comes from the shared .chip primitive in global.css */
 
 .career-submit-btn {
     align-self: flex-start;
@@ -279,29 +267,6 @@
     color: var(--text);
 }
 
-/* Card base (reuse global) */
-.card {
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 20px 24px;
-}
-
-.section-title {
-    color: var(--text);
-    font-size: 1rem;
-    font-weight: 600;
-    margin: 0 0 4px;
-}
-
-.btn {
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: 600;
-    transition: opacity 0.15s;
-}
-
-.btn:disabled { opacity: 0.55; cursor: not-allowed; }
-.btn-primary { background: var(--primary); color: #fff; }
-.btn-primary:hover:not(:disabled) { opacity: 0.88; }
+/* .card / .section-title / .btn / .btn-primary now come from the shared primitives in global.css.
+   (This block used to redefine them locally with color:#fff on .btn-primary, which is white text
+   on a white --primary background — invisible depending on cascade order.) */

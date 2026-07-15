@@ -41,13 +41,14 @@ public class PostgresNotificationRepository implements NotificationRepository {
     }
 
     @Override
-    public Flux<Notification> findByUser(String userId, int limit) {
+    public Flux<Notification> findByUser(String userId, int limit, int offset) {
         return dbClient.sql(
                 "SELECT id, user_id, type, title, body, link, is_read, created_at " +
-                "FROM notification WHERE user_id = :user_id ORDER BY created_at DESC LIMIT :limit"
+                "FROM notification WHERE user_id = :user_id ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
         )
                 .bind("user_id", UUID.fromString(userId))
                 .bind("limit", limit)
+                .bind("offset", offset)
                 .map((row, meta) -> mapRow(row))
                 .all();
     }

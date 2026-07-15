@@ -6,12 +6,9 @@ import {
 import Select from 'react-select';
 import { getRadarSearch, getRadarTop4, getRadarTop10 } from '../api/trendService';
 import { getForecast } from '../api/forecastService';
+import { CHART_PALETTE as PALETTE } from '../utils/chartPalette';
+import MaintenanceOverlay from '../components/common/MaintenanceOverlay';
 import './TrendDashboard.css';
-
-const PALETTE = [
-    '#6C63FF', '#00D68F', '#FF6584', '#FFC94D', '#54C5F8',
-    '#FF8C00', '#7FBA00', '#E040FB', '#FF5252', '#00B4D8'
-];
 
 const TIME_OPTIONS = [
     { label: '3 tháng', value: 3 },
@@ -282,40 +279,32 @@ export default function TrendDashboard() {
     
     if (error) {
         return (
-            <div className="dashboard-page flex-center" style={{ 
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                width: '100vw',
-                height: '100vh',
-                zIndex: 9999,
-                background: '#000', // Che phủ hoàn toàn nền
-                flexDirection: 'column', 
-                textAlign: 'center' 
-            }}>
-                <div className="error-display-box" style={{ 
-                    padding: '60px', 
-                    background: '#111', 
-                    borderRadius: '24px', 
-                    border: '1px solid #333',
-                    boxShadow: '0 20px 50px rgba(0,0,0,0.5)'
-                }}>
-                    <div className="error-icon-large" style={{ fontSize: '5rem', marginBottom: '24px' }}>
-                        {error === 'MAINTENANCE' ? '🚧' : '🔌'}
+            <MaintenanceOverlay>
+                <div className="dashboard-page flex-center" style={{ height: '100%', flexDirection: 'column', textAlign: 'center' }}>
+                    <div className="error-display-box" style={{
+                        padding: '60px',
+                        background: 'var(--surface)',
+                        borderRadius: 'var(--radius-xl)',
+                        border: '1px solid var(--border)',
+                        boxShadow: 'var(--shadow-lg)'
+                    }}>
+                        <div className="error-icon-large" style={{ fontSize: '5rem', marginBottom: '24px' }}>
+                            {error === 'MAINTENANCE' ? '🚧' : '🔌'}
+                        </div>
+                        <h2 style={{ fontSize: '2rem', marginBottom: '12px', color: 'var(--text)' }}>
+                            {error === 'MAINTENANCE' ? 'Hệ thống đang bảo trì' : 'Lỗi kết nối Server'}
+                        </h2>
+                        <p style={{ color: 'var(--text-2)', maxWidth: 450, margin: '16px auto', lineHeight: 1.6, fontSize: '1.1rem' }}>
+                            {error === 'MAINTENANCE'
+                                ? 'Chúng tôi đang tiến hành bảo trì định kỳ. Vui lòng quay lại sau.'
+                                : 'Không thể kết nối đến máy chủ TechRadar. Vui lòng kiểm tra lại đường truyền internet hoặc thử lại sau.'}
+                        </p>
+                        <button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: '30px', padding: '12px 32px', fontSize: '1rem', fontWeight: 'bold' }}>
+                            Thử lại ngay
+                        </button>
                     </div>
-                    <h2 style={{ fontSize: '2rem', marginBottom: '12px', color: '#fff' }}>
-                        {error === 'MAINTENANCE' ? 'Hệ thống đang bảo trì' : 'Lỗi kết nối Server'}
-                    </h2>
-                    <p style={{ color: '#888', maxWidth: 450, margin: '16px auto', lineHeight: 1.6, fontSize: '1.1rem' }}>
-                        {error === 'MAINTENANCE' 
-                            ? 'Chúng tôi đang tiến hành bảo trì định kỳ. Vui lòng quay lại sau.' 
-                            : 'Không thể kết nối đến máy chủ TechRadar. Vui lòng kiểm tra lại đường truyền internet hoặc thử lại sau.'}
-                    </p>
-                    <button className="btn btn-primary" onClick={() => window.location.reload()} style={{ marginTop: '30px', padding: '12px 32px', fontSize: '1rem', fontWeight: 'bold' }}>
-                        Thử lại ngay
-                    </button>
                 </div>
-            </div>
+            </MaintenanceOverlay>
         );
     }
 

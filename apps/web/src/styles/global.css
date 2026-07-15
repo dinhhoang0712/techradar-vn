@@ -28,6 +28,10 @@
   --yellow: #ffc94d;
   --yellow-glow: rgba(255, 201, 77, 0.2);
 
+  --danger: #e5484d;
+  --danger-light: #ff6b70;
+  --danger-glow: rgba(229, 72, 77, 0.2);
+
   --text: #e8eaf6;
   --text-2: #9fa8c7;
   --text-3: #5c6494;
@@ -197,6 +201,17 @@ select {
   color: var(--text);
 }
 
+.btn-danger {
+  background: transparent;
+  color: var(--danger-light);
+  border: 1px solid var(--danger);
+}
+
+.btn-danger:hover {
+  background: var(--danger-glow);
+  color: #fff;
+}
+
 .badge {
   display: inline-flex;
   align-items: center;
@@ -229,6 +244,72 @@ select {
   background: var(--primary-glow);
   color: var(--primary-light);
   border: 1px solid var(--primary);
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border);
+  border-radius: 50%;
+  border-top-color: var(--primary);
+  animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.pill-group {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pill {
+  padding: 5px 12px;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all var(--t);
+}
+
+.pill:hover {
+  border-color: var(--primary);
+  color: var(--primary-light);
+}
+
+.pill.active {
+  background: var(--primary-glow);
+  border-color: var(--primary);
+  color: var(--primary-light);
+  font-weight: 600;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all var(--t);
+}
+
+.chip:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.chip.active {
+  background: var(--primary-glow);
+  border-color: var(--primary);
+  color: var(--primary-light);
 }
 
 .section-title {
@@ -333,5 +414,99 @@ select {
   }
   .responsive-grid-xl {
     --grid-cols: 4;
+  }
+}
+
+/* ─── Shared toggle switch ──────────────────────────────────────────── */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 46px;
+  height: 26px;
+  flex-shrink: 0;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.switch .slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  transition: background-color var(--t), border-color var(--t);
+}
+
+.switch .slider::before {
+  position: absolute;
+  content: '';
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: var(--text-2);
+  border-radius: 50%;
+  transition: transform var(--t), background-color var(--t);
+}
+
+.switch input:checked + .slider {
+  background-color: var(--primary-glow);
+  border-color: var(--primary);
+}
+
+.switch input:checked + .slider::before {
+  transform: translateX(20px);
+  background-color: var(--primary);
+}
+
+.switch.danger input:checked + .slider {
+  background-color: var(--danger-glow);
+  border-color: var(--danger);
+}
+
+.switch.danger input:checked + .slider::before {
+  background-color: var(--danger);
+}
+
+/* ─── Shared animation keyframes ─────────────────────────────────────── */
+@keyframes fadeScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes toastSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulseOnce {
+  0% {
+    box-shadow: 0 0 0 0 var(--primary-glow);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(255, 255, 255, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
   }
 }

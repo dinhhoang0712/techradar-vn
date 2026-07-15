@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { registerMock } from '../../api/authService';
+import { registerUser } from '../../api/authService';
+import { useToast } from '../../components/common/ToastProvider';
 import './Auth.css';
 
 export default function RegisterPage() {
@@ -11,6 +12,7 @@ export default function RegisterPage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const navigate = useNavigate();
+    const notify = useToast();
 
     const handleRegister = async (e) => {
         e.preventDefault();
@@ -24,11 +26,10 @@ export default function RegisterPage() {
         setLoading(true);
 
         try {
-            // NOTE: Thay bằng API thực: registerUser (khi backend có sẵn)
-            const res = await registerMock({ full_name: name, email, password, confirm_password: confirmPwd });
+            const res = await registerUser({ full_name: name, email, password, confirm_password: confirmPwd });
             if (res.status === 'success' || res.access_token) {
-                alert('Khởi tạo tài khoản thành công! Vui lòng đăng nhập.');
-                navigate('/login'); 
+                notify({ title: 'Khởi tạo tài khoản thành công! Vui lòng đăng nhập.', variant: 'success' });
+                navigate('/login');
             }
         } catch (err) {
             setError('Đăng ký thất bại. Email đã tồn tại.');
@@ -43,11 +44,11 @@ export default function RegisterPage() {
                 <div className="auth-form-wrapper">
                     <div className="auth-logo">Tech<span>Radar</span></div>
                     <div>
-                        <h1 className="auth-title">Join us.</h1>
+                        <h1 className="auth-title">Tham gia ngay.</h1>
                         <p className="auth-subtitle">Mở ra không gian tri thức không giới hạn.</p>
                     </div>
 
-                    {error && <div style={{ color: '#ff6b6b', fontSize: '0.85rem', padding: '10px', background: 'rgba(255,107,107,0.1)', borderRadius: '6px' }}>{error}</div>}
+                    {error && <div className="auth-error">{error}</div>}
 
                     <form className="auth-form" onSubmit={handleRegister}>
                         <div className="auth-input-group">
@@ -92,7 +93,7 @@ export default function RegisterPage() {
                             />
                         </div>
                         
-                        <button type="submit" className="auth-btn" disabled={loading} style={{marginTop: '12px'}}>
+                        <button type="submit" className="auth-btn" disabled={loading}>
                             {loading ? 'Đang khởi tạo...' : 'Tạo tài khoản mới'}
                         </button>
                     </form>

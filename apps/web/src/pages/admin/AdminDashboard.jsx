@@ -28,7 +28,7 @@ export default function AdminDashboard() {
                     activeSessions: res.data?.activeSessions || 0,
                     searchesToday: res.data?.searchesToday || 0,
                     topKeywords: Array.isArray(res.data?.topKeywords) ? res.data.topKeywords : [],
-                    revenueMock: Array.isArray(res.data?.revenueMock) ? res.data.revenueMock : []
+                    monthlyVisits: Array.isArray(res.data?.monthlyVisits) ? res.data.monthlyVisits : []
                 };
                 setStats(safeData);
             } else {
@@ -63,8 +63,8 @@ export default function AdminDashboard() {
                 <h2>Đã xảy ra lỗi</h2>
                 <p>{error}</p>
                 <div className="error-actions">
-                    <button className="btn-retry" onClick={() => loadData()}>Thử lại</button>
-                    <button className="btn-login" onClick={() => navigate('/login')}>Đăng nhập</button>
+                    <button className="btn btn-secondary" onClick={() => loadData()}>Thử lại</button>
+                    <button className="btn btn-primary" onClick={() => navigate('/login')}>Đăng nhập</button>
                 </div>
             </div>
         );
@@ -93,19 +93,19 @@ export default function AdminDashboard() {
                 <div className="chart-card">
                     <h3>Lưu lượng truy cập hệ thống</h3>
                     <div style={{ width: '100%', height: 350 }}>
-                        {stats.revenueMock && stats.revenueMock.length > 0 ? (
+                        {stats.monthlyVisits && stats.monthlyVisits.length > 0 ? (
                             <ResponsiveContainer>
-                                <LineChart data={stats.revenueMock} margin={{top: 20, right: 30, left: 0, bottom: 0}}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#333333" />
-                                    <XAxis dataKey="month" stroke="#a0aec0" />
-                                    <YAxis stroke="#a0aec0" />
-                                    <Tooltip contentStyle={{ backgroundColor: '#1a202c', border: '1px solid #333333', borderRadius: 8, color: '#fff' }} />
+                                <LineChart data={stats.monthlyVisits} margin={{top: 20, right: 30, left: 0, bottom: 0}}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                                    <XAxis dataKey="month" stroke="var(--text-3)" />
+                                    <YAxis stroke="var(--text-3)" />
+                                    <Tooltip contentStyle={{ backgroundColor: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)' }} />
                                     <Legend wrapperStyle={{paddingTop: '20px'}}/>
-                                    <Line type="monotone" dataKey="count" name="Người dùng truy cập" stroke="#ffffff" strokeWidth={3} dot={{r: 5, strokeWidth: 2}} activeDot={{r: 8}} />
+                                    <Line type="monotone" dataKey="count" name="Người dùng truy cập" stroke="var(--primary)" strokeWidth={3} dot={{r: 5, strokeWidth: 2}} activeDot={{r: 8}} />
                                 </LineChart>
                             </ResponsiveContainer>
                         ) : (
-                            <div className="flex-center" style={{height: '100%', color: '#555'}}>Chưa có dữ liệu biểu đồ</div>
+                            <div className="flex-center chart-empty" style={{height: '100%'}}>Chưa có dữ liệu biểu đồ</div>
                         )}
                     </div>
                 </div>
@@ -123,7 +123,7 @@ export default function AdminDashboard() {
                                 </li>
                             ))
                         ) : (
-                            <li style={{color: '#555', textAlign: 'center', padding: '40px 0'}}>Không có từ khóa nào</li>
+                            <li className="keyword-empty">Không có từ khóa nào</li>
                         )}
                     </ul>
                 </div>

@@ -78,7 +78,7 @@ export default function CareerPage() {
                                     <button
                                         key={r}
                                         type="button"
-                                        className={`role-chip${targetRole === r ? ' active' : ''}`}
+                                        className={`chip role-chip${targetRole === r ? ' active' : ''}`}
                                         onClick={() => setTargetRole(r)}
                                     >
                                         {r}

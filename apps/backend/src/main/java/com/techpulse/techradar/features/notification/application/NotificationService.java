@@ -25,8 +25,8 @@ public class NotificationService {
 
     private final Sinks.Many<Notification> sink = Sinks.many().multicast().onBackpressureBuffer();
 
-    public Flux<Notification> list(String userId, int limit) {
-        return repository.findByUser(userId, limit);
+    public Flux<Notification> list(String userId, int limit, int offset) {
+        return repository.findByUser(userId, limit, offset);
     }
 
     public Mono<Long> unreadCount(String userId) {

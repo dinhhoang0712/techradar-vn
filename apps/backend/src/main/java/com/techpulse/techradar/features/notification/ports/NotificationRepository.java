@@ -12,7 +12,7 @@ public interface NotificationRepository {
 
     Mono<Notification> insert(Notification notification);
 
-    Flux<Notification> findByUser(String userId, int limit);
+    Flux<Notification> findByUser(String userId, int limit, int offset);
 
     Mono<Long> markRead(String id, String userId);
 

@@ -52,7 +52,7 @@ export const fetchAdminDashboardStats = async () => {
                 activeSessions: getData(visitsTodayRes) || 0,
                 searchesToday: getData(searchesTodayRes) || 0,
                 topKeywords: getData(topKeywordsRes) || [],
-                revenueMock: getData(monthlyVisitsRes) || []
+                monthlyVisits: getData(monthlyVisitsRes) || []
             }
         };
     } catch (error) {
@@ -72,6 +72,12 @@ export const updateAdminSetting = async (key, value) => {
         method: 'PUT',
         body: JSON.stringify({ value })
     });
+};
+
+// POST /admin/analytics/rebuild — rebuilds tech_analytics from the knowledge graph on demand
+// instead of waiting for the scheduled ETL cron.
+export const triggerAnalyticsRebuild = async () => {
+    return await apiClient('/admin/analytics/rebuild', { method: 'POST' });
 };
 
 // --- User Management ---

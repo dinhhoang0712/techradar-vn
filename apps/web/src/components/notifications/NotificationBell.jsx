@@ -7,6 +7,8 @@ import {
     markAllNotificationsRead,
     streamNotifications,
 } from '../../api/notificationService';
+import { useToast } from '../common/ToastProvider';
+import NotifIcon from './notifIcons';
 import './NotificationBell.css';
 
 function timeAgo(iso) {
@@ -20,20 +22,38 @@ function timeAgo(iso) {
     return `${Math.floor(diff / 86400)} ngày trước`;
 }
 
+function exactTime(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleString('vi-VN');
+}
+
 export default function NotificationBell() {
     const [items, setItems] = useState([]);
     const [unread, setUnread] = useState(0);
     const [open, setOpen] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(false);
+    const [pulse, setPulse] = useState(false);
     const wrapRef = useRef(null);
+    const openRef = useRef(false);
     const navigate = useNavigate();
+    const showToast = useToast();
+
+    openRef.current = open;
 
     const refresh = useCallback(async () => {
+        setError(false);
         try {
             const [list, count] = await Promise.all([getNotifications(), getUnreadCount()]);
             setItems(Array.isArray(list) ? list : []);
             setUnread(Number(count) || 0);
         } catch (err) {
             console.warn('[NotificationBell] load failed:', err);
+            setError(true);
+        } finally {
+            setLoading(false);
         }
     }, []);
 
@@ -46,12 +66,27 @@ export default function NotificationBell() {
         const controller = streamNotifications(
             (n) => {
                 setItems((prev) => [n, ...prev].slice(0, 50));
-                if (!n.read) setUnread((c) => c + 1);
+                if (!n.read) {
+                    setUnread((c) => c + 1);
+                    setPulse(true);
+                    setTimeout(() => setPulse(false), 700);
+                }
+                if (!openRef.current) {
+                    showToast({
+                        title: n.title,
+                        body: n.body,
+                        variant: 'info',
+                        onClick: () => {
+                            if (!n.read) markNotificationRead(n.id).catch(() => {});
+                            if (n.link) navigate(n.link);
+                        },
+                    });
+                }
             },
             (err) => console.warn('[NotificationBell] stream error:', err),
         );
         return () => controller.abort();
-    }, [refresh]);
+    }, [refresh, showToast, navigate]);
 
     // Close dropdown on outside click.
     useEffect(() => {
@@ -78,12 +113,17 @@ export default function NotificationBell() {
         try { await markAllNotificationsRead(); } catch { /* optimistic */ }
     };
 
+    const handleViewAll = () => {
+        setOpen(false);
+        navigate('/notifications');
+    };
+
     if (!localStorage.getItem('access_token')) return null;
 
     return (
         <div className="notif-wrap" ref={wrapRef}>
             <button
-                className={`notif-bell${open ? ' active' : ''}`}
+                className={`notif-bell${open ? ' active' : ''}${pulse ? ' pulse' : ''}`}
                 title="Thông báo"
                 aria-label="Thông báo"
                 onClick={() => setOpen((o) => !o)}
@@ -107,7 +147,26 @@ export default function NotificationBell() {
                         )}
                     </div>
                     <div className="notif-list">
-                        {items.length === 0 ? (
+                        {loading ? (
+                            <div className="notif-skeleton">
+                                {[0, 1, 2].map((i) => (
+                                    <div className="notif-skel-item" key={i}>
+                                        <span className="notif-skel-icon" />
+                                        <span className="notif-skel-lines">
+                                            <span className="notif-skel-line w-70" />
+                                            <span className="notif-skel-line w-40" />
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : error ? (
+                            <div className="notif-error">
+                                <span>Không tải được thông báo.</span>
+                                <button className="notif-retry" onClick={() => { setLoading(true); refresh(); }}>
+                                    Thử lại
+                                </button>
+                            </div>
+                        ) : items.length === 0 ? (
                             <div className="notif-empty">Chưa có thông báo</div>
                         ) : (
                             items.map((n) => (
@@ -116,15 +175,23 @@ export default function NotificationBell() {
                                     className={`notif-item${n.read ? '' : ' unread'}`}
                                     onClick={() => handleItemClick(n)}
                                 >
-                                    {!n.read && <span className="notif-dot" />}
+                                    <span className="notif-item-icon-wrap">
+                                        <NotifIcon type={n.type} />
+                                    </span>
                                     <div className="notif-item-body">
                                         <div className="notif-item-title">{n.title}</div>
                                         {n.body && <div className="notif-item-text">{n.body}</div>}
-                                        <div className="notif-item-time">{timeAgo(n.created_at)}</div>
+                                        <div className="notif-item-time" title={exactTime(n.created_at)}>
+                                            {timeAgo(n.created_at)}
+                                        </div>
                                     </div>
+                                    {!n.read && <span className="notif-dot" />}
                                 </button>
                             ))
                         )}
+                    </div>
+                    <div className="notif-foot">
+                        <button className="notif-viewall" onClick={handleViewAll}>Xem tất cả</button>
                     </div>
                 </div>
             )}

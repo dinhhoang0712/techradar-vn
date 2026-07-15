@@ -4,14 +4,10 @@ import {
     Legend, ResponsiveContainer, ReferenceLine
 } from 'recharts';
 import CreatableSelect from 'react-select/creatable';
-import { getCompareSearch } from '../api/compareService';
+import { getCompareSearch, getLlmSummary } from '../api/compareService';
 import { getRadarTop10 } from '../api/trendService';
+import { CHART_PALETTE as PALETTE } from '../utils/chartPalette';
 import './ComparePage.css';
-
-const PALETTE = [
-    '#6C63FF', '#00D68F', '#FF6584', '#FFC94D', '#54C5F8',
-    '#FF8C00', '#7FBA00', '#E040FB', '#FF5252', '#00B4D8'
-];
 
 // Để chọn tạm các công nghệ
 const DEFAULT_TECHS = [];
@@ -76,6 +72,9 @@ export default function ComparePage() {
     const [techOptions, setTechOptions] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [summary, setSummary] = useState('');
+    const [summaryLoading, setSummaryLoading] = useState(false);
+    const [summaryError, setSummaryError] = useState('');
 
     const activeTechIds = selectedTechs.map(t => t.value);
 
@@ -132,6 +131,42 @@ export default function ComparePage() {
         };
         fetchCompare();
     }, [selectedTechs, timeRange]);
+
+    // Tóm tắt AI chỉ áp dụng khi so sánh đúng 2 công nghệ (backend /compare/llm-summary là pairwise)
+    useEffect(() => {
+        if (compareData.length !== 2) {
+            setSummary('');
+            setSummaryError('');
+            return;
+        }
+        const [a, b] = compareData;
+        const sumJobs = (item) => (item.monthly || []).reduce((s, p) => s + (p.job_count || 0), 0);
+
+        let cancelled = false;
+        const fetchSummary = async () => {
+            setSummaryLoading(true);
+            setSummaryError('');
+            try {
+                const res = await getLlmSummary({
+                    technology1: a.keyword,
+                    technology2: b.keyword,
+                    growthRate1: a.growth_rate || 0,
+                    growthRate2: b.growth_rate || 0,
+                    jobCount1: sumJobs(a),
+                    jobCount2: sumJobs(b),
+                    // Không có nguồn article_count theo từng công nghệ ở /compare/search nên gửi 0.
+                });
+                if (!cancelled) setSummary(res?.data?.summary || '');
+            } catch (err) {
+                console.error('Lỗi tóm tắt AI:', err);
+                if (!cancelled) setSummaryError('Không thể tạo tóm tắt AI lúc này.');
+            } finally {
+                if (!cancelled) setSummaryLoading(false);
+            }
+        };
+        fetchSummary();
+        return () => { cancelled = true; };
+    }, [compareData]);
 
     // Trích xuất thống kê từ dữ liệu backend
     const statsArr = useMemo(() => {
@@ -227,7 +262,7 @@ export default function ComparePage() {
             </div>
 
             {loading && <div style={{ marginTop: 20, color: 'var(--text-2)' }}>Đang tải dữ liệu so sánh...</div>}
-            {error && <div style={{ marginTop: 20, color: '#ff6b6b' }}>{error}</div>}
+            {error && <div style={{ marginTop: 20, color: 'var(--danger-light)' }}>{error}</div>}
 
             {/* Stats cards */}
             {!loading && !error && (
@@ -245,6 +280,18 @@ export default function ComparePage() {
                             </div>
                         </div>
                     ))}
+                </div>
+            )}
+
+            {/* Tóm tắt AI (chỉ khi so sánh đúng 2 công nghệ) */}
+            {!loading && !error && compareData.length === 2 && (
+                <div className="card ai-summary-card" style={{ marginTop: 16 }}>
+                    <h2 className="section-title"><span className="icon">✨</span>Tóm tắt AI</h2>
+                    {summaryLoading && <p className="ai-summary-status">Đang tạo tóm tắt...</p>}
+                    {summaryError && <p className="ai-summary-status ai-summary-error">{summaryError}</p>}
+                    {!summaryLoading && !summaryError && summary && (
+                        <p className="ai-summary-text">{summary}</p>
+                    )}
                 </div>
             )}
 

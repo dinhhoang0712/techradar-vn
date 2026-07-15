@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
-import { fetchAdminSettings, updateAdminSetting } from '../../api/adminService';
+import { fetchAdminSettings, updateAdminSetting, triggerAnalyticsRebuild } from '../../api/adminService';
+import { useToast } from '../../components/common/ToastProvider';
 import './AdminSettings.css';
 
 export default function AdminSettings() {
     const [settings, setSettings] = useState({});
     const [loading, setLoading] = useState(true);
+    const [rebuilding, setRebuilding] = useState(false);
+    const notify = useToast();
 
     useEffect(() => {
         loadSettings();
@@ -50,11 +53,25 @@ export default function AdminSettings() {
             setSettings(prev => ({ ...prev, [frontendKey]: newValue }));
         } catch (error) {
             console.error(`Failed to update setting:`, error);
-            alert('Không thể cập nhật cài đặt. Vui lòng thử lại.');
+            notify({ title: 'Không thể cập nhật cài đặt. Vui lòng thử lại.', variant: 'error' });
         }
     };
 
-    if (loading) return <div className="loading" style={{color: '#fff', textAlign: 'center', padding: '2rem'}}>Đang tải cài đặt...</div>;
+    const handleRebuildAnalytics = async () => {
+        setRebuilding(true);
+        try {
+            const res = await triggerAnalyticsRebuild();
+            const rows = res?.data?.rows_upserted;
+            notify({ title: `Đã chạy lại phân tích thành công${rows != null ? ` (${rows} dòng)` : ''}.`, variant: 'success' });
+        } catch (error) {
+            console.error('Failed to rebuild analytics:', error);
+            notify({ title: 'Chạy lại phân tích thất bại. Vui lòng thử lại.', variant: 'error' });
+        } finally {
+            setRebuilding(false);
+        }
+    };
+
+    if (loading) return <div className="admin-settings-loading"><div className="loading-spinner" /><span>Đang tải cài đặt...</span></div>;
 
     return (
         <div className="admin-settings">
@@ -68,9 +85,9 @@ export default function AdminSettings() {
                     <h3>Chế độ Bảo trì Website</h3>
                     <p>Đóng toàn bộ màn hình truy cập của người dùng Web.</p>
                 </div>
-                <label className="switch">
+                <label className="switch danger">
                     <input type="checkbox" checked={settings.isWebMaintenance || false} onChange={() => handleToggleSetting('isWebMaintenance', settings.isWebMaintenance)} />
-                    <span className="slider round"></span>
+                    <span className="slider"></span>
                 </label>
             </div>
 
@@ -79,9 +96,9 @@ export default function AdminSettings() {
                     <h3>Chế độ Bảo trì App Mobile</h3>
                     <p>Chặn truy cập đối với phiên bản ứng dụng di động.</p>
                 </div>
-                <label className="switch">
+                <label className="switch danger">
                     <input type="checkbox" checked={settings.isAppMaintenance || false} onChange={() => handleToggleSetting('isAppMaintenance', settings.isAppMaintenance)} />
-                    <span className="slider round"></span>
+                    <span className="slider"></span>
                 </label>
             </div>
 
@@ -92,7 +109,7 @@ export default function AdminSettings() {
                 </div>
                 <label className="switch">
                     <input type="checkbox" checked={settings.isGraphEnabled !== false} onChange={() => handleToggleSetting('isGraphEnabled', settings.isGraphEnabled)} />
-                    <span className="slider round"></span>
+                    <span className="slider"></span>
                 </label>
             </div>
 
@@ -103,8 +120,18 @@ export default function AdminSettings() {
                 </div>
                 <label className="switch">
                     <input type="checkbox" checked={settings.isRagEnabled !== false} onChange={() => handleToggleSetting('isRagEnabled', settings.isRagEnabled)} />
-                    <span className="slider round"></span>
+                    <span className="slider"></span>
                 </label>
+            </div>
+
+            <div className="settings-card">
+                <div className="setting-info">
+                    <h3>Phân tích dữ liệu (ETL)</h3>
+                    <p>Chạy lại ngay việc tổng hợp tech_analytics từ Knowledge Graph, thay vì chờ lịch chạy định kỳ.</p>
+                </div>
+                <button className="btn btn-secondary" onClick={handleRebuildAnalytics} disabled={rebuilding}>
+                    {rebuilding ? 'Đang chạy...' : 'Chạy lại phân tích'}
+                </button>
             </div>
         </div>
     );

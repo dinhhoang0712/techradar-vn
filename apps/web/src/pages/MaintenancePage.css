@@ -3,20 +3,20 @@
     align-items: center;
     justify-content: center;
     height: 100vh;
-    background-color: var(--bg-main, #000000);
-    color: #e2e8f0;
+    background-color: var(--bg);
+    color: var(--text);
     text-align: center;
     font-family: inherit;
 }
 
 .maintenance-content {
-    background: #111111;
+    background: var(--surface);
     padding: 60px 40px;
-    border-radius: 16px;
-    border: 1px solid #333333;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
     max-width: 600px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-    animation: fadeIn 0.5s ease-out;
+    box-shadow: var(--shadow-lg);
+    animation: fadeIn var(--t-slow) ease-out;
 }
 
 .icon-pulse {
@@ -28,25 +28,25 @@
 .maintenance-content h1 {
     font-size: 2rem;
     margin: 0 0 16px 0;
-    color: #fff;
+    color: var(--text);
 }
 
 .maintenance-content p {
     font-size: 1.1rem;
     line-height: 1.6;
-    color: #a0aec0;
+    color: var(--text-2);
     margin-bottom: 30px;
 }
 
 .maintenance-footer {
-    border-top: 1px solid #333333;
+    border-top: 1px solid var(--border);
     padding-top: 20px;
     font-size: 0.9rem;
-    color: #718096;
+    color: var(--text-3);
 }
 
 .maintenance-footer a {
-    color: #ffffff;
+    color: var(--text);
     text-decoration: none;
     font-weight: bold;
 }

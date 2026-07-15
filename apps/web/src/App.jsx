@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider } from './contexts/AppContext';
+import { ToastProvider } from './components/common/ToastProvider';
 import UserLayout from './layouts/UserLayout';
 import AdminLayout from './layouts/AdminLayout';
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -15,6 +16,7 @@ import SalaryPage from './pages/SalaryPage';
 import UserProfile from './pages/UserProfile';
 import CareerPage from './pages/CareerPage';
 import ReportPage from './pages/ReportPage';
+import NotificationsPage from './pages/NotificationsPage';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
 import './styles/global.css';
@@ -22,6 +24,7 @@ import './styles/global.css';
 export default function App() {
   return (
     <AppProvider>
+      <ToastProvider>
       <BrowserRouter>
         <Routes>
           {/* Màn hình xác thực (Không có layout header) */}
@@ -40,6 +43,7 @@ export default function App() {
           <Route path="/profile" element={<UserProfile />} />
           <Route path="/career" element={<CareerPage />} />
           <Route path="/report" element={<ReportPage />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
         </Route>
 
           <Route path="/admin" element={<AdminLayout />}>
@@ -54,6 +58,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
     </BrowserRouter>
+    </ToastProvider>
     </AppProvider>
   );
 }

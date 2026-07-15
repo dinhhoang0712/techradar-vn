@@ -20,6 +20,27 @@
 
 ---
 
+## Mục lục
+
+- [Giới thiệu](#gioi-thieu)
+- [Tính năng chính](#tinh-nang-chinh)
+- [Kiến trúc hệ thống](#kien-truc-he-thong)
+- [Data Pipeline](#data-pipeline)
+- [Graph RAG](#graph-rag)
+- [Knowledge Graph](#knowledge-graph)
+- [Tech Stack](#tech-stack)
+- [Cấu trúc dự án](#cau-truc-du-an)
+- [Bắt đầu](#bat-dau)
+- [Kiểm thử](#kiem-thu)
+- [Tài liệu](#tai-lieu)
+- [Roadmap](#roadmap)
+- [Liên hệ](#lien-he)
+- [Acknowledgments](#acknowledgments)
+- [Star History](#star-history)
+
+---
+
+<a id="gioi-thieu"></a>
 ## 📖 Giới thiệu
 
 **TechRadar VN** là nền tảng phân tích xu hướng công nghệ và thị trường tuyển dụng IT tại Việt Nam, sử dụng kết hợp **Knowledge Graph**, **Graph RAG** và **Machine Learning** để cung cấp insights thực tế cho developers, recruiters và decision-makers.
@@ -50,6 +71,7 @@ TechRadar VN thu thập dữ liệu từ các nguồn tin công nghệ và tuy�
 
 ---
 
+<a id="tinh-nang-chinh"></a>
 ## ✨ Tính năng chính
 
 ### � Trend Radar Dashboard
@@ -222,69 +244,20 @@ Hệ thống thông báo realtime, fan-out qua Redis Pub/Sub nên đúng dù ch�
 
 ---
 
+<a id="kien-truc-he-thong"></a>
 ## 🏗 Kiến trúc hệ thống
 
 ### High-Level Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              CLIENT LAYER                                     │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │  React Web   │  │ Expo Mobile  │  │  Admin UI    │  │  Public API  │     │
-│  │  (Vite)      │  │  (React Nat) │  │  (React)     │  │  (Swagger)   │     │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘     │
-│         │                 │                 │                 │             │
-└─────────┼─────────────────┼─────────────────┼─────────────────┼─────────────┘
-          │                 │                 │                 │
-          └─────────────────┴─────────────────┴─────────────────┘
-                            │
-                    ┌───────▼────────┐
-                    │  Nginx Proxy  │
-                    │  (Reverse)    │
-                    └───────┬────────┘
-                            │
-          ┌─────────────────┼─────────────────┐
-          │                 │                 │
-┌─────────▼─────────┐ ┌────▼────┐ ┌────────▼────────┐
-│  Spring Boot API  │ │  Redis  │ │  MailHog (dev)  │
-│  Gateway          │ │ (Cache) │ │  (SMTP)         │
-│  (WebFlux)        │ └─────────┘ └─────────────────┘
-│  /api/v1/*        │
-└─────────┬─────────┘
-          │
-    ┌─────┼─────┬──────────────┬──────────────┐
-    │     │     │              │              │
-┌───▼───┐ │ ┌───▼────┐  ┌─────▼─────┐  ┌─────▼─────┐
-│PostgreSQL│ │ │ Neo4j  │  │ai-rag-core│  │ml-clustering│
-│(R2DBC)   │ │ │ (Graph)│  │(FastAPI)  │  │(FastAPI)   │
-│- users   │ │ │        │  │:8000      │  │:8001       │
-│- chat    │ │ │        │  │- RAG chat │  │- HDBSCAN   │
-│- analytics│ │ │        │  │- Recommend│  │- Cluster   │
-│- CMS     │ │ │        │  │- Forecast │  │  serving   │
-└─────────┘ │ └────────┘  └─────┬─────┘  └─────┬─────┘
-            │                   │               │
-            └───────────────────┴───────────────┘
-                            │
-                    ┌───────▼────────┐
-                    │     Kafka      │
-                    │  (Event Bus)   │
-                    └───────┬────────┘
-                            │
-          ┌─────────────────┼─────────────────┐
-          │                 │                 │
-┌─────────▼─────────┐ ┌───▼────┐ ┌────────▼────────┐
-│  Data Platform     │ │Crawlers│ │  Qdrant (opt)   │
-│  - Bronze Writer   │ │(8 sources)│  (Vector Store) │
-│  - Silver Processor│ │        │ └─────────────────┘
-│  - Gold ETL        │ │        │
-│  - Scheduler       │ │        │
-└─────────┬─────────┘ └────────┘
-          │
-    ┌─────▼─────┐
-    │  MinIO    │
-    │ (S3-like) │
-    └───────────┘
-```
+<div align="center">
+
+![TechRadar VN System Architecture](docs/images/architecture.png)
+
+*Client → Nginx + Spring Boot WebFlux → Graph RAG / ML · Neo4j Knowledge Graph · Medallion ETL (Bronze → Silver → Gold) · Docker Compose*
+
+</div>
+
+Chi tiết: [Architecture](docs/ARCHITECTURE.md).
 
 ### Backend Architecture
 
@@ -298,19 +271,26 @@ Backend được xây dựng với **Spring Boot 3.4** theo mô hình **Hexagona
 - Reactive Programming: WebFlux + R2DBC cho non-blocking I/O
 
 **Feature Modules:**
-- `auth`: Authentication & Authorization
-- `radar`: Trend Analytics
+- `auth`: Authentication & Authorization (JWT, refresh rotation)
+- `radar`: Trend Analytics, export PNG/CSV
 - `compare`: Technology Comparison
 - `graph`: Knowledge Graph Explorer
-- `chat`: RAG Chatbot
-- `clustering`: Technology Clustering
-- `user`: User Management
-- `system`: System Settings
-- `health`: Health Checks
-- `kafka`: Event Handling
+- `chat`: RAG Chatbot proxy (`ai-rag-core`)
+- `clustering`: Technology Clustering proxy (`ml-clustering`)
+- `salary`: Salary Insights (Neo4j)
+- `notification`: In-app / email alerts, SSE stream, trend & job-match dispatch
+- `company`: Company Explorer (Neo4j)
+- `job`: Job Matching theo skill overlap (Neo4j)
+- `messaging`: Direct messages 1-1 (Postgres + SSE qua Redis Pub/Sub)
+- `social`: Feed / follow / like / comment / content report
+- `aiproxy`: Forward career / forecast / recommend / report / interview / agent / summarize → `ai-rag-core`
+- `user`: User Management, profile, avatar, preferences
+- `system`: Settings, admin dashboard, activity log, CMS, health/status, social moderation
+- `kafka`: Event handling (extract → Neo4j, alerts)
 
 ---
 
+<a id="data-pipeline"></a>
 ## 📊 Data Pipeline
 
 ### Data Sources
@@ -329,37 +309,15 @@ Backend được xây dựng với **Spring Boot 3.4** theo mô hình **Hexagona
 
 ### Pipeline Stages
 
-```
-┌─────────────┐
-│   Crawlers  │ ──► Kafka (raw_articles, raw_jobs)
-└──────┬──────┘
-       │
-       ▼
-┌─────────────┐
-│Bronze Writer│ ──► MinIO (immutable raw data)
-└──────┬──────┘
-       │
-       ▼
-┌─────────────┐
-│Silver       │ ──► PostgreSQL (dp_processed_*)
-│Processor    │     - Deduplication
-│             │     - Quality scoring
-└──────┬──────┘
-       │
-       ▼
-┌─────────────┐
-│Knowledge    │ ──► Neo4j (Knowledge Graph)
-│Graph Import │     - Nodes: Technology, Company, Job, Skill
-│             │     - Relationships: MENTIONS, REQUIRES, USES
-└──────┬──────┘
-       │
-       ▼
-┌─────────────┐
-│Gold ETL     │ ──► PostgreSQL (tech_analytics)
-│             │     - Aggregated analytics
-│             │     - Trend metrics
-└─────────────┘
-```
+<div align="center">
+
+![TechRadar VN Data Pipeline](docs/images/data-pipeline.png)
+
+*Sources → Crawlers → Kafka → Medallion (Bronze / Silver / Gold) → Neo4j + PostgreSQL → Dashboards & AI*
+
+</div>
+
+> **Ghi chú triển khai:** Bronze lưu raw trên **MinIO**; Silver ghi **PostgreSQL** (`dp_processed_*` — dedup, quality); KG import vào **Neo4j**; Gold ETL tổng hợp **`tech_analytics`** trên PostgreSQL. Chi tiết: [Data Platform](docs/DATA_PLATFORM.md).
 
 ### NLP Processing
 
@@ -370,6 +328,24 @@ Backend được xây dựng với **Spring Boot 3.4** theo mô hình **Hexagona
 
 ---
 
+<a id="graph-rag"></a>
+## 🤖 Graph RAG
+
+Luồng chatbot: entity extraction → hybrid retrieval (graph + vector + SQL) → BGE rerank → context builder → LLM + citations.
+
+<div align="center">
+
+![TechRadar VN Graph RAG](docs/images/graph-rag.png)
+
+*FastAPI ai-rag-core · Neo4j · Qdrant (optional) · PostgreSQL analytics · OpenAI / Gemini*
+
+</div>
+
+> Vector search dùng Neo4j; **Qdrant** là tùy chọn (`--profile vector`). Thêm user context từ `user_profile` khi cá nhân hóa câu trả lời. Chi tiết: [AI Platform](docs/AI_PLATFORM.md).
+
+---
+
+<a id="knowledge-graph"></a>
 ## 🗄 Knowledge Graph
 
 ### Node Types
@@ -401,6 +377,7 @@ Backend được xây dựng với **Spring Boot 3.4** theo mô hình **Hexagona
 
 ---
 
+<a id="tech-stack"></a>
 ## 🛠 Tech Stack
 
 ### Frontend
@@ -464,6 +441,7 @@ Backend được xây dựng với **Spring Boot 3.4** theo mô hình **Hexagona
 
 ---
 
+<a id="cau-truc-du-an"></a>
 ## 📁 Cấu trúc dự án
 
 ```
@@ -480,9 +458,15 @@ TECH-RADAR/
 │   │   │       │   │   ├── graph/
 │   │   │       │   │   ├── chat/
 │   │   │       │   │   ├── clustering/
+│   │   │       │   │   ├── salary/
+│   │   │       │   │   ├── notification/
+│   │   │       │   │   ├── company/
+│   │   │       │   │   ├── job/
+│   │   │       │   │   ├── messaging/
+│   │   │       │   │   ├── social/
+│   │   │       │   │   ├── aiproxy/
 │   │   │       │   │   ├── user/
-│   │   │       │   │   ├── system/
-│   │   │       │   │   ├── health/
+│   │   │       │   │   ├── system/     # settings, admin, health/status
 │   │   │       │   │   └── kafka/
 │   │   │       │   └── shared/         # Shared infrastructure
 │   │   │       └── resources/
@@ -569,6 +553,7 @@ TECH-RADAR/
 
 ---
 
+<a id="bat-dau"></a>
 ## 🚀 Bắt đầu
 
 ### Yêu cầu hệ thống
@@ -593,7 +578,7 @@ Cách nhanh nhất để chạy toàn bộ hệ thống:
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/your-org/tech-radar.git
+git clone https://github.com/dinhhoang0712/tech-radar.git
 cd tech-radar
 
 # 2. Điền environment variables
@@ -693,6 +678,7 @@ Xem `.env.docker.example` cho đầy đủ các biến.
 
 ---
 
+<a id="kiem-thu"></a>
 ## 🧪 Kiểm thử
 
 ### Backend Tests (Spring Boot)
@@ -758,6 +744,7 @@ pytest
 
 ---
 
+<a id="tai-lieu"></a>
 ## 📚 Tài liệu
 
 - **[Documentation Index](docs/README.md)** - Mục lục tài liệu đầy đủ
@@ -772,6 +759,7 @@ pytest
 
 ---
 
+<a id="roadmap"></a>
 ## 🗺 Roadmap
 
 ### Phase 1: Core Features ✅ (Hoàn thành)
@@ -784,33 +772,38 @@ pytest
 - [x] User Management
 - [x] Notifications
 
-### Phase 2: Enhanced Features (Đang phát triển)
+### Phase 2: Enhanced Features ✅ (Hoàn thành)
 
 - [x] Career Assistant
 - [x] Recommendation Engine
-- [x] Personalized Learning Path (roadmap trong Career Assistant)
-- [x] Skill Gap Analysis (skill gap trong Career Assistant)
-- [ ] Job Matching System
+- [x] Personalized Learning Path (trong Career Assistant)
+- [x] Skill Gap Analysis (trong Career Assistant)
+- [x] Job Matching System (Neo4j skill match + alerts)
 - [x] Salary Analytics
+- [x] Company Explorer
+- [x] AI Mock Interview
+- [x] Social Feed (post / like / comment / follow)
+- [x] Direct Messaging (SSE realtime)
 
-### Phase 3: Advanced Features (Lên kế hoạch)
+### Phase 3: Advanced Features (Một phần hoàn thành)
 
-- [ ] Graph Embeddings
-- [ ] Real-time Trend Detection
-- [ ] Multi-source Knowledge Graph
-- [ ] Knowledge Graph Versioning
-- [ ] Graph Analytics Dashboard
-- [x] Mobile App (React Native)
+- [x] Multi-source Knowledge Graph (8 nguồn bài / job VN)
+- [x] Mobile App (Expo / React Native)
 - [x] API Rate Limiting
 - [x] Advanced Monitoring (Prometheus + Grafana + Loki)
+- [ ] Graph Embeddings (đã dùng FastRP/Node2Vec cho clustering — chưa API/product riêng)
+- [ ] Real-time Trend Detection (hiện alert theo threshold MoM qua Kafka ETL)
+- [ ] Knowledge Graph Versioning
+- [ ] Graph Analytics Dashboard (centrality / community UI)
 
-### Phase 4: Enterprise Features (Lên kế hoạch)
+### Phase 4: Enterprise Features (Một phần hoàn thành)
 
-- [ ] SSO Integration (SAML, OAuth2)
-- [ ] RBAC Advanced
-- [x] Audit Logging (activity_log + ActivityTrackingFilter)
-- [ ] Data Export (PDF, Excel)
+- [x] Audit Logging (`activity_log` + `ActivityTrackingFilter`)
 - [x] Custom Reports (report feature + ReportPage)
+- [x] Content Moderation (user report + admin queue)
+- [ ] SSO Integration (SAML, OAuth2)
+- [ ] RBAC Advanced (hiện có USER / ADMIN cơ bản)
+- [ ] Data Export (PDF, Excel) — đã có PNG/CSV trên Radar
 - [ ] Webhooks
 - [ ] API Keys Management
 - [ ] Multi-tenancy
@@ -818,6 +811,7 @@ pytest
 ---
 
 
+<a id="lien-he"></a>
 ## 📞 Liên hệ
 
 - **Website**: https://vuhoang.click
@@ -827,6 +821,7 @@ pytest
 
 ---
 
+<a id="acknowledgments"></a>
 ## 🙏 Acknowledgments
 
 - **OpenAI** - GPT models cho RAG
@@ -838,6 +833,7 @@ pytest
 
 ---
 
+<a id="star-history"></a>
 ## ⭐ Star History
 
 Nếu dự án này hữu ích cho bạn, hãy star nó trên GitHub!

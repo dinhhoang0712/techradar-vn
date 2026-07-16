@@ -26,6 +26,14 @@ const NODE_TYPES = {
     job: { color: '#FF9800', size: 12 },
 };
 
+// Hiệu ứng "sonar ping" quanh node đang được focus (canvas không đọc được biến CSS
+// nên lấy trực tiếp giá trị hex của --primary / --accent trong global.css)
+const PING_COLOR_PRIMARY = '#4f9dff';
+const PING_COLOR_ACCENT = '#9b8cff';
+const PING_PERIOD_MS = 1800;
+const PING_RING_COUNT = 2;
+const PING_MAX_GROWTH = 26;
+
 export default function GraphExplorer() {
     const context = useAppContext();
     const settings = context?.settings;
@@ -319,6 +327,23 @@ export default function GraphExplorer() {
 
         ctx.shadowBlur = 0;
 
+        // Sonar ping: vòng tròn lan tỏa liên tục quanh node đang được focus
+        if (isCenter) {
+            ctx.save();
+            const cyclePos = (Date.now() % PING_PERIOD_MS) / PING_PERIOD_MS;
+            for (let i = 0; i < PING_RING_COUNT; i++) {
+                const progress = (cyclePos + i / PING_RING_COUNT) % 1;
+                const ringRadius = r + progress * PING_MAX_GROWTH;
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, ringRadius, 0, 2 * Math.PI);
+                ctx.lineWidth = 1.5 / globalScale;
+                ctx.strokeStyle = i % 2 === 0 ? PING_COLOR_PRIMARY : PING_COLOR_ACCENT;
+                ctx.globalAlpha = (1 - progress) * 0.6;
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+
         if (globalScale >= 0.8) {
             ctx.font = `600 ${Math.min(14 / globalScale, 12)}px Inter, sans-serif`;
             ctx.fillStyle = '#E8EAF6';
@@ -437,6 +462,10 @@ export default function GraphExplorer() {
 
     return (
         <div className="graph-page">
+            <div className="graph-page-header">
+                <h1 className="graph-title">Bản đồ <span className="graph-title-accent">Công nghệ</span></h1>
+                <p className="graph-subtitle">Khám phá mối liên hệ giữa công nghệ, công ty, kỹ năng và vị trí qua đồ thị tri thức.</p>
+            </div>
             <div className="graph-search-bar card">
                 <div className="feature-switcher-tabs">
                     <button className={`feat-tab${activeFeature === 'explore' ? ' active' : ''}`} onClick={() => toggleFeature('explore')}>Khám phá</button>
@@ -633,10 +662,16 @@ export default function GraphExplorer() {
                     </>
                 ) : (
                 <div className="graph-canvas-wrapper">
-                    {loading && <div style={{ position: 'absolute', top: 20, left: 20, zIndex: 10, color: 'var(--text)' }}>Đang tải đồ thị...</div>}
+                    {loading && (
+                        <div className="graph-loading-overlay">
+                            <div className="loading-spinner"></div>
+                            <span>Đang tải đồ thị...</span>
+                        </div>
+                    )}
                     <ForceGraph2D
                         ref={fgRef}
                         graphData={graphData}
+                        autoPauseRedraw={false}
                         nodeCanvasObject={paintNode}
                         nodeCanvasObjectMode={() => 'replace'}
                         onNodeClick={handleNodeClick}

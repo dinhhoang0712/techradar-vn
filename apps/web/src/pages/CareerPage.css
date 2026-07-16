@@ -191,30 +191,59 @@
     color: var(--green);
 }
 
-/* Skill gap table */
-.skill-gap-table {
+/* Skill gap vertical timeline */
+.skill-gap-timeline {
     display: flex;
     flex-direction: column;
-    gap: 10px;
     margin-top: 14px;
 }
 
+.skill-gap-timeline-item {
+    display: flex;
+    gap: 14px;
+}
+
+.skill-gap-timeline-rail {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.skill-gap-marker {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--gradient-brand);
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.82rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: var(--shadow-primary);
+}
+
+.skill-gap-connector {
+    width: 2px;
+    flex: 1;
+    min-height: 14px;
+    margin: 4px 0;
+    background: var(--gradient-brand);
+    opacity: 0.35;
+}
+
 .skill-gap-row {
+    flex: 1;
     display: flex;
     align-items: center;
     gap: 14px;
     padding: 12px 14px;
+    margin-bottom: 10px;
     background: var(--surface);
     border-radius: 8px;
     border: 1px solid var(--border);
-}
-
-.skill-gap-priority {
-    color: var(--primary);
-    font-weight: 700;
-    font-size: 0.85rem;
-    width: 28px;
-    flex-shrink: 0;
 }
 
 .skill-gap-info {
@@ -242,20 +271,56 @@
     white-space: nowrap;
 }
 
-/* Roadmap markdown */
+/* Roadmap markdown — headings rendered by the sanitized-markdown injection are styled
+   as connected numbered "milestones" purely via CSS counters, without touching how the
+   content is generated/injected (dangerouslySetInnerHTML stays untouched). */
 .career-roadmap-content {
+    position: relative;
     color: var(--text-2);
     font-size: 0.92rem;
     line-height: 1.75;
     margin-top: 12px;
+    padding-left: 36px;
+    counter-reset: milestone;
+}
+
+.career-roadmap-content::before {
+    content: '';
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: 11px;
+    width: 2px;
+    background: var(--gradient-brand);
+    opacity: 0.35;
 }
 
 .career-roadmap-content h2,
 .career-roadmap-content h3 {
+    position: relative;
     color: var(--text);
     font-size: 1rem;
     font-weight: 600;
     margin: 16px 0 6px;
+    counter-increment: milestone;
+}
+
+.career-roadmap-content h2::before,
+.career-roadmap-content h3::before {
+    content: counter(milestone);
+    position: absolute;
+    left: -36px;
+    top: 1px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--gradient-brand);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 22px;
+    text-align: center;
+    box-shadow: var(--shadow-primary);
 }
 
 .career-roadmap-content li {

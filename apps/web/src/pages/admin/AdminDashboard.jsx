@@ -11,6 +11,8 @@ import {
     LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
     XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
+import { useToast } from '../../components/common/toastContext';
+import RingGauge from '../../components/common/RingGauge';
 import './AdminDashboard.css';
 
 const TABS = [
@@ -30,9 +32,20 @@ function formatDateTime(iso) {
     return d.toLocaleString('vi-VN');
 }
 
+// Tỷ lệ xử lý thành công = (article + job đã xử lý) / (article + job đã xử lý + lỗi)
+function computePipelineSuccessRate(pipeline) {
+    if (!pipeline) return 0;
+    const processed = (pipeline.articles_processed || 0) + (pipeline.jobs_processed || 0);
+    const failed = (pipeline.articles_failed || 0) + (pipeline.jobs_failed || 0);
+    const total = processed + failed;
+    if (total <= 0) return 100;
+    return (processed / total) * 100;
+}
+
 export default function AdminDashboard() {
     const [activeTab, setActiveTab] = useState('overview');
     const navigate = useNavigate();
+    const notify = useToast();
 
     // --- Tổng quan (existing) ---
     const [stats, setStats] = useState(null);
@@ -109,10 +122,11 @@ export default function AdminDashboard() {
             setSocial(res?.data || null);
         } catch (err) {
             console.error('Failed to load social dashboard:', err);
+            notify({ title: 'Không tải được dữ liệu Cộng đồng', body: 'Vui lòng thử lại.', variant: 'error' });
         } finally {
             setSocialLoading(false);
         }
-    }, []);
+    }, [notify]);
 
     const loadJobs = useCallback(async () => {
         try {
@@ -121,10 +135,11 @@ export default function AdminDashboard() {
             setJobs(res?.data || null);
         } catch (err) {
             console.error('Failed to load job market dashboard:', err);
+            notify({ title: 'Không tải được dữ liệu Việc làm & Công nghệ', body: 'Vui lòng thử lại.', variant: 'error' });
         } finally {
             setJobsLoading(false);
         }
-    }, []);
+    }, [notify]);
 
     const loadPipeline = useCallback(async () => {
         try {
@@ -133,10 +148,11 @@ export default function AdminDashboard() {
             setPipeline(res?.data || null);
         } catch (err) {
             console.error('Failed to load pipeline dashboard:', err);
+            notify({ title: 'Không tải được dữ liệu Kafka Pipeline', body: 'Vui lòng thử lại.', variant: 'error' });
         } finally {
             setPipelineLoading(false);
         }
-    }, []);
+    }, [notify]);
 
     const loadMessaging = useCallback(async () => {
         try {
@@ -145,10 +161,11 @@ export default function AdminDashboard() {
             setMessaging(res?.data || null);
         } catch (err) {
             console.error('Failed to load messaging dashboard:', err);
+            notify({ title: 'Không tải được dữ liệu Tin nhắn & Thông báo', body: 'Vui lòng thử lại.', variant: 'error' });
         } finally {
             setMessagingLoading(false);
         }
-    }, []);
+    }, [notify]);
 
     if (loading) {
         return (
@@ -174,6 +191,8 @@ export default function AdminDashboard() {
     }
 
     if (!stats) return null;
+
+    const pipelineSuccessRate = pipeline ? computePipelineSuccessRate(pipeline) : 0;
 
     return (
         <div className="admin-dashboard">
@@ -341,7 +360,13 @@ export default function AdminDashboard() {
                     {pipeline && (
                         <>
                             <div className={`pipeline-banner ${pipeline.last_failure_at ? 'warning' : 'healthy'}`}>
-                                <span className="pipeline-banner-icon">{pipeline.last_failure_at ? '⚠️' : '✅'}</span>
+                                <RingGauge
+                                    percent={pipelineSuccessRate}
+                                    size={44}
+                                    strokeWidth={4}
+                                    label={`${Math.round(pipelineSuccessRate)}%`}
+                                    className="pipeline-banner-gauge"
+                                />
                                 <div>
                                     <strong>{pipeline.last_failure_at ? 'Có lỗi đồng bộ gần đây' : 'Pipeline đang hoạt động ổn định'}</strong>
                                     {pipeline.last_failure_at && (

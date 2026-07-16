@@ -2,9 +2,11 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import { getClusters, getClusterById, getClusterByTech } from '../api/clusterService';
 import { CHART_PALETTE as COLORS } from '../utils/chartPalette';
+import { useToast } from '../components/common/toastContext';
 import './ClusterDashboard.css';
 
 export default function ClusterDashboard() {
+    const notify = useToast();
     const fgRef = useRef();
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedClusterId, setSelectedClusterId] = useState(null);
@@ -51,12 +53,13 @@ export default function ClusterDashboard() {
                 setSelectedClusterDetail(data);
             } catch (err) {
                 console.error("Error fetching cluster detail:", err);
+                notify({ title: 'Không tải được chi tiết cụm', body: 'Vui lòng thử lại.', variant: 'error' });
             } finally {
                 setDetailLoading(false);
             }
         };
         fetchDetail();
-    }, [selectedClusterId]);
+    }, [selectedClusterId, notify]);
 
     // --- Lọc danh sách cụm cho Màn hình Grid (khi chưa chọn cụm nào) ---
     const filteredClusters = useMemo(() => {
@@ -262,30 +265,66 @@ export default function ClusterDashboard() {
 
             {/* MÀN HÌNH 1: LƯỚI TỔNG QUAN */}
             {loading ? (
-                <div style={{ textAlign: 'center', padding: '60px', color: 'var(--text-3)' }}>Đang tải dữ liệu cụm...</div>
+                <div className="cluster-grid">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                        <div className="cluster-grid-item cluster-grid-item-skeleton" key={i}>
+                            <div className="skeleton cluster-skel-badge" />
+                            <div className="skeleton cluster-skel-title" />
+                            <div className="skeleton cluster-skel-line" />
+                            <div className="skeleton cluster-skel-line" style={{ width: '80%' }} />
+                            <div className="cluster-stats">
+                                <div className="skeleton cluster-skel-stat" />
+                                <div className="skeleton cluster-skel-stat" />
+                            </div>
+                        </div>
+                    ))}
+                </div>
             ) : error ? (
                 <div style={{ textAlign: 'center', padding: '60px', color: 'var(--danger-light)' }}>Lỗi: {error}</div>
             ) : selectedClusterId === null ? (
                 <div className="cluster-grid">
-                    {filteredClusters.map(cluster => (
-                        <button
-                            type="button"
-                            key={cluster.cluster_id}
-                            className="cluster-grid-item"
-                            onClick={() => setSelectedClusterId(cluster.cluster_id)}
-                            style={{ borderTop: `4px solid ${COLORS[cluster.cluster_id % COLORS.length]}` }}
-                        >
-                            <span className="cluster-domain-badge" style={{ background: COLORS[cluster.cluster_id % COLORS.length] + '22', color: COLORS[cluster.cluster_id % COLORS.length] }}>
-                                {cluster.domain}
-                            </span>
-                            <h3>{cluster.label}</h3>
-                            <p className="cluster-desc-short">{cluster.description}</p>
-                            <div className="cluster-stats">
-                                <span><strong>{cluster.n_members || cluster.member_count || 0}</strong> công nghệ</span>
-                                <span>Tin cậy: <strong>{cluster.confidence ? Math.round(cluster.confidence * 100) : 0}%</strong></span>
-                            </div>
-                        </button>
-                    ))}
+                    {filteredClusters.map(cluster => {
+                        const color = COLORS[cluster.cluster_id % COLORS.length];
+                        const orbitCount = 3 + (cluster.cluster_id % 4); // 3-6 vệ tinh, đổi theo từng cụm cho sinh động
+                        const orbitRadius = 16;
+                        return (
+                            <button
+                                type="button"
+                                key={cluster.cluster_id}
+                                className="cluster-grid-item"
+                                onClick={() => setSelectedClusterId(cluster.cluster_id)}
+                                style={{ borderTop: `4px solid ${color}` }}
+                            >
+                                <div className="cluster-orbit-preview" aria-hidden="true">
+                                    <div className="cluster-orbit-ring">
+                                        {Array.from({ length: orbitCount }).map((_, i) => {
+                                            const angle = (360 / orbitCount) * i;
+                                            return (
+                                                <span
+                                                    key={i}
+                                                    className="cluster-orbit-dot"
+                                                    style={{
+                                                        background: color,
+                                                        transform: `rotate(${angle}deg) translate(${orbitRadius}px) rotate(-${angle}deg)`,
+                                                    }}
+                                                />
+                                            );
+                                        })}
+                                    </div>
+                                    <span className="cluster-orbit-center" style={{ background: color, boxShadow: `0 0 8px ${color}` }} />
+                                </div>
+                                <span className="cluster-domain-badge" style={{ background: color + '22', color }}>
+                                    {cluster.domain}
+                                </span>
+                                <h3>{cluster.label}</h3>
+                                <p className="cluster-desc-short">{cluster.description}</p>
+                                <div className="cluster-stats">
+                                    <span><strong>{cluster.n_members || cluster.member_count || 0}</strong> công nghệ</span>
+                                    <span>Tin cậy: <strong>{cluster.confidence ? Math.round(cluster.confidence * 100) : 0}%</strong></span>
+                                </div>
+                            </button>
+                        );
+                    })}
                     {filteredClusters.length === 0 && (
                         <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '60px', color: 'var(--text-3)' }}>
                             <p>Không tìm thấy cụm nào phù hợp.</p>

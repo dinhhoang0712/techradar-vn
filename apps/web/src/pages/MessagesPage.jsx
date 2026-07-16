@@ -95,9 +95,22 @@ export default function MessagesPage() {
             <div className="messages-sidebar card">
                 <h2 className="section-title">Tin nhắn</h2>
                 {conversationsLoading ? (
-                    <div className="messages-state">Đang tải cuộc trò chuyện...</div>
+                    <div className="conv-list">
+                        {[0, 1, 2, 3].map((i) => (
+                            <div className="conv-row-skeleton" key={i}>
+                                <div className="skeleton conv-row-skeleton-avatar" />
+                                <div className="conv-row-skeleton-lines">
+                                    <div className="skeleton conv-row-skeleton-line" style={{ width: '55%' }} />
+                                    <div className="skeleton conv-row-skeleton-line" style={{ width: '82%' }} />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 ) : conversations.length === 0 ? (
-                    <div className="messages-state">Chưa có cuộc trò chuyện nào.</div>
+                    <div className="messages-state">
+                        <span className="messages-empty-icon" aria-hidden="true">💬</span>
+                        Chưa có cuộc trò chuyện nào.
+                    </div>
                 ) : (
                     <div className="conv-list">
                         {conversations.map((c) => (

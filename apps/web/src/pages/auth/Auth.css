@@ -203,14 +203,19 @@
     z-index: 2;
 }
 
-/* Abstract geometry background */
+/* Abstract geometry background — concentric circles tinted with a low-opacity
+   gradient stroke (masked to a thin ring so the fill stays hollow) instead of
+   the previous flat --border outline. */
 .auth-right::before {
     content: '';
     position: absolute;
     width: 600px;
     height: 600px;
-    border: 1px solid var(--border);
     border-radius: 50%;
+    background: var(--gradient-brand);
+    opacity: 0.16;
+    -webkit-mask: radial-gradient(circle, transparent calc(100% - 1.5px), #000 calc(100% - 1.5px));
+    mask: radial-gradient(circle, transparent calc(100% - 1.5px), #000 calc(100% - 1.5px));
     top: -200px;
     right: -200px;
     z-index: 1;
@@ -221,9 +226,74 @@
     position: absolute;
     width: 800px;
     height: 800px;
-    border: 1px solid var(--border);
     border-radius: 50%;
+    background: var(--gradient-brand);
+    opacity: 0.12;
+    -webkit-mask: radial-gradient(circle, transparent calc(100% - 1.5px), #000 calc(100% - 1.5px));
+    mask: radial-gradient(circle, transparent calc(100% - 1.5px), #000 calc(100% - 1.5px));
     bottom: -300px;
     left: -300px;
     z-index: 1;
+}
+
+/* Small orbit dots slowly rotating around the concentric circles, adapted
+   from ClusterDashboard's .cluster-orbit-preview pattern at panel scale. */
+.auth-orbit-decor {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 280px;
+    height: 280px;
+    margin: -140px 0 0 -140px;
+    z-index: 1;
+    pointer-events: none;
+    opacity: 0.8;
+}
+
+.auth-orbit-ring {
+    position: absolute;
+    inset: 0;
+    animation: orbit-spin 22s linear infinite;
+}
+
+.auth-orbit-dot {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 6px;
+    height: 6px;
+    margin: -3px;
+    border-radius: 50%;
+    box-shadow: 0 0 8px currentColor;
+}
+
+@keyframes orbit-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .auth-orbit-ring {
+        animation: none;
+    }
+}
+
+/* ─── Stat chips ──────────────────────────────────────────────────── */
+.auth-stats-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 22px;
+    z-index: 2;
+}
+
+.auth-stat-chip {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 6px 14px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-2);
 }

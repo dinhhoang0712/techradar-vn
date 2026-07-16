@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { createChatSession, streamChatMessage, getChatHistory, getChatSessions, deleteChatSession } from '../api/chatService';
 import { runAgent } from '../api/agentService';
 import { useAppContext } from '../contexts/appContextStore';
+import { useToast } from '../components/common/toastContext';
 import MaintenancePage from './MaintenancePage';
 import MaintenanceOverlay from '../components/common/MaintenanceOverlay';
 import Modal from '../components/common/Modal';
@@ -133,6 +134,7 @@ export default function ChatbotPage() {
     const context = useAppContext();
     const settings = context?.settings;
     const navigate = useNavigate();
+    const notify = useToast();
 
     const [sessionId,    setSessionId]    = useState(null);
     const [sessionError, setSessionError] = useState(false);
@@ -261,6 +263,7 @@ export default function ChatbotPage() {
             await deleteChatSession(sid);
         } catch (err) {
             console.warn('[chat] deleteChatSession failed', err);
+            notify({ title: 'Xoá cuộc trò chuyện thất bại', body: 'Có thể cuộc trò chuyện vẫn còn trên máy chủ.', variant: 'error' });
         }
     };
 
@@ -477,6 +480,10 @@ export default function ChatbotPage() {
                             </svg>
                             <span className="hide-mobile">{showHistory ? 'Ẩn lịch sử' : 'Lịch sử'}</span>
                         </button>
+                        <span className="chat-logo-ping" aria-hidden="true">
+                            <span className="chat-ping-ring"></span>
+                            <span className="chat-ping-dot"></span>
+                        </span>
                         <span className="chat-header-title">Tech Radar AI</span>
                     </div>
                     {sessionError && (
@@ -550,7 +557,9 @@ export default function ChatbotPage() {
                         )}
                         {messages.map(msg => (
                             <div key={msg.id} className={`chat-bubble-wrap ${msg.role}`}>
-                                {msg.role === 'bot' && <div className="bot-avatar text-avatar">AI</div>}
+                                {msg.role === 'bot' && (
+                                    <div className={`bot-avatar text-avatar gradient-ring${msg.streaming ? ' active' : ''}`}>AI</div>
+                                )}
                                 <div className={`chat-bubble ${msg.role}`}>
                                     <div className="bubble-content">
                                         {msg.agentThinking && msg.streaming ? (

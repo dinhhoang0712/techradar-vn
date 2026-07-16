@@ -69,10 +69,20 @@
     width: 100%;
 }
 
+.company-card-identity {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
 .company-card-name {
     font-weight: 600;
     color: var(--text);
     font-size: 0.95rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .company-card-jobs {
@@ -90,6 +100,44 @@
     color: var(--text-3);
     font-size: 0.9rem;
     grid-column: 1 / -1;
+}
+
+/* --- Skeleton loading cho lưới công ty --- */
+.company-card-skeleton {
+    cursor: default;
+    gap: 10px;
+}
+
+.company-card-skeleton:hover {
+    transform: none;
+}
+
+.company-skel-logo {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-sm);
+    flex-shrink: 0;
+}
+
+.company-skel-name {
+    width: 110px;
+    height: 16px;
+}
+
+.company-skel-jobs {
+    width: 44px;
+    height: 12px;
+}
+
+.company-skel-location {
+    width: 80px;
+    height: 12px;
+}
+
+.company-skel-chip {
+    width: 56px;
+    height: 22px;
+    border-radius: 20px;
 }
 
 /* Detail panel */
@@ -110,6 +158,13 @@
     justify-content: space-between;
     gap: 10px;
     margin-bottom: 14px;
+}
+
+.company-detail-identity {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 0;
 }
 
 .company-detail-title {
@@ -138,6 +193,7 @@
 
 .similar-company-row {
     display: flex;
+    align-items: flex-start;
     gap: 12px;
     padding: 12px;
     background: var(--surface);
@@ -145,16 +201,9 @@
     border: 1px solid var(--border);
 }
 
-.similar-company-score {
-    background: var(--primary-glow);
-    border: 1px solid var(--primary);
-    border-radius: 20px;
-    color: var(--primary-light);
-    font-size: 0.8rem;
-    font-weight: 700;
-    padding: 3px 10px;
-    white-space: nowrap;
-    height: fit-content;
+.similar-company-row .ring-gauge {
+    flex-shrink: 0;
+    margin-top: 2px;
 }
 
 .similar-company-info {
@@ -165,10 +214,20 @@
     min-width: 0;
 }
 
+.similar-company-identity {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
 .similar-company-name {
     font-weight: 600;
     color: var(--text);
     font-size: 0.88rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .similar-company-location {

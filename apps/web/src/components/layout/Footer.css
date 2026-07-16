@@ -18,6 +18,7 @@
 .footer-brand {
     flex: 0 0 auto;
     max-width: 220px;
+    position: relative;
 }
 
 .footer-logo {
@@ -26,6 +27,60 @@
     color: var(--primary-light);
     display: block;
     margin-bottom: 10px;
+}
+
+/* "Radar" gradient-clipped, mirroring Header's .logo-accent / AdminSidebar's
+   .brand-name so the wordmark reads consistently everywhere it appears. */
+.footer-logo-accent {
+    background: var(--gradient-brand);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    color: transparent;
+}
+
+/* Small orbiting accent dots near the brand block, adapted from
+   ClusterDashboard's .cluster-orbit-preview pattern at a smaller scale. */
+.footer-orbit-decor {
+    position: absolute;
+    top: -8px;
+    right: -22px;
+    width: 30px;
+    height: 30px;
+    pointer-events: none;
+    opacity: 0.75;
+    animation: orbit-spin 18s linear infinite;
+}
+
+.footer-orbit-dot {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 4px;
+    height: 4px;
+    margin: -2px;
+    border-radius: 50%;
+}
+
+.footer-orbit-dot-1 { background: var(--primary); transform: rotate(0deg) translate(13px) rotate(0deg); }
+.footer-orbit-dot-2 { background: var(--accent); transform: rotate(130deg) translate(13px) rotate(0deg); }
+.footer-orbit-dot-3 { background: var(--primary-light); transform: rotate(250deg) translate(13px) rotate(0deg); }
+
+@keyframes orbit-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .footer-orbit-decor {
+        animation: none;
+    }
+}
+
+@media (max-width: 768px) {
+    .footer-orbit-decor {
+        display: none;
+    }
 }
 
 .footer-tagline {

@@ -7,7 +7,12 @@ export default function Footer() {
         <footer className="site-footer">
             <div className="footer-inner">
                 <div className="footer-brand">
-                    <span className="footer-logo">TechRadar</span>
+                    <span className="footer-orbit-decor" aria-hidden="true">
+                        <span className="footer-orbit-dot footer-orbit-dot-1" />
+                        <span className="footer-orbit-dot footer-orbit-dot-2" />
+                        <span className="footer-orbit-dot footer-orbit-dot-3" />
+                    </span>
+                    <span className="footer-logo">Tech<span className="footer-logo-accent">Radar</span></span>
                     <p className="footer-tagline">Theo dõi xu hướng công nghệ thông minh</p>
                 </div>
 

@@ -57,6 +57,11 @@ export default function ReportPage() {
         URL.revokeObjectURL(url);
     };
 
+    // Giá trị lớn nhất trong danh sách hiện tại, dùng để scale thanh sparkbar theo tỉ lệ tương đối.
+    const topTechs = result?.top_techs || [];
+    const maxJobCount = Math.max(1, ...topTechs.map(t => t.job_count || 0));
+    const maxAbsGrowth = Math.max(1, ...topTechs.map(t => Math.abs(t.growth_rate || 0)));
+
     return (
         <div className="report-page">
             <div className="report-hero">
@@ -154,11 +159,27 @@ export default function ReportPage() {
                                         <span className="rank">#{i + 1}</span>
                                         <span className="tech-name">{t.name}</span>
                                         <span className="cluster-label">{t.cluster_label || '—'}</span>
-                                        <span className="job-count">{t.job_count?.toLocaleString() || '—'}</span>
+                                        <span className="job-count">
+                                            <span className="cell-value">{t.job_count?.toLocaleString() || '—'}</span>
+                                            <span className="sparkbar-track">
+                                                <span
+                                                    className="sparkbar-fill"
+                                                    style={{ width: `${(t.job_count || 0) / maxJobCount * 100}%` }}
+                                                />
+                                            </span>
+                                        </span>
                                         <span className={`growth-rate ${(t.growth_rate ?? 0) >= 0 ? 'up' : 'down'}`}>
-                                            {t.growth_rate != null
-                                                ? `${t.growth_rate >= 0 ? '+' : ''}${Number(t.growth_rate).toFixed(1)}%`
-                                                : '—'}
+                                            <span className="cell-value">
+                                                {t.growth_rate != null
+                                                    ? `${t.growth_rate >= 0 ? '+' : ''}${Number(t.growth_rate).toFixed(1)}%`
+                                                    : '—'}
+                                            </span>
+                                            <span className="sparkbar-track">
+                                                <span
+                                                    className={`sparkbar-fill growth ${(t.growth_rate ?? 0) >= 0 ? 'up' : 'down'}`}
+                                                    style={{ width: `${Math.abs(t.growth_rate || 0) / maxAbsGrowth * 100}%` }}
+                                                />
+                                            </span>
                                         </span>
                                     </div>
                                 ))}
@@ -168,7 +189,7 @@ export default function ReportPage() {
 
                     {/* Markdown report */}
                     {result.report && (
-                        <div className="card report-content-card">
+                        <div className="card report-content-card report-generated-doc">
                             <div className="report-content-header">
                                 <h2 className="section-title">Nội dung báo cáo</h2>
                                 {result.generated_at && (

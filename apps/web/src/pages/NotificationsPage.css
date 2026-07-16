@@ -57,6 +57,11 @@
     background: var(--primary-glow);
 }
 
+.notifpage-item--skeleton {
+    cursor: default;
+    pointer-events: none;
+}
+
 .notifpage-item-icon {
     flex: 0 0 auto;
     display: flex;
@@ -73,6 +78,20 @@
 .notifpage-item-body {
     min-width: 0;
     flex: 1;
+}
+
+.notifpage-skel-line {
+    height: 12px;
+    border-radius: var(--radius-sm);
+}
+
+.notifpage-skel-line--title {
+    width: 55%;
+    margin-bottom: 8px;
+}
+
+.notifpage-skel-line--text {
+    width: 82%;
 }
 
 .notifpage-item-title {

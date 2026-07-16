@@ -106,10 +106,22 @@ export default function RegisterPage() {
             </div>
 
             <div className="auth-right">
+                <div className="auth-orbit-decor" aria-hidden="true">
+                    <div className="auth-orbit-ring">
+                        <span className="auth-orbit-dot" style={{ color: 'var(--primary)', background: 'var(--primary)', transform: 'rotate(0deg) translate(140px) rotate(0deg)' }} />
+                        <span className="auth-orbit-dot" style={{ color: 'var(--accent)', background: 'var(--accent)', transform: 'rotate(140deg) translate(140px) rotate(0deg)' }} />
+                        <span className="auth-orbit-dot" style={{ color: 'var(--primary-light)', background: 'var(--primary-light)', transform: 'rotate(255deg) translate(140px) rotate(0deg)' }} />
+                    </div>
+                </div>
                 <h2 className="auth-artwork-title">Bứt phá <br/>Mọi Giới Hạn</h2>
                 <p className="auth-artwork-subtitle">
                     Gia nhập cộng đồng người dùng TechRadar để tiếp cận các dữ liệu tuyển dụng và báo cáo chi tiết nhất.
                 </p>
+                <div className="auth-stats-row">
+                    <span className="auth-stat-chip">500+ công ty</span>
+                    <span className="auth-stat-chip">10k+ báo cáo</span>
+                    <span className="auth-stat-chip">1000+ tin tuyển dụng</span>
+                </div>
             </div>
         </div>
     );

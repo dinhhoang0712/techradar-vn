@@ -105,7 +105,7 @@ export default function PublicProfilePage() {
     return (
         <div className="public-profile-page">
             <div className="card public-profile-header">
-                <Avatar user={profile} size={72} />
+                <Avatar user={profile} size={72} ring />
 
                 <div className="public-profile-info">
                     <div className="public-profile-name-row">
@@ -143,9 +143,18 @@ export default function PublicProfilePage() {
                     {profile.bio && <p className="public-profile-bio">{profile.bio}</p>}
 
                     <div className="public-profile-stats">
-                        <span><strong>{profile.post_count}</strong> bài viết</span>
-                        <span><strong>{profile.follower_count}</strong> người theo dõi</span>
-                        <span><strong>{profile.following_count}</strong> đang theo dõi</span>
+                        <div className="public-profile-stat-chip">
+                            <span className="public-profile-stat-value">{profile.post_count}</span>
+                            <span className="public-profile-stat-label">bài viết</span>
+                        </div>
+                        <div className="public-profile-stat-chip">
+                            <span className="public-profile-stat-value">{profile.follower_count}</span>
+                            <span className="public-profile-stat-label">người theo dõi</span>
+                        </div>
+                        <div className="public-profile-stat-chip">
+                            <span className="public-profile-stat-value">{profile.following_count}</span>
+                            <span className="public-profile-stat-label">đang theo dõi</span>
+                        </div>
                     </div>
                 </div>
             </div>

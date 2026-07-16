@@ -52,10 +52,11 @@
 .brand-name {
     font-weight: 800;
     font-size: 1rem;
-    background: linear-gradient(135deg, var(--primary-light), var(--accent-light));
+    background: var(--gradient-brand);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+    color: transparent;
 }
 
 .collapse-btn {

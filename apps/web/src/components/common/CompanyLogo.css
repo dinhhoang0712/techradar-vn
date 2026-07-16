@@ -1,0 +1,16 @@
+.company-logo-img {
+    border-radius: var(--radius-sm);
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.company-logo-fallback {
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: rgba(6, 8, 16, 0.85);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}

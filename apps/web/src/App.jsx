@@ -26,6 +26,7 @@ import PublicProfilePage from './pages/PublicProfilePage';
 import MessagesPage from './pages/MessagesPage';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
+import NotFoundPage from './pages/NotFoundPage';
 import './styles/global.css';
 
 export default function App() {
@@ -68,8 +69,8 @@ export default function App() {
             <Route path="settings" element={<AdminSettings />} />
           </Route>
 
-          {/* Catch-all: Điều hướng các route không tồn tại về trang chủ */}
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          {/* Catch-all: Hiển thị trang 404 cho các route không tồn tại */}
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
     </BrowserRouter>
     </ToastProvider>

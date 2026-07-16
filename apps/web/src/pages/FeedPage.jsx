@@ -58,6 +58,7 @@ export default function FeedPage() {
     const [loadingMore, setLoadingMore] = useState(false);
     const [suggested, setSuggested] = useState([]);
     const [suggestedLoading, setSuggestedLoading] = useState(true);
+    const [composerFocused, setComposerFocused] = useState(false);
     const notify = useToast();
 
     useEffect(() => {
@@ -147,13 +148,15 @@ export default function FeedPage() {
     return (
         <div className="feed-page">
             <div className="feed-main">
-                <div className="card feed-composer">
+                <div className={`card feed-composer${composerFocused ? ' is-focused' : ''}`}>
                     <form onSubmit={handlePost}>
                         <textarea
                             className="form-input feed-composer-input"
                             placeholder="Bạn đang nghĩ gì về công nghệ hôm nay?"
                             value={content}
                             onChange={(e) => setContent(e.target.value)}
+                            onFocus={() => setComposerFocused(true)}
+                            onBlur={() => setComposerFocused(false)}
                             maxLength={2000}
                             rows={3}
                             disabled={posting}
@@ -168,7 +171,21 @@ export default function FeedPage() {
                 </div>
 
                 {loading ? (
-                    <div className="feed-state">Đang tải bảng tin...</div>
+                    <div className="feed-list">
+                        {[0, 1, 2].map((i) => (
+                            <div className="card post-skeleton" key={i}>
+                                <div className="post-skeleton-header">
+                                    <div className="skeleton post-skeleton-avatar" />
+                                    <div className="post-skeleton-lines">
+                                        <div className="skeleton post-skeleton-line" style={{ width: '35%' }} />
+                                        <div className="skeleton post-skeleton-line" style={{ width: '20%' }} />
+                                    </div>
+                                </div>
+                                <div className="skeleton post-skeleton-line" style={{ width: '92%', height: 12 }} />
+                                <div className="skeleton post-skeleton-line" style={{ width: '68%', height: 12 }} />
+                            </div>
+                        ))}
+                    </div>
                 ) : error ? (
                     <div className="feed-state">
                         <span>Không tải được bảng tin.</span>
@@ -176,6 +193,7 @@ export default function FeedPage() {
                     </div>
                 ) : posts.length === 0 ? (
                     <div className="feed-state">
+                        <span className="feed-empty-icon" aria-hidden="true">📰</span>
                         Chưa có bài viết nào. Theo dõi thêm người dùng ở bên phải hoặc tự đăng bài đầu tiên!
                     </div>
                 ) : (

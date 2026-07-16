@@ -66,7 +66,7 @@
     color: var(--text);
 }
 
-.pipeline-banner-icon { font-size: 1.4rem; line-height: 1; }
+.pipeline-banner-gauge { flex-shrink: 0; }
 .pipeline-banner p { margin: 6px 0 0; color: var(--text-2); }
 
 .pipeline-timestamps {
@@ -94,6 +94,7 @@
 }
 
 .stat-card {
+    position: relative;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -101,6 +102,16 @@
     text-align: center;
     box-shadow: var(--shadow-sm);
     transition: transform var(--t), border-color var(--t);
+    overflow: hidden;
+}
+.stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--gradient-brand);
 }
 .stat-card:hover {
     transform: translateY(-4px);

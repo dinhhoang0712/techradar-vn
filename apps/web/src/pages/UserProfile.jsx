@@ -169,26 +169,28 @@ export default function UserProfile() {
                     <div className="profile-card">
                         {/* Avatar section */}
                         <div className="profile-avatar-section">
-                            <div className="profile-avatar">
-                                {profile.avatar_url ? (
-                                    <img src={profile.avatar_url} alt="Avatar" className="profile-avatar-img" />
-                                ) : (
-                                    <div className="profile-avatar-icon">
-                                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                                            <circle cx="12" cy="7" r="4"></circle>
-                                        </svg>
-                                    </div>
-                                )}
-                                <label className="profile-avatar-edit" title="Đổi ảnh đại diện">
-                                    📷
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        style={{ display: 'none' }}
-                                        onChange={handleAvatarChange}
-                                    />
-                                </label>
+                            <div className="profile-avatar-ring gradient-ring active">
+                                <div className="profile-avatar">
+                                    {profile.avatar_url ? (
+                                        <img src={profile.avatar_url} alt="Avatar" className="profile-avatar-img" />
+                                    ) : (
+                                        <div className="profile-avatar-icon">
+                                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                                <circle cx="12" cy="7" r="4"></circle>
+                                            </svg>
+                                        </div>
+                                    )}
+                                    <label className="profile-avatar-edit" title="Đổi ảnh đại diện">
+                                        📷
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            style={{ display: 'none' }}
+                                            onChange={handleAvatarChange}
+                                        />
+                                    </label>
+                                </div>
                             </div>
                             <div className="profile-identity">
                                 <h2 className="profile-name">{profile.full_name || 'Người dùng'}</h2>

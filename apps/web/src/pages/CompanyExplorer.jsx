@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { getCompanies, getSimilarCompanies } from '../api/companyService';
+import CompanyLogo from '../components/common/CompanyLogo';
+import RingGauge from '../components/common/RingGauge';
 import './CompanyExplorer.css';
 
 function SimilarPanel({ company, onClose }) {
@@ -16,9 +18,12 @@ function SimilarPanel({ company, onClose }) {
     return (
         <div className="company-detail-panel">
             <div className="company-detail-header">
-                <div>
-                    <h3 className="company-detail-title">{company.name}</h3>
-                    <p className="company-detail-sub">{company.location || 'Chưa rõ địa điểm'} · {company.job_count} tin tuyển dụng</p>
+                <div className="company-detail-identity">
+                    <CompanyLogo name={company.name} size={44} />
+                    <div>
+                        <h3 className="company-detail-title">{company.name}</h3>
+                        <p className="company-detail-sub">{company.location || 'Chưa rõ địa điểm'} · {company.job_count} tin tuyển dụng</p>
+                    </div>
                 </div>
                 <button className="detail-close" onClick={onClose}>✕</button>
             </div>
@@ -39,20 +44,26 @@ function SimilarPanel({ company, onClose }) {
                 <p className="company-empty-hint">Chưa tìm thấy công ty nào có tech stack trùng lặp.</p>
             ) : (
                 <div className="similar-company-list">
-                    {similar.map((s) => (
-                        <div key={s.id} className="similar-company-row">
-                            <div className="similar-company-score">{Math.round(s.score * 100)}%</div>
-                            <div className="similar-company-info">
-                                <span className="similar-company-name">{s.name}</span>
-                                {s.location && <span className="similar-company-location">{s.location}</span>}
-                                <div className="skills-chips">
-                                    {s.shared_techs.map(t => (
-                                        <span key={t} className="skill-chip skill-chip--have">{t}</span>
-                                    ))}
+                    {similar.map((s) => {
+                        const scorePercent = Math.round((s.score || 0) * 100);
+                        return (
+                            <div key={s.id} className="similar-company-row">
+                                <RingGauge percent={scorePercent} size={36} strokeWidth={4} label={scorePercent} />
+                                <div className="similar-company-info">
+                                    <div className="similar-company-identity">
+                                        <CompanyLogo name={s.name} size={44} />
+                                        <span className="similar-company-name">{s.name}</span>
+                                    </div>
+                                    {s.location && <span className="similar-company-location">{s.location}</span>}
+                                    <div className="skills-chips">
+                                        {s.shared_techs.map(t => (
+                                            <span key={t} className="skill-chip skill-chip--have">{t}</span>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
         </div>
@@ -83,9 +94,32 @@ export default function CompanyExplorer() {
     }, [companies, search]);
 
     if (loading) return (
-        <div className="company-explorer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300 }}>
-            <div className="loading-spinner" />
-            <span style={{ color: 'var(--text-2)', marginLeft: 12 }}>Đang phân tích tech stack công ty...</span>
+        <div className="company-explorer">
+            <div className="company-hero">
+                <h1 className="company-title">Công ty & Tech Stack</h1>
+                <p className="company-subtitle">
+                    Tech stack suy ra từ tin tuyển dụng — tìm công ty đang dùng công nghệ bạn quan tâm, hoặc công ty tương tự
+                </p>
+            </div>
+            <div className="company-grid">
+                {Array.from({ length: 8 }).map((_, i) => (
+                    <div className="company-card card company-card-skeleton" key={i}>
+                        <div className="company-card-header">
+                            <div className="company-card-identity">
+                                <div className="skeleton company-skel-logo" />
+                                <div className="skeleton company-skel-name" />
+                            </div>
+                            <div className="skeleton company-skel-jobs" />
+                        </div>
+                        <div className="skeleton company-skel-location" />
+                        <div className="skills-chips">
+                            <div className="skeleton company-skel-chip" />
+                            <div className="skeleton company-skel-chip" />
+                            <div className="skeleton company-skel-chip" />
+                        </div>
+                    </div>
+                ))}
+            </div>
         </div>
     );
 
@@ -126,7 +160,10 @@ export default function CompanyExplorer() {
                             onClick={() => setSelected(selected?.id === c.id ? null : c)}
                         >
                             <div className="company-card-header">
-                                <span className="company-card-name">{c.name}</span>
+                                <div className="company-card-identity">
+                                    <CompanyLogo name={c.name} size={44} />
+                                    <span className="company-card-name">{c.name}</span>
+                                </div>
                                 <span className="company-card-jobs">{c.job_count} tin</span>
                             </div>
                             {c.location && <span className="company-card-location">{c.location}</span>}

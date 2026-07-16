@@ -23,6 +23,21 @@
     border: 1px solid var(--border);
     box-shadow: var(--shadow-lg);
     animation: fadeScaleIn var(--t) ease-out;
+    position: relative;
+}
+
+/* Thin gradient accent on the top edge — rounded to match the box's own
+   border-radius so it stays subtle without needing overflow:hidden on the
+   parent (which would otherwise clip the existing overflow-y:auto scroll). */
+.modal-content::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    border-radius: var(--radius) var(--radius) 0 0;
+    background: var(--gradient-brand);
 }
 
 .modal-title {

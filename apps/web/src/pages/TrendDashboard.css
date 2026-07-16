@@ -4,6 +4,77 @@
     gap: 0;
 }
 
+/* Hero */
+.dashboard-hero {
+    position: relative;
+    margin-bottom: 20px;
+    padding: 4px 0;
+}
+
+.dashboard-title {
+    position: relative;
+    z-index: 1;
+    font-size: 1.9rem;
+    font-weight: 700;
+    color: var(--text);
+    margin: 0 0 6px;
+}
+
+.dashboard-subtitle {
+    position: relative;
+    z-index: 1;
+    color: var(--text-2);
+    font-size: 1rem;
+    margin: 0;
+    max-width: 560px;
+}
+
+/* Radar-sweep decorative motif — purely cosmetic, sits behind the hero text */
+.radar-sweep {
+    position: absolute;
+    top: 50%;
+    right: 0;
+    transform: translateY(-50%);
+    width: 150px;
+    height: 150px;
+    z-index: 0;
+    opacity: 0.22;
+    pointer-events: none;
+}
+
+@media (max-width: 640px) {
+    .radar-sweep {
+        width: 100px;
+        height: 100px;
+        opacity: 0.15;
+    }
+}
+
+.radar-ring {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    border-radius: 50%;
+    border: 1px solid var(--border-2);
+    transform: translate(-50%, -50%);
+}
+
+.radar-ring-1 { width: 34%; height: 34%; }
+.radar-ring-2 { width: 66%; height: 66%; }
+.radar-ring-3 { width: 100%; height: 100%; border-color: var(--border); }
+
+.radar-sweep-beam {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: conic-gradient(from 0deg, var(--primary) 0deg, var(--accent) 18deg, transparent 55deg, transparent 360deg);
+    animation: radar-spin 5s linear infinite;
+}
+
+@keyframes radar-spin {
+    to { transform: rotate(360deg); }
+}
+
 /* Stats row */
 .stats-row {
     display: grid;
@@ -214,6 +285,7 @@
 }
 
 .top10-item {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -228,6 +300,24 @@
 .top10-item:hover {
     border-color: var(--border-2);
     background: var(--surface-2);
+}
+
+/* Rank 1-3 get a brighter radar contact + a subtle brand-gradient edge */
+.top10-item--top {
+    padding-left: 15px;
+    border-color: var(--border-2);
+    background: linear-gradient(90deg, var(--primary-glow) 0%, transparent 55%), var(--bg-2);
+}
+
+.top10-item--top::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 3px;
+    border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+    background: var(--gradient-brand);
 }
 
 .top10-item.hot {
@@ -258,11 +348,52 @@
     font-size: 0.75rem;
 }
 
-.top10-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
+/* Radar blip — small sonar contact standing in for the old flat dot */
+.top10-blip {
+    position: relative;
+    width: 16px;
+    height: 16px;
     flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    --blip-color: var(--primary);
+}
+
+.top10-blip-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--blip-color);
+    box-shadow: 0 0 6px var(--blip-color);
+    z-index: 1;
+}
+
+.top10-blip-ping {
+    position: absolute;
+    inset: 3px;
+    border-radius: 50%;
+    border: 1px solid var(--blip-color);
+    animation: blip-ping 2.4s ease-out infinite;
+}
+
+.top10-blip--top .top10-blip-dot {
+    width: 11px;
+    height: 11px;
+    background: var(--gradient-brand);
+    box-shadow: 0 0 10px var(--primary-glow);
+}
+
+.top10-blip--top .top10-blip-ping {
+    inset: 1px;
+    border-color: var(--primary);
+    animation-duration: 1.8s;
+}
+
+@keyframes blip-ping {
+    0% { transform: scale(0.6); opacity: 0.9; }
+    70% { transform: scale(2.4); opacity: 0; }
+    100% { transform: scale(2.4); opacity: 0; }
 }
 
 .top10-name {

@@ -6,6 +6,33 @@
     padding: 12px;
 }
 
+/* Page title */
+.graph-page-header {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.graph-title {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--text);
+    margin: 0;
+}
+
+.graph-title-accent {
+    background: var(--gradient-brand);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.graph-subtitle {
+    font-size: 0.9rem;
+    color: var(--text-3);
+    margin: 0;
+}
+
 .graph-search-bar {
     width: 100%;
     display: flex;
@@ -372,6 +399,29 @@
 
 .graph-canvas-wrapper canvas {
     display: block;
+}
+
+/* Loading overlay (khi đang fetch dữ liệu đồ thị) */
+.graph-loading-overlay {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(19, 22, 37, 0.88);
+    border: 1px solid var(--border);
+    border-radius: 99px;
+    padding: 6px 14px 6px 10px;
+    font-size: 0.82rem;
+    color: var(--text-2);
+}
+
+.graph-loading-overlay .loading-spinner {
+    width: 16px;
+    height: 16px;
+    border-width: 2px;
 }
 
 /* Node tooltip */

@@ -180,19 +180,24 @@ export default function CareerPage() {
                         {result.skill_gap?.length > 0 && (
                             <div className="card">
                                 <h3 className="section-title">Kỹ năng cần học</h3>
-                                <div className="skill-gap-table">
-                                    {result.skill_gap.map((step) => (
-                                        <div key={step.skill} className="skill-gap-row">
-                                            <div className="skill-gap-priority">#{step.priority}</div>
-                                            <div className="skill-gap-info">
-                                                <span className="skill-gap-name">{step.skill}</span>
-                                                <span className="skill-gap-reason">{step.reason}</span>
+                                <div className="skill-gap-timeline">
+                                    {result.skill_gap.map((step, idx) => (
+                                        <div key={step.skill} className="skill-gap-timeline-item">
+                                            <div className="skill-gap-timeline-rail">
+                                                <div className="skill-gap-marker">{step.priority}</div>
+                                                {idx < result.skill_gap.length - 1 && <div className="skill-gap-connector" />}
                                             </div>
-                                            {step.job_demand != null && (
-                                                <div className="skill-gap-demand">
-                                                    {step.job_demand.toLocaleString()} jobs
+                                            <div className="skill-gap-row">
+                                                <div className="skill-gap-info">
+                                                    <span className="skill-gap-name">{step.skill}</span>
+                                                    <span className="skill-gap-reason">{step.reason}</span>
                                                 </div>
-                                            )}
+                                                {step.job_demand != null && (
+                                                    <div className="skill-gap-demand">
+                                                        {step.job_demand.toLocaleString()} jobs
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -207,12 +212,12 @@ export default function CareerPage() {
                                     dangerouslySetInnerHTML={{
                                         __html: result.roadmap
                                             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-                                            .replace(/\n\n/g, '</p><p>')
-                                            .replace(/\n/g, '<br/>')
                                             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
                                             .replace(/^## (.*)/gm, '<h3>$1</h3>')
                                             .replace(/^# (.*)/gm, '<h2>$1</h2>')
                                             .replace(/^- (.*)/gm, '<li>$1</li>')
+                                            .replace(/\n\n/g, '</p><p>')
+                                            .replace(/\n/g, '<br/>')
                                     }}
                                 />
                             </div>

@@ -193,6 +193,15 @@
     }
 }
 
+/* Avatar ring wrapper: kept separate from .profile-avatar (which clips the image via
+   overflow: hidden) so the gradient ring's pseudo-element isn't clipped along with it. */
+.profile-avatar-ring {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
 /* Avatar upload button */
 .profile-avatar { position: relative; }
 .profile-avatar-edit {

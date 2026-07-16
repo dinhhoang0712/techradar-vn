@@ -4,37 +4,40 @@
 :root {
   --font-base: 'Inter', sans-serif;
 
-  /* Colors */
-  --bg: #000000;
-  --bg-2: #0a0a0a;
-  --surface: #111111;
-  --surface-2: #1a1a1a;
-  --border: #333333;
-  --border-2: #444444;
+  /* Colors — deep navy base with an electric blue → violet brand duo */
+  --bg: #060810;
+  --bg-2: #0b0e1a;
+  --surface: #12162a;
+  --surface-2: #1a2036;
+  --surface-glass: rgba(7, 9, 18, 0.72);
+  --border: #262d47;
+  --border-2: #3a4266;
 
-  --primary: #ffffff;
-  --primary-light: #f0f0f0;
-  --primary-dark: #cccccc;
-  --primary-glow: rgba(255, 255, 255, 0.25);
+  --primary: #4f9dff;
+  --primary-light: #82c0ff;
+  --primary-dark: #2f7ae0;
+  --primary-glow: rgba(79, 157, 255, 0.28);
 
-  --accent: #cccccc;
-  --accent-light: #e0e0e0;
-  --accent-glow: rgba(200, 200, 200, 0.25);
+  --accent: #9b8cff;
+  --accent-light: #bdb2ff;
+  --accent-glow: rgba(155, 140, 255, 0.22);
 
-  --green: #00d68f;
-  --green-light: #00f0a8;
-  --green-glow: rgba(0, 214, 143, 0.2);
+  --gradient-brand: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
 
-  --yellow: #ffc94d;
-  --yellow-glow: rgba(255, 201, 77, 0.2);
+  --green: #22d3a4;
+  --green-light: #55e0bc;
+  --green-glow: rgba(34, 211, 164, 0.2);
 
-  --danger: #e5484d;
-  --danger-light: #ff6b70;
-  --danger-glow: rgba(229, 72, 77, 0.2);
+  --yellow: #f6b93b;
+  --yellow-glow: rgba(246, 185, 59, 0.2);
 
-  --text: #e8eaf6;
-  --text-2: #9fa8c7;
-  --text-3: #5c6494;
+  --danger: #ff5c72;
+  --danger-light: #ff8a97;
+  --danger-glow: rgba(255, 92, 114, 0.2);
+
+  --text: #eef1fb;
+  --text-2: #a8b1d6;
+  --text-3: #6b74a0;
 
   /* Sizing */
   --header-h: 64px;
@@ -45,14 +48,15 @@
   --radius-xl: 24px;
 
   /* Shadows */
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
-  --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0 2px 8px rgba(2, 3, 10, 0.35);
+  --shadow: 0 4px 24px rgba(2, 3, 10, 0.45);
+  --shadow-lg: 0 8px 40px rgba(2, 3, 10, 0.55);
   --shadow-primary: 0 4px 24px var(--primary-glow);
 
   /* Transitions */
   --t: 0.2s ease;
   --t-slow: 0.4s ease;
+  --t-spring: 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
 
   /* Admin Sidebar */
   --sidebar-w: 260px;
@@ -118,6 +122,24 @@ select {
   border-radius: 99px;
 }
 
+/* ─── Accessibility & Motion ─────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* ─── App Layout ─────────────────────────────────────────────────────── */
 .app-layout {
   display: flex;
@@ -148,12 +170,13 @@ select {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 20px;
-  transition: border-color var(--t), box-shadow var(--t);
+  transition: border-color var(--t), box-shadow var(--t), transform var(--t);
 }
 
 .card:hover {
   border-color: var(--border-2);
   box-shadow: var(--shadow);
+  transform: translateY(-2px);
 }
 
 .btn {
@@ -169,13 +192,13 @@ select {
 }
 
 .btn-primary {
-  background: var(--primary);
-  color: #000;
+  background: var(--gradient-brand);
+  color: #06070f;
   box-shadow: var(--shadow-primary);
 }
 
 .btn-primary:hover {
-  background: var(--primary-light);
+  filter: brightness(1.1);
   transform: translateY(-1px);
 }
 
@@ -508,5 +531,65 @@ select {
   }
   100% {
     box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+  }
+}
+
+/* ─── Shared skeleton shimmer (use instead of plain "Đang tải..." text) ── */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  isolation: isolate;
+}
+
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.07), transparent);
+  transform: translateX(-100%);
+  animation: shimmer 1.6s infinite;
+}
+
+@keyframes shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* ─── Shared gradient ring (avatar highlight / "is active" indicator) ──── */
+.gradient-ring {
+  position: relative;
+  /* z-index: 0 forces a new stacking context so the ::before (z-index: -1)
+     stays scoped inside it, instead of leaking behind an ancestor's own
+     background (e.g. a card the avatar sits inside). */
+  z-index: 0;
+}
+
+.gradient-ring::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  background: var(--gradient-brand);
+  z-index: -1;
+  opacity: 0;
+  transition: opacity var(--t);
+}
+
+.gradient-ring.active::before {
+  opacity: 1;
+  animation: ringPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes ringPulse {
+  0%, 100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
   }
 }

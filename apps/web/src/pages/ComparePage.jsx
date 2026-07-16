@@ -7,6 +7,7 @@ import CreatableSelect from 'react-select/creatable';
 import { getCompareSearch, getLlmSummary } from '../api/compareService';
 import { getRadarTop10 } from '../api/trendService';
 import { CHART_PALETTE as PALETTE } from '../utils/chartPalette';
+import { useToast } from '../components/common/toastContext';
 import './ComparePage.css';
 
 // Để chọn tạm các công nghệ
@@ -75,6 +76,7 @@ export default function ComparePage() {
     const [summary, setSummary] = useState('');
     const [summaryLoading, setSummaryLoading] = useState(false);
     const [summaryError, setSummaryError] = useState('');
+    const notify = useToast();
 
     const activeTechIds = selectedTechs.map(t => t.value);
 
@@ -100,10 +102,11 @@ export default function ComparePage() {
                 }
             } catch (e) {
                 console.warn("Could not fetch options", e);
+                notify({ title: 'Không tải được danh sách công nghệ gợi ý', body: 'Vui lòng thử lại.', variant: 'error' });
             }
         };
         fetchOptions();
-    }, []);
+    }, [notify]);
 
     useEffect(() => {
         if (selectedTechs.length === 0) {
@@ -261,8 +264,14 @@ export default function ComparePage() {
                 </div>
             </div>
 
-            {loading && <div style={{ marginTop: 20, color: 'var(--text-2)' }}>Đang tải dữ liệu so sánh...</div>}
-            {error && <div style={{ marginTop: 20, color: 'var(--danger-light)' }}>{error}</div>}
+            {loading && (
+                <div className="card" style={{ marginTop: 16 }}>
+                    <div className="skeleton compare-chart-skeleton" />
+                </div>
+            )}
+            {error && !loading && (
+                <div className="card compare-error-card" style={{ marginTop: 16 }}>{error}</div>
+            )}
             {!loading && !error && selectedTechs.length === 0 && (
                 <div className="card compare-empty" style={{ marginTop: 16 }}>
                     Chọn ít nhất một công nghệ ở ô tìm kiếm phía trên để bắt đầu so sánh.
@@ -297,6 +306,24 @@ export default function ComparePage() {
                     {!summaryLoading && !summaryError && summary && (
                         <p className="ai-summary-text">{summary}</p>
                     )}
+                </div>
+            )}
+
+            {/* Đối đầu trực tiếp (VS) — hiển thị khi có >= 2 công nghệ được chọn.
+                Dùng chung colorMap với thẻ thống kê & chart phía dưới để nhất quán màu. */}
+            {selectedTechs.length >= 2 && (
+                <div className="card compare-vs-card" style={{ marginTop: 16 }}>
+                    <div className="vs-row">
+                        {selectedTechs.map((t, i) => (
+                            <div key={t.value} className="vs-item">
+                                <div className="vs-chip" style={{ borderColor: (colorMap[t.value] || '#fff') + '66' }}>
+                                    <span className="vs-dot" style={{ background: colorMap[t.value] }} />
+                                    <span className="vs-name">{t.value}</span>
+                                </div>
+                                {i < selectedTechs.length - 1 && <span className="vs-divider">VS</span>}
+                            </div>
+                        ))}
+                    </div>
                 </div>
             )}
 

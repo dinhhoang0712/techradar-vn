@@ -165,14 +165,59 @@
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.job-count { font-size: 0.85rem; color: var(--text-2); }
-.growth-rate { font-size: 0.85rem; font-weight: 600; }
+.job-count,
+.growth-rate {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.85rem;
+    color: var(--text-2);
+}
+.growth-rate { font-weight: 600; }
 .growth-rate.up { color: var(--green); }
 .growth-rate.down { color: var(--danger-light); }
+
+.cell-value { line-height: 1.2; }
+
+/* Sparkbar — thanh mini biểu thị tỉ lệ tương đối so với giá trị lớn nhất trong danh sách */
+.sparkbar-track {
+    width: 100%;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--bg-2);
+    overflow: hidden;
+}
+
+.sparkbar-fill {
+    display: block;
+    height: 100%;
+    border-radius: 2px;
+    background: var(--gradient-brand);
+}
+
+.sparkbar-fill.growth.up { background: var(--green); }
+.sparkbar-fill.growth.down { background: var(--danger); }
 
 /* Report markdown */
 .report-content-card {
     padding: 20px 24px;
+}
+
+/* "Tài liệu được tạo tự động" — thanh gradient-brand mỏng ở mép trên để phân biệt
+   với các card thông thường, gợi cảm giác đây là văn bản/báo cáo có thể xuất ra. */
+.report-generated-doc {
+    position: relative;
+    overflow: hidden;
+}
+
+.report-generated-doc::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--gradient-brand);
 }
 
 .report-content-header {

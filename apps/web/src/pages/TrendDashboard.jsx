@@ -9,6 +9,7 @@ import { getForecast } from '../api/forecastService';
 import { summarizeTech } from '../api/summarizeService';
 import { CHART_PALETTE as PALETTE } from '../utils/chartPalette';
 import MaintenanceOverlay from '../components/common/MaintenanceOverlay';
+import { useToast } from '../components/common/toastContext';
 import './TrendDashboard.css';
 
 const TIME_OPTIONS = [
@@ -159,6 +160,7 @@ export default function TrendDashboard() {
     const [loadingSummary, setLoadingSummary] = useState(false);
     const [summaryTech, setSummaryTech] = useState(null);
     const [summaryError, setSummaryError] = useState('');
+    const notify = useToast();
 
     const colorMap = useMemo(() => {
         const map = {};
@@ -249,12 +251,14 @@ export default function TrendDashboard() {
         try {
             const res = await getForecast(techName, 6);
             setForecast(res?.data ?? res);
-        } catch {
+        } catch (err) {
+            console.error('Lỗi lấy dự báo:', err);
             setForecast(null);
+            notify({ title: 'Không thể tạo dự báo lúc này', body: 'Vui lòng thử lại.', variant: 'error' });
         } finally {
             setLoadingForecast(false);
         }
-    }, [forecastTech]);
+    }, [forecastTech, notify]);
 
     const handleSummarize = useCallback(async (techName) => {
         if (summaryTech === techName) {
@@ -336,6 +340,20 @@ export default function TrendDashboard() {
 
     return (
         <div className="dashboard-page">
+            {/* Hero */}
+            <div className="dashboard-hero">
+                <div className="radar-sweep" aria-hidden="true">
+                    <span className="radar-ring radar-ring-1" />
+                    <span className="radar-ring radar-ring-2" />
+                    <span className="radar-ring radar-ring-3" />
+                    <span className="radar-sweep-beam" />
+                </div>
+                <h1 className="dashboard-title">Radar Công nghệ</h1>
+                <p className="dashboard-subtitle">
+                    Quét xu hướng công nghệ hot nhất trên thị trường tuyển dụng, cập nhật theo thời gian thực.
+                </p>
+            </div>
+
             {/* Top Stats từ /radar/top4 */}
             <div className="stats-row">
                 {top4Data.map((t, i) => (
@@ -437,10 +455,18 @@ export default function TrendDashboard() {
             <div className="card top10-card" style={{ marginTop: 16 }}>
                 <h2 className="section-title">Top 10 Công nghệ Hot nhất</h2>
                 <div className="top10-grid">
-                    {top10Data.map((t, i) => (
-                        <div key={t.keyword} className="top10-item">
+                    {top10Data.map((t, i) => {
+                        const isTopRank = i < 3;
+                        return (
+                        <div key={t.keyword} className={`top10-item${isTopRank ? ' top10-item--top' : ''}`}>
                             <span className="top10-rank">#{i + 1}</span>
-                            <span className="top10-dot" style={{ background: PALETTE[i % PALETTE.length] }} />
+                            <span
+                                className={`top10-blip${isTopRank ? ' top10-blip--top' : ''}`}
+                                style={{ '--blip-color': PALETTE[i % PALETTE.length] }}
+                            >
+                                <span className="top10-blip-ping" />
+                                <span className="top10-blip-dot" />
+                            </span>
                             <span className="top10-name">{t.keyword}</span>
                             <span className="top10-jobs">{t.job_count?.toLocaleString()} jobs</span>
                             <button
@@ -458,7 +484,8 @@ export default function TrendDashboard() {
                                 {summaryTech === t.keyword && loadingSummary ? '...' : '📰'}
                             </button>
                         </div>
-                    ))}
+                        );
+                    })}
                 </div>
             </div>
 

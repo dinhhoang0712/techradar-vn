@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { fetchAdminUsers, createAdminUser, updateAdminUser, deleteAdminUser } from '../../api/adminService';
 import Modal from '../../components/common/Modal';
+import Avatar from '../../components/common/Avatar';
 import { useToast } from '../../components/common/toastContext';
 import './AdminUsers.css';
 
@@ -137,7 +138,12 @@ export default function AdminUsers() {
                         )}
                         {!loading && users.map(u => (
                             <tr key={u.id}>
-                                <td>{u.full_name || u.name}</td>
+                                <td>
+                                    <div className="u-identity">
+                                        <Avatar user={{ full_name: u.full_name || u.name || u.email, avatar_url: u.avatar_url }} size={36} />
+                                        <span>{u.full_name || u.name}</span>
+                                    </div>
+                                </td>
                                 <td>{u.email}</td>
                                 <td>
                                     <span className={`role-badge ${String(u.role).toLowerCase() === 'admin' ? 'admin' : 'user'}`}>

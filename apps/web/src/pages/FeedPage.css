@@ -20,6 +20,30 @@
     gap: 16px;
 }
 
+.feed-composer {
+    position: relative;
+    z-index: 0;
+}
+
+.feed-composer::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: calc(var(--radius) + 2px);
+    background: var(--gradient-brand);
+    z-index: -1;
+    opacity: 0;
+    transition: opacity var(--t);
+}
+
+.feed-composer.is-focused::before {
+    opacity: 1;
+}
+
+.feed-composer.is-focused {
+    box-shadow: 0 0 22px var(--primary-glow), 0 0 34px var(--accent-glow);
+}
+
 .feed-composer-input {
     width: 100%;
     resize: vertical;
@@ -41,15 +65,55 @@
     display: flex;
     flex-direction: column;
     align-items: center;
+    gap: 10px;
     padding: 40px 20px;
     color: var(--text-2);
     text-align: center;
+}
+
+.feed-empty-icon {
+    font-size: 1.8rem;
+    line-height: 1;
+    opacity: 0.85;
 }
 
 .feed-list {
     display: flex;
     flex-direction: column;
     gap: 16px;
+}
+
+/* Feed loading skeleton — mirrors PostCard's header + content layout */
+.post-skeleton {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.post-skeleton-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 4px;
+}
+
+.post-skeleton-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.post-skeleton-lines {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.post-skeleton-line {
+    height: 10px;
+    border-radius: 4px;
 }
 
 .feed-loadmore {

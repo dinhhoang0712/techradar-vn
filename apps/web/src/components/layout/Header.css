@@ -6,11 +6,23 @@
     right: 0;
     z-index: 1000;
     height: var(--header-h);
-    background: rgba(13, 15, 26, 0.85);
+    background: var(--surface-glass);
     backdrop-filter: blur(20px) saturate(1.8);
     -webkit-backdrop-filter: blur(20px) saturate(1.8);
     border-bottom: 1px solid var(--border);
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+    box-shadow: var(--shadow);
+}
+
+.site-header::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--primary-glow) 30%, var(--accent-glow) 70%, transparent);
+    opacity: 0.8;
+    pointer-events: none;
 }
 
 .header-inner {
@@ -31,11 +43,45 @@
     gap: 10px;
     text-decoration: none;
     flex-shrink: 0;
+    transition: opacity var(--t);
 }
 
-.logo-icon {
-    font-size: 1.5rem;
-    filter: drop-shadow(0 0 8px var(--primary-glow));
+.header-logo:hover {
+    opacity: 0.85;
+}
+
+.logo-ping {
+    position: relative;
+    width: 9px;
+    height: 9px;
+    flex-shrink: 0;
+}
+
+.ping-dot {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: var(--primary);
+    box-shadow: 0 0 8px var(--primary-glow);
+}
+
+.ping-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 1.5px solid var(--primary);
+    animation: radarPing 2.4s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
+}
+
+@keyframes radarPing {
+    0% {
+        transform: scale(1);
+        opacity: 0.8;
+    }
+    100% {
+        transform: scale(3);
+        opacity: 0;
+    }
 }
 
 .logo-text {
@@ -46,7 +92,11 @@
 }
 
 .logo-accent {
-    color: var(--primary-light);
+    background: var(--gradient-brand);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    color: transparent;
 }
 
 /* ─── Navigation ─────────────────────────────────────────────────── */
@@ -92,9 +142,82 @@
     left: 16px;
     right: 16px;
     height: 2px;
-    background: var(--primary);
+    background: var(--gradient-brand);
     border-radius: 2px 2px 0 0;
     box-shadow: 0 0 8px var(--primary-glow);
+}
+
+/* ─── Nav: "Công cụ" dropdown ─────────────────────────────────────── */
+.nav-more {
+    position: relative;
+    display: flex;
+}
+
+.nav-more-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: none;
+    background: transparent;
+    font-family: inherit;
+}
+
+.nav-more-chevron {
+    transition: transform var(--t);
+}
+
+.nav-more-trigger.open .nav-more-chevron {
+    transform: rotate(180deg);
+}
+
+.nav-more-menu {
+    position: absolute;
+    top: calc(100% + 10px);
+    left: 50%;
+    transform: translateX(-50%) translateY(-6px) scale(0.98);
+    display: flex;
+    flex-direction: column;
+    min-width: 180px;
+    padding: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity var(--t), transform var(--t), visibility var(--t);
+    z-index: 1001;
+}
+
+.nav-more-menu.open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0) scale(1);
+}
+
+.nav-more-item {
+    display: flex;
+    align-items: center;
+    padding: 9px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-2);
+    white-space: nowrap;
+    transition: background var(--t), color var(--t);
+}
+
+.nav-more-item:hover {
+    background: var(--surface-2);
+    color: var(--text);
+}
+
+.nav-more-item.active {
+    color: var(--primary-light);
+    background: var(--primary-glow);
+    font-weight: 600;
 }
 
 /* ─── Header Actions ──────────────────────────────────────────────── */
@@ -151,6 +274,45 @@
     color: var(--text);
     padding: 8px;
     z-index: 1001;
+}
+
+/* ─── Header icon buttons (messages, etc.) ───────────────────────── */
+.header-icon-btn {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-2);
+    cursor: pointer;
+    transition: background var(--t), color var(--t), box-shadow var(--t);
+}
+
+.header-icon-btn:hover {
+    color: var(--primary-light);
+    background: var(--surface-2);
+    box-shadow: 0 0 0 2px var(--primary);
+}
+
+.header-icon-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 4px;
+    border-radius: 99px;
+    background: var(--danger);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 17px;
+    text-align: center;
+    box-shadow: 0 0 0 2px var(--bg-2);
 }
 
 /* ─── Avatar + Dropdown ───────────────────────────────────────────── */
@@ -325,9 +487,50 @@
         display: none;
     }
 
+    .nav-more {
+        width: 100%;
+        flex-direction: column;
+    }
+
+    .nav-more-trigger {
+        width: 100%;
+        justify-content: flex-start;
+        pointer-events: none;
+        opacity: 0.6;
+        font-size: 0.8rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        padding: 20px 16px 4px;
+    }
+
+    .nav-more-chevron {
+        display: none;
+    }
+
+    .nav-more-menu {
+        position: static;
+        width: 100%;
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+        transform: none;
+        background: transparent;
+        border: none;
+        box-shadow: none;
+        padding: 0;
+    }
+
+    .nav-more-item {
+        width: 100%;
+        padding: 12px 16px;
+        font-size: 1.1rem;
+        border-radius: var(--radius);
+    }
+
     .header-actions {
         margin-left: 0;
-        gap: 12px;
+        gap: 8px;
     }
 
     .header-status {

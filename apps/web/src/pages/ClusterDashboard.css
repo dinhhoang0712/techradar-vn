@@ -135,6 +135,83 @@
     border-color: var(--primary-light);
 }
 
+/* --- Orbit preview trang trí góc trên phải mỗi card --- */
+.cluster-orbit-preview {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    width: 44px;
+    height: 44px;
+    pointer-events: none;
+    opacity: 0.85;
+}
+
+.cluster-orbit-ring {
+    position: absolute;
+    inset: 0;
+    animation: orbit-spin 14s linear infinite;
+}
+
+.cluster-orbit-dot {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 5px;
+    height: 5px;
+    margin: -2.5px;
+    border-radius: 50%;
+}
+
+.cluster-orbit-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 9px;
+    height: 9px;
+    margin: -4.5px;
+    border-radius: 50%;
+}
+
+@keyframes orbit-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cluster-orbit-ring {
+        animation: none;
+    }
+}
+
+/* --- Skeleton loading cho lưới tổng quan --- */
+.cluster-grid-item-skeleton {
+    cursor: default;
+    gap: 10px;
+}
+
+.cluster-skel-badge {
+    width: 90px;
+    height: 22px;
+    border-radius: 20px;
+    margin-bottom: 8px;
+}
+
+.cluster-skel-title {
+    width: 65%;
+    height: 20px;
+    margin-bottom: 4px;
+}
+
+.cluster-skel-line {
+    width: 100%;
+    height: 12px;
+}
+
+.cluster-skel-stat {
+    width: 70px;
+    height: 14px;
+}
+
 .cluster-grid-item h3 {
     font-size: 1.25rem;
     margin-bottom: 12px;

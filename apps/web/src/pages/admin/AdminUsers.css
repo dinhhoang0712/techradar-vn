@@ -57,6 +57,13 @@
 
 .u-id { color: var(--text-3); font-family: monospace; }
 
+.u-identity {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 500;
+}
+
 .role-badge {
     padding: 4px 10px;
     border-radius: 99px;

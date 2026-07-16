@@ -243,14 +243,8 @@
     gap: 12px;
 }
 
-.interview-score-badge {
-    background: var(--primary-glow);
-    border: 1px solid var(--primary);
-    border-radius: 20px;
-    color: var(--primary-light);
-    font-size: 1.1rem;
-    font-weight: 700;
-    padding: 6px 18px;
+.interview-score-gauge {
+    flex-shrink: 0;
 }
 
 .interview-summary-text {

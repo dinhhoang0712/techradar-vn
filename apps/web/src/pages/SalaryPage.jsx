@@ -122,7 +122,7 @@ function DetailPanel({ tech, onClose }) {
                                 className="salary-bar-range"
                                 style={{
                                     left: `${data.min_salary_mvnd / (data.max_salary_mvnd || 1) * 100}%`,
-                                    width: `${(data.p75_salary_mvnd - data.p25_salary_mvnd) / (data.max_salary_mvnd || 1) * 100}%`,
+                                    '--bar-width': `${(data.p75_salary_mvnd - data.p25_salary_mvnd) / (data.max_salary_mvnd || 1) * 100}%`,
                                 }}
                             />
                             <div

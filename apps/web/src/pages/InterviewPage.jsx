@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { runInterviewTurn } from '../api/interviewService';
+import RingGauge from '../components/common/RingGauge';
 import './InterviewPage.css';
 
 const COMMON_ROLES = [
@@ -203,7 +204,7 @@ export default function InterviewPage() {
 
                         {loading && (
                             <div className="chat-bubble-wrap bot">
-                                <div className="bot-avatar">AI</div>
+                                <div className={`bot-avatar gradient-ring${loading ? ' active' : ''}`}>AI</div>
                                 <div className="chat-bubble bot">
                                     <div className="bubble-content">
                                         <span className="dots-animation"><span>.</span><span>.</span><span>.</span></span>
@@ -238,7 +239,13 @@ export default function InterviewPage() {
                         <div className="interview-result-card">
                             <div className="interview-result-header">
                                 <h3 className="section-title">Kết quả đánh giá</h3>
-                                <div className="interview-score-badge">{finalSummary?.score}/10</div>
+                                <RingGauge
+                                    percent={(finalSummary?.score ?? 0) * 10}
+                                    size={60}
+                                    strokeWidth={5}
+                                    label={`${finalSummary?.score ?? 0}/10`}
+                                    className="interview-score-gauge"
+                                />
                             </div>
                             <div className="interview-summary-text">{renderMarkdown(finalSummary?.summary || '')}</div>
                             <button type="button" className="btn btn-secondary" onClick={handleReset}>

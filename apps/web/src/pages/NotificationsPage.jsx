@@ -6,6 +6,7 @@ import {
     markAllNotificationsRead,
 } from '../api/notificationService';
 import NotifIcon from '../components/notifications/notifIcons';
+import { useToast } from '../components/common/toastContext';
 import './NotificationsPage.css';
 
 const PAGE_SIZE = 20;
@@ -25,6 +26,7 @@ export default function NotificationsPage() {
     const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState(false);
     const navigate = useNavigate();
+    const notify = useToast();
 
     const loadFirstPage = useCallback(async () => {
         setLoading(true);
@@ -55,6 +57,7 @@ export default function NotificationsPage() {
             setHasMore(list.length === PAGE_SIZE);
         } catch (err) {
             console.warn('[NotificationsPage] load more failed:', err);
+            notify({ title: 'Không tải thêm được thông báo', body: 'Vui lòng thử lại.', variant: 'error' });
         } finally {
             setLoadingMore(false);
         }
@@ -91,7 +94,17 @@ export default function NotificationsPage() {
 
             <div className="notifpage-card card">
                 {loading ? (
-                    <div className="notifpage-state">Đang tải…</div>
+                    <div className="notifpage-list">
+                        {[0, 1, 2, 3].map((i) => (
+                            <div className="notifpage-item notifpage-item--skeleton" key={i}>
+                                <span className="notifpage-item-icon skeleton" />
+                                <div className="notifpage-item-body">
+                                    <div className="skeleton notifpage-skel-line notifpage-skel-line--title" />
+                                    <div className="skeleton notifpage-skel-line notifpage-skel-line--text" />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 ) : error ? (
                     <div className="notifpage-state">
                         <span>Không tải được thông báo.</span>
@@ -108,7 +121,7 @@ export default function NotificationsPage() {
                                     className={`notifpage-item${n.read ? '' : ' unread'}`}
                                     onClick={() => handleItemClick(n)}
                                 >
-                                    <span className="notifpage-item-icon">
+                                    <span className={`notifpage-item-icon${n.read ? '' : ' gradient-ring active'}`}>
                                         <NotifIcon type={n.type} />
                                     </span>
                                     <div className="notifpage-item-body">

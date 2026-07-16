@@ -29,6 +29,7 @@ export default function AdminSettings() {
             }
         } catch (error) {
             console.error('Failed to load admin settings:', error);
+            notify({ title: 'Không tải được cài đặt hệ thống', body: 'Vui lòng tải lại trang.', variant: 'error' });
         } finally {
             setLoading(false);
         }

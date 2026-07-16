@@ -269,6 +269,42 @@
     letter-spacing: 0.02em;
 }
 
+/* Small radar/pulse indicator next to the header title — scaled-down variant of
+   Header.css's .logo-ping/.ping-dot/.ping-ring, for brand consistency. */
+.chat-logo-ping {
+    position: relative;
+    width: 8px;
+    height: 8px;
+    flex-shrink: 0;
+}
+
+.chat-ping-dot {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: var(--primary);
+    box-shadow: 0 0 8px var(--primary-glow);
+}
+
+.chat-ping-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 1.5px solid var(--primary);
+    animation: chatRadarPing 2.4s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
+}
+
+@keyframes chatRadarPing {
+    0% {
+        transform: scale(1);
+        opacity: 0.8;
+    }
+    100% {
+        transform: scale(3);
+        opacity: 0;
+    }
+}
+
 .new-chat-btn {
     font-size: 0.78rem !important;
     padding: 5px 12px !important;

@@ -4,6 +4,30 @@ import { registerUser } from '../../api/authService';
 import { useToast } from '../../components/common/toastContext';
 import './Auth.css';
 
+const MIN_PASSWORD_LENGTH = 8;
+
+function resolveRegisterError(err) {
+    const status = err?.status;
+    const message = String(err?.message || '').trim();
+    const lower = message.toLowerCase();
+
+    if (status === 409 || lower.includes('already registered') || lower.includes('email already')) {
+        return 'Email đã tồn tại. Vui lòng dùng email khác.';
+    }
+    if (status === 400 && (lower.includes('password') || lower.includes('8'))) {
+        return `Mật khẩu phải có ít nhất ${MIN_PASSWORD_LENGTH} ký tự.`;
+    }
+    if (status === 400) {
+        return message && message !== 'Bad Request'
+            ? message
+            : 'Thông tin đăng ký không hợp lệ. Vui lòng kiểm tra lại.';
+    }
+    if (err?.message === 'SERVER_CONNECTION_FAILED') {
+        return 'Không kết nối được máy chủ. Vui lòng thử lại sau.';
+    }
+    return message || 'Đăng ký thất bại. Vui lòng thử lại.';
+}
+
 export default function RegisterPage() {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
@@ -18,6 +42,11 @@ export default function RegisterPage() {
         e.preventDefault();
         setError('');
 
+        if (password.length < MIN_PASSWORD_LENGTH) {
+            setError(`Mật khẩu phải có ít nhất ${MIN_PASSWORD_LENGTH} ký tự.`);
+            return;
+        }
+
         if (password !== confirmPwd) {
             setError('Mật khẩu xác nhận không khớp!');
             return;
@@ -30,9 +59,11 @@ export default function RegisterPage() {
             if (res.status === 'success' || res.access_token) {
                 notify({ title: 'Khởi tạo tài khoản thành công! Vui lòng đăng nhập.', variant: 'success' });
                 navigate('/login');
+            } else {
+                setError('Đăng ký thất bại. Vui lòng thử lại.');
             }
-        } catch {
-            setError('Đăng ký thất bại. Email đã tồn tại.');
+        } catch (err) {
+            setError(resolveRegisterError(err));
         } finally {
             setLoading(false);
         }
@@ -76,10 +107,10 @@ export default function RegisterPage() {
                             <input 
                                 type="password" 
                                 required 
-                                placeholder="••••••••"
+                                placeholder="Ít nhất 8 ký tự"
                                 value={password}
                                 onChange={e => setPassword(e.target.value)}
-                                minLength={6}
+                                minLength={MIN_PASSWORD_LENGTH}
                             />
                         </div>
                         <div className="auth-input-group">
@@ -87,9 +118,10 @@ export default function RegisterPage() {
                             <input 
                                 type="password" 
                                 required 
-                                placeholder="••••••••"
+                                placeholder="Nhập lại mật khẩu"
                                 value={confirmPwd}
                                 onChange={e => setConfirmPwd(e.target.value)}
+                                minLength={MIN_PASSWORD_LENGTH}
                             />
                         </div>
                         

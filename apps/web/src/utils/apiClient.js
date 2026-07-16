@@ -52,7 +52,6 @@ export const apiClient = async (endpoint, options = {}, _retried = false) => {
             localStorage.removeItem('login_timestamp');
             
             if (!window.location.pathname.includes('/login')) {
-                alert('Phiên đăng nhập của bạn đã hết hạn (sau 15 phút). Vui lòng đăng nhập lại.');
                 window.location.href = '/login';
             }
             const timeoutError = new Error('SESSION_TIMEOUT');
@@ -108,7 +107,6 @@ export const apiClient = async (endpoint, options = {}, _retried = false) => {
                 
                 // Tránh loop redirect nếu đang ở trang login
                 if (!window.location.pathname.includes('/login')) {
-                    alert('Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại.');
                     window.location.href = '/login';
                 }
                 

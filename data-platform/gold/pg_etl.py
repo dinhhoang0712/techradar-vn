@@ -21,16 +21,27 @@ from config import Settings
 _ARTICLE_Q = """
 MATCH (t:Technology)<-[:MENTIONS]-(a:Article)
 WHERE a.published_date IS NOT NULL
-WITH t.name AS tech,
-     substring(toString(a.published_date), 0, 7) AS ym
+WITH t.name AS tech, toString(a.published_date) AS raw
+WITH tech,
+     CASE
+       WHEN raw =~ '^\\d{4}-\\d{2}' THEN substring(raw, 0, 7)
+       WHEN raw =~ '^\\d{2}/\\d{2}/\\d{4}' THEN substring(raw, 6, 4) + '-' + substring(raw, 3, 2)
+       ELSE null
+     END AS ym
 WHERE ym IS NOT NULL
 RETURN tech, ym, count(*) AS cnt
 """
 
 _JOB_Q = """
 MATCH (t:Technology)<-[:REQUIRES]-(j:Job)
-WITH t.name AS tech,
-     substring(toString(coalesce(j.posted_date, j.due_date, j.created_at)), 0, 7) AS ym
+WITH t.name AS tech, j,
+     toString(coalesce(j.posted_date, j.due_date, j.created_at)) AS raw
+WITH tech, j,
+     CASE
+       WHEN raw =~ '^\\d{4}-\\d{2}' THEN substring(raw, 0, 7)
+       WHEN raw =~ '^\\d{2}/\\d{2}/\\d{4}' THEN substring(raw, 6, 4) + '-' + substring(raw, 3, 2)
+       ELSE null
+     END AS ym
 WHERE ym IS NOT NULL
 RETURN tech, ym, count(DISTINCT j) AS cnt
 """

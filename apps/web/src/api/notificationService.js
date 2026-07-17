@@ -38,50 +38,65 @@ export const markAllNotificationsRead = async () =>
 // Trả về AbortController; gọi .abort() khi unmount để đóng stream.
 //
 //   onNotification(n)  — callback mỗi khi nhận một thông báo mới
-//   onError(err)       — callback khi stream lỗi (bỏ qua AbortError)
+//   onError(err)       — callback khi stream lỗi hẳn (bỏ qua AbortError, và các lần
+//                         mất kết nối tạm thời tự reconnect được — xem RECONNECT_DELAY_MS)
 // ─────────────────────────────────────────────
+const RECONNECT_DELAY_MS = 3000;
+
 export const streamNotifications = (onNotification, onError) => {
-    const token = localStorage.getItem('access_token');
     const controller = new AbortController();
 
     (async () => {
-        try {
-            const res = await fetch(`${API_BASE_URL}/notifications/stream`, {
-                headers: {
-                    Accept: 'text/event-stream',
-                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                },
-                signal: controller.signal,
-            });
-            if (!res.ok || !res.body) throw new Error(`SSE ${res.status}`);
+        while (!controller.signal.aborted) {
+            try {
+                const token = localStorage.getItem('access_token');
+                const res = await fetch(`${API_BASE_URL}/notifications/stream`, {
+                    headers: {
+                        Accept: 'text/event-stream',
+                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    },
+                    signal: controller.signal,
+                });
+                if (!res.ok || !res.body) {
+                    if (res.status === 401) {
+                        // Token hết hạn — reconnect với cùng token cũ sẽ luôn thất bại, dừng hẳn.
+                        onError?.(new Error('SSE 401'));
+                        return;
+                    }
+                    throw new Error(`SSE ${res.status}`);
+                }
 
-            const reader = res.body.getReader();
-            const decoder = new TextDecoder('utf-8');
-            let buffer = '';
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let buffer = '';
 
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                buffer += decoder.decode(value, { stream: true });
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break; // server đóng kết nối (vd idle timeout) — reconnect bên dưới
+                    buffer += decoder.decode(value, { stream: true });
 
-                const lines = buffer.split('\n');
-                buffer = lines.pop(); // giữ lại phần chưa hoàn chỉnh
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop(); // giữ lại phần chưa hoàn chỉnh
 
-                for (const line of lines) {
-                    if (!line || line.startsWith(':')) continue; // heartbeat comment
-                    if (line.startsWith('event:')) continue;     // event type — xử lý ở data
-                    if (line.startsWith('data:')) {
-                        const raw = line.slice(5).trimStart();
-                        try {
-                            onNotification(JSON.parse(raw));
-                        } catch {
-                            /* dòng data không phải JSON — bỏ qua */
+                    for (const line of lines) {
+                        if (!line || line.startsWith(':')) continue; // heartbeat comment
+                        if (line.startsWith('event:')) continue;     // event type — xử lý ở data
+                        if (line.startsWith('data:')) {
+                            const raw = line.slice(5).trimStart();
+                            try {
+                                onNotification(JSON.parse(raw));
+                            } catch {
+                                /* dòng data không phải JSON — bỏ qua */
+                            }
                         }
                     }
                 }
+            } catch (err) {
+                if (err?.name === 'AbortError') return;
+                onError?.(err);
             }
-        } catch (err) {
-            if (err?.name !== 'AbortError') onError?.(err);
+            if (controller.signal.aborted) return;
+            await new Promise((resolve) => setTimeout(resolve, RECONNECT_DELAY_MS));
         }
     })();
 

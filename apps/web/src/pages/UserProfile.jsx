@@ -68,7 +68,7 @@ export default function UserProfile() {
                 loadRecommendations(flatData.technologies);
             }
         } catch (err) {
-            showToast('error', 'Không thể tải thông tin người dùng. Vui lòng thử lại.');
+            showToast('error', err.message || 'Không thể tải thông tin người dùng. Vui lòng thử lại.');
             console.error('[UserProfile] Load error:', err);
         } finally {
             setLoading(false);
@@ -100,7 +100,7 @@ export default function UserProfile() {
             setEditMode(false);
             showToast('success', 'Cập nhật thông tin thành công!');
         } catch (err) {
-            showToast('error', 'Cập nhật thất bại. Vui lòng thử lại.');
+            showToast('error', err.message || 'Cập nhật thất bại. Vui lòng thử lại.');
             console.error('[UserProfile] Save error:', err);
         } finally {
             setSaving(false);

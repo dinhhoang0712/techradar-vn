@@ -256,6 +256,7 @@ export default function ChatbotPage() {
 
     const confirmDeleteSession = async () => {
         const sid = deleteTarget;
+        const previousSessions = sessions;
         setDeleteTarget(null);
         setSessions(prev => prev.filter(s => s.id !== sid));
         if (sid === sessionId) clearSession();
@@ -263,7 +264,8 @@ export default function ChatbotPage() {
             await deleteChatSession(sid);
         } catch (err) {
             console.warn('[chat] deleteChatSession failed', err);
-            notify({ title: 'Xoá cuộc trò chuyện thất bại', body: 'Có thể cuộc trò chuyện vẫn còn trên máy chủ.', variant: 'error' });
+            setSessions(previousSessions);
+            notify({ title: 'Xoá cuộc trò chuyện thất bại', body: 'Đã khôi phục lại trong lịch sử.', variant: 'error' });
         }
     };
 

@@ -90,7 +90,8 @@ export const apiClient = async (endpoint, options = {}, _retried = false) => {
                         variant: 'error',
                         duration: 4000,
                     });
-                    window.location.href = '/login';
+                    // Delay the redirect so the toast is actually visible before the page tears down.
+                    setTimeout(() => { window.location.href = '/login'; }, 1200);
                 }
                 
                 const authError = new Error('UNAUTHORIZED');

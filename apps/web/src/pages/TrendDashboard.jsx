@@ -296,14 +296,17 @@ export default function TrendDashboard() {
         import('html2canvas').then(({ default: html2canvas }) => {
             const el = document.getElementById('main-chart-wrapper');
             if (!el) return;
-            html2canvas(el, { backgroundColor: '#000000' }).then(canvas => {
+            return html2canvas(el, { backgroundColor: '#000000' }).then(canvas => {
                 const a = document.createElement('a');
                 a.href = canvas.toDataURL('image/png');
                 a.download = 'tech_trend_chart.png';
                 a.click();
             });
+        }).catch((err) => {
+            console.error('[TrendDashboard] Export PNG failed:', err);
+            notify({ title: 'Không thể xuất ảnh biểu đồ', body: 'Vui lòng thử lại.', variant: 'error' });
         });
-    }, []);
+    }, [notify]);
 
     if (loadingTop) return <div className="dashboard-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300 }}><div className="loading-spinner"></div><span style={{ color: 'var(--text-2)', marginLeft: 12 }}>Đang tải dữ liệu...</span></div>;
     

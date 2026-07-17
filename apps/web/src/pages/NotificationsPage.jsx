@@ -79,14 +79,25 @@ export default function NotificationsPage() {
     const handleItemClick = async (n) => {
         if (!n.read) {
             setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
-            try { await markNotificationRead(n.id); } catch { /* optimistic */ }
+            try {
+                await markNotificationRead(n.id);
+            } catch {
+                setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: false } : x)));
+                notify({ title: 'Không thể đánh dấu đã đọc', body: 'Vui lòng thử lại.', variant: 'error' });
+            }
         }
         if (n.link) navigate(n.link);
     };
 
     const handleMarkAll = async () => {
+        const previous = items;
         setItems((prev) => prev.map((x) => ({ ...x, read: true })));
-        try { await markAllNotificationsRead(); } catch { /* optimistic */ }
+        try {
+            await markAllNotificationsRead();
+        } catch {
+            setItems(previous);
+            notify({ title: 'Không thể đánh dấu tất cả đã đọc', body: 'Vui lòng thử lại.', variant: 'error' });
+        }
     };
 
     const unreadCount = items.filter((n) => !n.read).length;

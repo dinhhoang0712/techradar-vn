@@ -9,13 +9,17 @@ import {
     streamConversations,
 } from '../api/messagingService';
 import { getUserProfile } from '../api/userService';
+import { useToast } from '../components/common/toastContext';
 
 export function MessagingProvider({ children }) {
     const [currentUserId, setCurrentUserId] = useState(null);
     const [conversations, setConversations] = useState([]);
     const [conversationsLoading, setConversationsLoading] = useState(true);
+    const [conversationsError, setConversationsError] = useState(false);
     const [messagesByConversation, setMessagesByConversation] = useState({});
+    const [messagesError, setMessagesError] = useState({});
     const [activeConversationId, setActiveConversationId] = useState(null);
+    const notify = useToast();
 
     const conversationsRef = useRef([]);
     const activeConversationIdRef = useRef(null);
@@ -24,11 +28,14 @@ export function MessagingProvider({ children }) {
 
     const refreshConversations = async () => {
         setConversationsLoading(true);
+        setConversationsError(false);
         try {
             const res = await getConversations();
             setConversations(res?.data ?? []);
         } catch (err) {
             console.warn('[Messaging] refreshConversations failed:', err);
+            setConversationsError(true);
+            notify({ title: 'Không tải được danh sách trò chuyện', body: 'Vui lòng thử lại.', variant: 'error' });
         } finally {
             setConversationsLoading(false);
         }
@@ -95,8 +102,11 @@ export function MessagingProvider({ children }) {
         try {
             const res = await getMessages(conversationId);
             setMessagesByConversation((prev) => ({ ...prev, [conversationId]: res?.data ?? [] }));
+            setMessagesError((prev) => ({ ...prev, [conversationId]: false }));
         } catch (err) {
             console.warn('[Messaging] loadMessages failed:', err);
+            setMessagesError((prev) => ({ ...prev, [conversationId]: true }));
+            notify({ title: 'Không tải được tin nhắn', body: 'Vui lòng thử lại.', variant: 'error' });
         }
     };
 
@@ -104,11 +114,15 @@ export function MessagingProvider({ children }) {
         setActiveConversationId(conversationId);
         if (!conversationId) return;
         await loadMessages(conversationId);
+        const previousUnread = conversationsRef.current.find((c) => c.id === conversationId)?.unread_count;
         setConversations((prev) => prev.map((c) => (c.id === conversationId ? { ...c, unread_count: 0 } : c)));
         try {
             await markConversationRead(conversationId);
-        } catch {
-            /* optimistic — không sao nếu request nền thất bại */
+        } catch (err) {
+            console.warn('[Messaging] markConversationRead failed:', err);
+            setConversations((prev) =>
+                prev.map((c) => (c.id === conversationId ? { ...c, unread_count: previousUnread ?? c.unread_count } : c)));
+            notify({ title: 'Không thể đánh dấu đã đọc', body: 'Vui lòng thử lại.', variant: 'error' });
         }
     };
 
@@ -148,7 +162,9 @@ export function MessagingProvider({ children }) {
                 currentUserId,
                 conversations,
                 conversationsLoading,
+                conversationsError,
                 messagesByConversation,
+                messagesError,
                 activeConversationId,
                 refreshConversations,
                 loadMessages,

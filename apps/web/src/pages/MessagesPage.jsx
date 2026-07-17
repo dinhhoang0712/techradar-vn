@@ -42,9 +42,13 @@ export default function MessagesPage() {
         currentUserId,
         conversations,
         conversationsLoading,
+        conversationsError,
         messagesByConversation,
+        messagesError,
         activeConversationId,
         selectConversation,
+        refreshConversations,
+        loadMessages,
         send,
     } = useMessagingContext();
 
@@ -106,6 +110,11 @@ export default function MessagesPage() {
                             </div>
                         ))}
                     </div>
+                ) : conversationsError ? (
+                    <div className="messages-state">
+                        <span>Không tải được danh sách trò chuyện.</span>
+                        <button className="btn btn-ghost mt-16" onClick={refreshConversations}>Thử lại</button>
+                    </div>
                 ) : conversations.length === 0 ? (
                     <div className="messages-state">
                         <span className="messages-empty-icon" aria-hidden="true">💬</span>
@@ -142,7 +151,17 @@ export default function MessagesPage() {
                         </div>
 
                         <div className="thread-messages" ref={threadRef}>
-                            {activeMessages.length === 0 ? (
+                            {messagesError[activeConversationId] ? (
+                                <div className="messages-state">
+                                    <span>Không tải được tin nhắn.</span>
+                                    <button
+                                        className="btn btn-ghost mt-16"
+                                        onClick={() => loadMessages(activeConversationId, { force: true })}
+                                    >
+                                        Thử lại
+                                    </button>
+                                </div>
+                            ) : activeMessages.length === 0 ? (
                                 <div className="messages-state">Chưa có tin nhắn. Hãy bắt đầu cuộc trò chuyện!</div>
                             ) : (
                                 activeMessages.map((m) => (

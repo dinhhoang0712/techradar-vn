@@ -101,16 +101,30 @@ export default function NotificationBell() {
         if (!n.read) {
             setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
             setUnread((c) => Math.max(0, c - 1));
-            try { await markNotificationRead(n.id); } catch { /* optimistic */ }
+            try {
+                await markNotificationRead(n.id);
+            } catch {
+                setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: false } : x)));
+                setUnread((c) => c + 1);
+                showToast({ title: 'Không thể đánh dấu đã đọc', body: 'Vui lòng thử lại.', variant: 'error' });
+            }
         }
         setOpen(false);
         if (n.link) navigate(n.link);
     };
 
     const handleMarkAll = async () => {
+        const previousItems = items;
+        const previousUnread = unread;
         setItems((prev) => prev.map((x) => ({ ...x, read: true })));
         setUnread(0);
-        try { await markAllNotificationsRead(); } catch { /* optimistic */ }
+        try {
+            await markAllNotificationsRead();
+        } catch {
+            setItems(previousItems);
+            setUnread(previousUnread);
+            showToast({ title: 'Không thể đánh dấu tất cả đã đọc', body: 'Vui lòng thử lại.', variant: 'error' });
+        }
     };
 
     const handleViewAll = () => {

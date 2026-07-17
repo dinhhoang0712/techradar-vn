@@ -1,9 +1,32 @@
+.feed-page-wrap {
+    max-width: 1100px;
+    margin: 0 auto;
+}
+
+.feed-page-header {
+    margin-bottom: 20px;
+}
+
+.feed-page-title {
+    font-size: 1.7rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    background: var(--gradient-brand);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    margin-bottom: 4px;
+}
+
+.feed-page-subtitle {
+    color: var(--text-2);
+    font-size: 0.9rem;
+}
+
 .feed-page {
     display: flex;
     gap: 20px;
     align-items: flex-start;
-    max-width: 1100px;
-    margin: 0 auto;
 }
 
 @media (max-width: 900px) {
@@ -44,10 +67,36 @@
     box-shadow: 0 0 22px var(--primary-glow), 0 0 34px var(--accent-glow);
 }
 
+.feed-composer-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
 .feed-composer-input {
+    flex: 1;
+    min-width: 0;
     width: 100%;
     resize: vertical;
-    margin-bottom: 10px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    font-size: 0.92rem;
+    line-height: 1.5;
+    color: var(--text);
+    font-family: inherit;
+    outline: none;
+    transition: border-color var(--t), box-shadow var(--t);
+}
+
+.feed-composer-input::placeholder {
+    color: var(--text-3);
+}
+
+.feed-composer-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-glow);
 }
 
 .feed-composer-footer {
@@ -71,10 +120,24 @@
     text-align: center;
 }
 
-.feed-empty-icon {
-    font-size: 1.8rem;
+.feed-state.card:hover {
+    transform: none;
+}
+
+.feed-state-icon-wrap {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--primary-glow);
+    margin-bottom: 4px;
+}
+
+.feed-state-icon {
+    font-size: 1.7rem;
     line-height: 1;
-    opacity: 0.85;
 }
 
 .feed-list {
@@ -153,6 +216,13 @@
     align-items: center;
     justify-content: space-between;
     gap: 10px;
+    padding: 6px;
+    border-radius: var(--radius-sm);
+    transition: background var(--t);
+}
+
+.suggested-user-row:hover {
+    background: var(--surface-2);
 }
 
 .suggested-user-info {

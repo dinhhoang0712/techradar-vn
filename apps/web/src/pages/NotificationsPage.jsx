@@ -4,6 +4,7 @@ import {
     getNotifications,
     markNotificationRead,
     markAllNotificationsRead,
+    streamNotifications,
 } from '../api/notificationService';
 import NotifIcon from '../components/notifications/notifIcons';
 import { useToast } from '../components/common/toastContext';
@@ -47,6 +48,18 @@ export default function NotificationsPage() {
     useEffect(() => {
         loadFirstPage();
     }, [loadFirstPage]);
+
+    // Live push — cùng cơ chế với NotificationBell, để danh sách trên trang này
+    // tự cập nhật khi có thông báo mới, không cần tải lại trang.
+    useEffect(() => {
+        const controller = streamNotifications(
+            (n) => {
+                setItems((prev) => (prev.some((x) => x.id === n.id) ? prev : [n, ...prev]));
+            },
+            (err) => console.warn('[NotificationsPage] stream error:', err),
+        );
+        return () => controller.abort();
+    }, []);
 
     const loadMore = async () => {
         setLoadingMore(true);

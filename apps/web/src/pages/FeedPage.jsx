@@ -48,6 +48,7 @@ function SuggestedUserRow({ user, onFollowed }) {
 
 export default function FeedPage() {
     const [currentUserId, setCurrentUserId] = useState(null);
+    const [currentUser, setCurrentUser] = useState(null);
     const [content, setContent] = useState('');
     const [posting, setPosting] = useState(false);
     const [posts, setPosts] = useState([]);
@@ -65,7 +66,9 @@ export default function FeedPage() {
         getUserProfile()
             .then((res) => {
                 const data = res?.data ?? res ?? {};
-                setCurrentUserId(data.id ?? data.user?.id ?? null);
+                const user = data.user ?? data;
+                setCurrentUser(user);
+                setCurrentUserId(user?.id ?? null);
             })
             .catch(() => {});
     }, []);
@@ -146,88 +149,102 @@ export default function FeedPage() {
     };
 
     return (
-        <div className="feed-page">
-            <div className="feed-main">
-                <div className={`card feed-composer${composerFocused ? ' is-focused' : ''}`}>
-                    <form onSubmit={handlePost}>
-                        <textarea
-                            className="form-input feed-composer-input"
-                            placeholder="Bạn đang nghĩ gì về công nghệ hôm nay?"
-                            value={content}
-                            onChange={(e) => setContent(e.target.value)}
-                            onFocus={() => setComposerFocused(true)}
-                            onBlur={() => setComposerFocused(false)}
-                            maxLength={2000}
-                            rows={3}
-                            disabled={posting}
-                        />
-                        <div className="feed-composer-footer">
-                            <span className="feed-composer-count">{content.length}/2000</span>
-                            <button type="submit" className="btn btn-primary" disabled={posting || !content.trim()}>
-                                {posting ? 'Đang đăng...' : 'Đăng bài'}
-                            </button>
-                        </div>
-                    </form>
-                </div>
-
-                {loading ? (
-                    <div className="feed-list">
-                        {[0, 1, 2].map((i) => (
-                            <div className="card post-skeleton" key={i}>
-                                <div className="post-skeleton-header">
-                                    <div className="skeleton post-skeleton-avatar" />
-                                    <div className="post-skeleton-lines">
-                                        <div className="skeleton post-skeleton-line" style={{ width: '35%' }} />
-                                        <div className="skeleton post-skeleton-line" style={{ width: '20%' }} />
-                                    </div>
-                                </div>
-                                <div className="skeleton post-skeleton-line" style={{ width: '92%', height: 12 }} />
-                                <div className="skeleton post-skeleton-line" style={{ width: '68%', height: 12 }} />
+        <div className="feed-page-wrap">
+            <div className="feed-page-header">
+                <h1 className="feed-page-title">Bảng tin</h1>
+                <p className="feed-page-subtitle">Cập nhật mới nhất từ cộng đồng công nghệ bạn theo dõi</p>
+            </div>
+            <div className="feed-page">
+                <div className="feed-main">
+                    <div className={`card feed-composer${composerFocused ? ' is-focused' : ''}`}>
+                        <form onSubmit={handlePost}>
+                            <div className="feed-composer-row">
+                                <Avatar user={currentUser} size={40} />
+                                <textarea
+                                    className="feed-composer-input"
+                                    placeholder="Bạn đang nghĩ gì về công nghệ hôm nay?"
+                                    value={content}
+                                    onChange={(e) => setContent(e.target.value)}
+                                    onFocus={() => setComposerFocused(true)}
+                                    onBlur={() => setComposerFocused(false)}
+                                    maxLength={2000}
+                                    rows={3}
+                                    disabled={posting}
+                                />
                             </div>
-                        ))}
-                    </div>
-                ) : error ? (
-                    <div className="feed-state">
-                        <span>Không tải được bảng tin.</span>
-                        <button className="btn btn-ghost mt-16" onClick={loadFeed}>Thử lại</button>
-                    </div>
-                ) : posts.length === 0 ? (
-                    <div className="feed-state">
-                        <span className="feed-empty-icon" aria-hidden="true">📰</span>
-                        Chưa có bài viết nào. Theo dõi thêm người dùng ở bên phải hoặc tự đăng bài đầu tiên!
-                    </div>
-                ) : (
-                    <>
-                        <div className="feed-list">
-                            {posts.map((post) => (
-                                <PostCard key={post.id} post={post} currentUserId={currentUserId} onDeleted={handleDeleted} />
-                            ))}
-                        </div>
-                        {hasMore && (
-                            <div className="feed-loadmore">
-                                <button className="btn btn-ghost" onClick={loadMore} disabled={loadingMore}>
-                                    {loadingMore ? 'Đang tải…' : 'Tải thêm'}
+                            <div className="feed-composer-footer">
+                                <span className="feed-composer-count">{content.length}/2000</span>
+                                <button type="submit" className="btn btn-primary" disabled={posting || !content.trim()}>
+                                    {posting ? 'Đang đăng...' : 'Đăng bài'}
                                 </button>
                             </div>
-                        )}
-                    </>
-                )}
-            </div>
+                        </form>
+                    </div>
 
-            <div className="feed-sidebar">
-                <div className="card suggested-card">
-                    <h3 className="section-title">Gợi ý theo dõi</h3>
-                    {suggestedLoading ? (
-                        <p className="suggested-empty-hint">Đang tải gợi ý...</p>
-                    ) : suggested.length === 0 ? (
-                        <p className="suggested-empty-hint">Không có gợi ý nào lúc này.</p>
-                    ) : (
-                        <div className="suggested-user-list">
-                            {suggested.map((u) => (
-                                <SuggestedUserRow key={u.id} user={u} onFollowed={markFollowed} />
+                    {loading ? (
+                        <div className="feed-list">
+                            {[0, 1, 2].map((i) => (
+                                <div className="card post-skeleton" key={i}>
+                                    <div className="post-skeleton-header">
+                                        <div className="skeleton post-skeleton-avatar" />
+                                        <div className="post-skeleton-lines">
+                                            <div className="skeleton post-skeleton-line" style={{ width: '35%' }} />
+                                            <div className="skeleton post-skeleton-line" style={{ width: '20%' }} />
+                                        </div>
+                                    </div>
+                                    <div className="skeleton post-skeleton-line" style={{ width: '92%', height: 12 }} />
+                                    <div className="skeleton post-skeleton-line" style={{ width: '68%', height: 12 }} />
+                                </div>
                             ))}
                         </div>
+                    ) : error ? (
+                        <div className="card feed-state">
+                            <div className="feed-state-icon-wrap">
+                                <span className="feed-state-icon" aria-hidden="true">⚠️</span>
+                            </div>
+                            <span>Không tải được bảng tin.</span>
+                            <button className="btn btn-ghost mt-16" onClick={loadFeed}>Thử lại</button>
+                        </div>
+                    ) : posts.length === 0 ? (
+                        <div className="card feed-state">
+                            <div className="feed-state-icon-wrap">
+                                <span className="feed-state-icon" aria-hidden="true">📰</span>
+                            </div>
+                            Chưa có bài viết nào. Theo dõi thêm người dùng ở bên phải hoặc tự đăng bài đầu tiên!
+                        </div>
+                    ) : (
+                        <>
+                            <div className="feed-list">
+                                {posts.map((post) => (
+                                    <PostCard key={post.id} post={post} currentUserId={currentUserId} onDeleted={handleDeleted} />
+                                ))}
+                            </div>
+                            {hasMore && (
+                                <div className="feed-loadmore">
+                                    <button className="btn btn-ghost" onClick={loadMore} disabled={loadingMore}>
+                                        {loadingMore ? 'Đang tải…' : 'Tải thêm'}
+                                    </button>
+                                </div>
+                            )}
+                        </>
                     )}
+                </div>
+
+                <div className="feed-sidebar">
+                    <div className="card suggested-card">
+                        <h3 className="section-title"><span className="icon">✨</span> Gợi ý theo dõi</h3>
+                        {suggestedLoading ? (
+                            <p className="suggested-empty-hint">Đang tải gợi ý...</p>
+                        ) : suggested.length === 0 ? (
+                            <p className="suggested-empty-hint">Không có gợi ý nào lúc này.</p>
+                        ) : (
+                            <div className="suggested-user-list">
+                                {suggested.map((u) => (
+                                    <SuggestedUserRow key={u.id} user={u} onFollowed={markFollowed} />
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

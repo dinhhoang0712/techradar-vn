@@ -1,7 +1,25 @@
 .post-card {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: 12px;
+    overflow: hidden;
+}
+
+.post-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--gradient-brand);
+    opacity: 0;
+    transition: opacity var(--t);
+}
+
+.post-card:hover::before {
+    opacity: 1;
 }
 
 .post-header {
@@ -37,6 +55,12 @@
 
 .post-author:hover .post-author-name {
     color: var(--primary-light);
+}
+
+.post-author:hover .shared-avatar-img,
+.post-author:hover .shared-avatar-initials,
+.post-author:hover .shared-avatar-icon {
+    box-shadow: 0 0 0 2px var(--primary);
 }
 
 .post-time {
@@ -156,6 +180,7 @@
 
 .post-action-btn.liked {
     color: var(--danger-light);
+    background: var(--danger-glow);
 }
 
 .post-comments {

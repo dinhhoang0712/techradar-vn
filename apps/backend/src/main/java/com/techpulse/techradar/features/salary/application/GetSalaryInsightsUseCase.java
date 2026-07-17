@@ -35,7 +35,7 @@ public class GetSalaryInsightsUseCase {
 
     public Flux<SalaryInsight> execute(int limit, int minJobs) {
         int effectiveLimit = limit <= 0 ? 20 : Math.min(limit, 100);
-        int effectiveMinJobs = minJobs <= 0 ? 3 : minJobs;
+        int effectiveMinJobs = minJobs <= 0 ? 1 : minJobs;
         String cacheKey = CACHE_PREFIX + effectiveLimit + ":" + effectiveMinJobs;
 
         log.info("Fetching salary insights limit={} minJobs={}", effectiveLimit, effectiveMinJobs);

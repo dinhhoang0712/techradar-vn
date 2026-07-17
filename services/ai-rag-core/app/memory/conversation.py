@@ -32,14 +32,3 @@ async def get_history(
     )
     rows = result.mappings().all()
     return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
-
-
-def format_history_block(history: list[dict]) -> str:
-    """Format lịch sử thành text block để inject vào prompt."""
-    if not history:
-        return ""
-    lines = []
-    for msg in history:
-        role = "User" if msg["role"] == "user" else "Assistant"
-        lines.append(f"{role}: {msg['content'][:300]}")
-    return "Lịch sử hội thoại:\n" + "\n".join(lines)

@@ -36,9 +36,12 @@ public class Neo4jJobRepository implements JobRepository {
             "WITH j, requiredNames, " +
             "     [n IN requiredNames WHERE toLower(n) IN $userSkillsLower] AS matchedNames " +
             "WHERE size(matchedNames) > 0 " +
-            // Job-[:HIRES_FOR]->Company comes from the batch knowledge-graph importer;
-            // Job-[:POSTED_BY]->Company comes from the real-time Kafka pipeline
-            // (KafkaNeo4jWriterService) — a job seen by only one of the two has only one edge.
+            // Job-[:HIRES_FOR]->Company was written by the old knowledge-graph/ batch importer
+            // (removed from the repo — see docs/DATABASE.md §4.1); it's frozen historical data,
+            // no longer written by anything. Job-[:POSTED_BY]->Company is the live edge, written
+            // by the real-time Kafka pipeline (KafkaNeo4jWriterService) and by
+            // data-platform/gold/neo4j_job_sync.py — a job seen by only one of the two has only
+            // one edge.
             // A job seen by both could match a company via each edge; collect+head picks one
             // instead of returning one JobMatchRaw row per matched company.
             "OPTIONAL MATCH (j)-[:POSTED_BY|HIRES_FOR]->(c:Company) " +

@@ -33,21 +33,23 @@
     margin: 0;
 }
 
-.graph-search-bar {
+/* ─── Toolbar: tabs + mode input + controls trên MỘT hàng, chiều cao ổn định
+   giữa các tab để tránh layout bị giật khi chuyển "Khám phá / Lộ trình / Duyệt bộ lọc" ── */
+.graph-toolbar {
     width: 100%;
     display: flex;
-    flex-direction: column;
-    /* Đổi sang dọc để chứa tabs */
+    align-items: center;
+    flex-wrap: wrap;
     gap: 16px;
-    padding: 16px;
+    padding: 12px 16px;
     position: relative;
     z-index: 10;
 }
 
-/* Feature Switcher Tabs */
 .feature-switcher-tabs {
     display: flex;
-    gap: 8px;
+    flex-shrink: 0;
+    gap: 4px;
     padding: 4px;
     background: rgba(13, 15, 26, 0.4);
     border-radius: 12px;
@@ -55,18 +57,18 @@
 }
 
 .feat-tab {
-    flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
-    padding: 10px 16px;
+    padding: 8px 14px;
     border: none;
     background: transparent;
     color: var(--text-2);
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     font-weight: 600;
     cursor: pointer;
+    white-space: nowrap;
     border-radius: 8px;
     transition: all 0.3s ease;
 }
@@ -82,47 +84,43 @@
     box-shadow: 0 4px 12px rgba(255, 255, 255, 0.1);
 }
 
-.feat-icon {
-    font-size: 1rem;
+/* Vùng nội dung riêng theo tab — min-height cố định để 3 chế độ không lệch chiều cao nhau */
+.toolbar-main {
+    flex: 1;
+    min-width: 240px;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
 }
 
-/* Journey search row */
-.journey-search-row {
+.toolbar-hint {
+    color: var(--text-3);
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+/* Journey inline row: 2 ô input + mũi tên + nút hành động, gọn trên 1 hàng */
+.journey-inline-row {
     display: flex;
-    align-items: flex-end;
-    gap: 12px;
+    align-items: center;
+    gap: 10px;
     flex: 1;
     flex-wrap: wrap;
 }
 
-@media (max-width: 768px) {
-    .journey-search-row {
-        flex-direction: column;
-        align-items: stretch;
-    }
-}
-
-.journey-search-field {
-    flex: 1;
-    min-width: 200px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.journey-search-label {
+.journey-field {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: var(--text-3);
+    flex: 1;
+    min-width: 200px;
 }
 
 .journey-tag {
-    padding: 2px 10px;
-    border-radius: 99px;
-    font-size: 0.73rem;
+    flex-shrink: 0;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 0.7rem;
     font-weight: 700;
     letter-spacing: 0.03em;
     text-transform: uppercase;
@@ -131,28 +129,52 @@
 .journey-tag.start {
     background: var(--green-glow);
     color: var(--green);
-    border: 1px solid var(--green);
 }
 
 .journey-tag.end {
     background: var(--danger-glow);
     color: var(--danger-light);
-    border: 1px solid var(--danger);
-}
-
-.journey-selected-badge {
-    padding: 2px 10px;
-    border-radius: 6px;
-    font-size: 0.75rem;
-    font-weight: 600;
 }
 
 .journey-arrow {
-    font-size: 1.5rem;
-    color: #FFD700;
-    padding-bottom: 4px;
+    font-size: 0.95rem;
+    color: var(--text-3);
     flex-shrink: 0;
-    line-height: 42px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    transition: all var(--t);
+}
+
+.journey-arrow:hover {
+    color: var(--primary-light);
+    border-color: var(--primary);
+}
+
+.journey-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+    .journey-inline-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .journey-arrow {
+        display: none;
+    }
+
+    .journey-actions {
+        justify-content: flex-end;
+    }
 }
 
 .search-input-wrap {
@@ -160,19 +182,12 @@
     display: flex;
     align-items: center;
     flex: 1;
-    min-width: 200px;
-}
-
-.search-icon {
-    position: absolute;
-    left: 10px;
-    font-size: 0.9rem;
-    pointer-events: none;
+    min-width: 160px;
 }
 
 .search-input {
     width: 100%;
-    padding: 8px 12px 8px 32px;
+    padding: 8px 12px;
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
@@ -228,30 +243,12 @@
     font-weight: 600;
 }
 
-.graph-controls {
+.toolbar-controls {
     display: flex;
     align-items: center;
     gap: 8px;
+    flex-shrink: 0;
     flex-wrap: wrap;
-}
-
-@media (max-width: 640px) {
-    .graph-controls {
-        justify-content: space-between;
-    }
-}
-
-.control-group-inline {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.control-label {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--text-3);
-    white-space: nowrap;
 }
 
 /* Body */
@@ -297,41 +294,6 @@
     font-size: 0.75rem;
     color: var(--text-3);
     font-weight: 600;
-}
-
-.filter-slider-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.filter-slider-row input[type=range] {
-    flex: 1;
-    accent-color: var(--primary);
-    height: 4px;
-    cursor: pointer;
-}
-
-.filter-val {
-    font-size: 0.78rem;
-    color: var(--primary-light);
-    font-weight: 600;
-    min-width: 52px;
-    text-align: right;
-}
-
-.filter-checkbox-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.82rem;
-    color: var(--text-2);
-    cursor: pointer;
-}
-
-.filter-checkbox-row input {
-    accent-color: var(--primary);
-    cursor: pointer;
 }
 
 /* Browse-mode results (flat node list from /graph/filter) */
@@ -401,12 +363,14 @@
     display: block;
 }
 
-/* Loading overlay (khi đang fetch dữ liệu đồ thị) */
+/* Loading overlay (khi đang fetch dữ liệu đồ thị) — canh giữa phía trên để tránh đè lên breadcrumb (trái)
+   và panel lộ trình/cạnh (phải) */
 .graph-loading-overlay {
     position: absolute;
     top: 12px;
-    left: 12px;
-    z-index: 10;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 40;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -424,11 +388,84 @@
     border-width: 2px;
 }
 
-/* Node tooltip */
+/* Breadcrumb điều hướng (tab Khám phá) — cho phép quay lại node đã xem trước đó */
+.graph-breadcrumb {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    z-index: 40;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px;
+    background: rgba(19, 22, 37, 0.88);
+    border: 1px solid var(--border);
+    border-radius: 99px;
+    padding: 6px 12px;
+    max-width: fit-content;
+}
+
+.breadcrumb-item-wrap {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.breadcrumb-sep {
+    color: var(--text-3);
+    margin: 0 2px;
+}
+
+.breadcrumb-item {
+    background: none;
+    border: none;
+    padding: 2px 4px;
+    font-size: 0.8rem;
+    color: var(--text-2);
+    border-radius: 4px;
+}
+
+button.breadcrumb-item:hover {
+    color: var(--primary-light);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.breadcrumb-item.current {
+    color: var(--text);
+    font-weight: 700;
+}
+
+/* Empty state khi tìm kiếm/lộ trình không ra kết quả */
+.graph-empty-state {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 24px;
+    z-index: 20;
+    pointer-events: none;
+}
+
+.graph-empty-state p {
+    max-width: 360px;
+    color: var(--text-3);
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.graph-empty-state b {
+    color: var(--text-2);
+}
+
+/* Node tooltip — đặt góc dưới-trái, ngay trên dock, để không đè lên breadcrumb (trên-trái)
+   hay panel lộ trình/cạnh (trên-phải) */
 .node-tooltip {
     position: absolute;
-    top: 16px;
-    right: 16px;
+    bottom: 56px;
+    left: 12px;
     background: rgba(19, 22, 37, 0.96);
     border: 1px solid var(--border-2);
     border-radius: var(--radius);
@@ -437,14 +474,13 @@
     max-width: 240px;
     box-shadow: var(--shadow-lg);
     pointer-events: none;
-    z-index: 50;
+    z-index: 45;
 }
 
 .nt-header {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 8px;
 }
 
 .nt-type-badge {
@@ -454,61 +490,148 @@
     font-weight: 700;
 }
 
-.nt-row {
-    font-size: 0.8rem;
-    color: var(--text-2);
-    margin-bottom: 3px;
-}
-
-.nt-row b {
-    color: var(--text);
-}
-
-.nt-hint {
-    margin-top: 8px;
-    font-size: 0.7rem;
-    color: var(--text-3);
-    font-style: italic;
-}
-
-/* Graph stats badge */
-.graph-stats-badge {
+/* ─── Dock công cụ nổi duy nhất ở đáy canvas: gộp số lượng node + zoom + chú giải,
+   thay cho 4 hộp rải rác 4 góc trước đây ── */
+.graph-dock {
     position: absolute;
     bottom: 12px;
     left: 12px;
+    right: 12px;
     display: flex;
     align-items: center;
-    gap: 8px;
+    justify-content: space-between;
+    gap: 12px;
+    z-index: 50;
+    pointer-events: none;
+}
+
+.dock-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     background: rgba(19, 22, 37, 0.88);
     border: 1px solid var(--border);
     border-radius: 99px;
-    padding: 4px 12px;
-    font-size: 0.78rem;
-    color: var(--text-2);
-    z-index: 50;
+    padding: 6px;
+    pointer-events: auto;
 }
 
-/* Legend */
-.graph-legend {
+.dock-count {
+    padding: 0 10px;
+    font-size: 0.78rem;
+    color: var(--text-2);
+    white-space: nowrap;
+}
+
+.dock-btn {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    border: 1px solid transparent;
+    background: var(--surface-2);
+    color: var(--text-2);
+    font-size: 0.9rem;
+    line-height: 1;
+    transition: all var(--t);
+}
+
+.dock-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary-light);
+}
+
+.dock-btn.active {
+    background: var(--primary-glow);
+    border-color: var(--primary);
+    color: var(--primary-light);
+}
+
+/* Chú giải thu gọn (bấm nút "i" trên dock để mở), gồm cả màu node lẫn màu cạnh */
+.graph-legend-panel {
     position: absolute;
-    bottom: 12px;
+    bottom: 56px;
     right: 12px;
-    background: rgba(19, 22, 37, 0.9);
+    max-width: min(280px, calc(100% - 24px));
+    max-height: calc(100% - 80px);
+    overflow-y: auto;
+    background: rgba(19, 22, 37, 0.94);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    padding: 10px 12px;
+    padding: 12px;
     display: flex;
     flex-direction: column;
-    gap: 5px;
-    z-index: 50;
+    gap: 10px;
+    z-index: 55;
+    box-shadow: var(--shadow-lg);
+    animation: fadeScaleIn 0.2s ease;
+}
+
+.legend-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.legend-section-title {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.legend-section-title em {
+    font-style: normal;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--text-3);
+    opacity: 0.8;
+}
+
+.legend-tips {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 6px 0 0;
+    padding-left: 16px;
+    font-size: 0.78rem;
+    line-height: 1.4;
+    color: var(--text-2);
+}
+
+.legend-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
 }
 
 .legend-item {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     color: var(--text-2);
+}
+
+.legend-item-toggle {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 99px;
+    padding: 4px 10px;
+    transition: all var(--t);
+}
+
+.legend-item-toggle:hover {
+    border-color: var(--border-2);
+}
+
+.legend-item-toggle.off {
+    opacity: 0.4;
+    text-decoration: line-through;
 }
 
 .legend-dot {
@@ -519,8 +642,8 @@
 }
 
 .legend-line {
-    width: 18px;
-    height: 2px;
+    width: 16px;
+    height: 3px;
     border-radius: 2px;
     flex-shrink: 0;
 }
@@ -528,33 +651,53 @@
 .legend-sep {
     height: 1px;
     background: var(--border);
-    margin: 2px 0;
 }
 
-/* Edge panel & Journey panel container */
+/* ─── Panel bên (lộ trình/cạnh): nổi đè lên góc phải canvas (slide-in) thay vì
+   chiếm chỗ và đẩy co hẹp khung đồ thị như trước ── */
 .graph-side-panels {
-    width: 300px;
-    flex-shrink: 0;
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    bottom: 12px;
+    width: 320px;
     display: flex;
     flex-direction: column;
     gap: 12px;
     overflow-y: auto;
-    padding-right: 4px;
+    z-index: 60;
+    animation: panelSlideIn 0.25s ease;
+}
+
+@keyframes panelSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(16px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
 }
 
 @media (max-width: 1024px) {
     .graph-side-panels {
+        position: relative;
+        top: auto;
+        right: auto;
+        bottom: auto;
         width: 100%;
         overflow: visible;
-        padding-right: 0;
     }
 }
 
 /* Journey panel */
 .journey-panel {
     padding: 16px;
-    background: linear-gradient(135deg, rgba(25, 28, 45, 0.95) 0%, rgba(13, 15, 26, 0.98) 100%);
+    background: linear-gradient(135deg, rgba(25, 28, 45, 0.97) 0%, rgba(13, 15, 26, 0.99) 100%);
     border: 1px solid #FFD70044;
+    box-shadow: var(--shadow-lg);
 }
 
 .jp-header {
@@ -617,44 +760,13 @@
     line-height: 1.4;
 }
 
-/* Selection hint */
-.path-hint-badge {
-    position: absolute;
-    top: 16px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(108, 99, 255, 0.2);
-    backdrop-filter: blur(8px);
-    border: 1px solid var(--primary);
-    color: white;
-    padding: 10px 20px;
-    border-radius: 99px;
-    font-size: 0.9rem;
-    z-index: 100;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-    pointer-events: none;
-    animation: slideDown 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28);
-}
-
-@keyframes slideDown {
-    from {
-        opacity: 0;
-        transform: translate(-50%, -40px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translate(-50%, 0);
-    }
-}
-
-/* Edge panel refinements */
+/* Edge panel */
 .edge-panel {
     width: 100%;
-    /* Sẽ dùng chiều cao trong sidebar */
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
+    box-shadow: var(--shadow-lg);
 }
 
 .ep-header {
@@ -675,6 +787,16 @@
     gap: 8px;
 }
 
+.ep-sentence {
+    font-size: 0.88rem;
+    color: var(--text-2);
+    line-height: 1.6;
+}
+
+.ep-sentence b {
+    color: var(--text);
+}
+
 .ep-row {
     display: flex;
     justify-content: space-between;
@@ -690,22 +812,7 @@
     font-weight: 500;
 }
 
-.ep-val {
-    color: var(--text);
-    font-weight: 600;
-    text-align: right;
-}
-
 .ep-type {
     font-weight: 700;
     font-size: 0.85rem;
-}
-
-.ep-desc {
-    font-size: 0.8rem;
-    color: var(--text-2);
-    background: var(--surface-2);
-    border-radius: var(--radius-sm);
-    padding: 10px;
-    line-height: 1.5;
 }

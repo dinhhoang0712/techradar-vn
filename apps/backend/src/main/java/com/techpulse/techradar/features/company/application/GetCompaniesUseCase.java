@@ -65,7 +65,9 @@ public class GetCompaniesUseCase {
                 CompanyNames.clean(raw.name()),
                 raw.location(),
                 raw.techStack(),
-                raw.jobCount()
+                raw.jobCount(),
+                raw.industry(),
+                raw.size()
         );
     }
 }

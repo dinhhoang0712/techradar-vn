@@ -62,7 +62,11 @@ bundled), nên một `.env` kiểu cloud không thể làm hỏng kết nối. C
 | `LLM_PROVIDER` | `openai` | `openai` \| `gemini` |
 | `OPENAI_API_KEY` / `GEMINI_API_KEY` | rỗng | Thiếu thì stack vẫn chạy nhưng chat trả lời lỗi |
 | `ALLOWED_ORIGINS` / `CORS_ORIGINS` | `*` | CORS gateway / RAG |
-| `WEB_RESET_URL` | `http://localhost:5173/login` | Link trong email reset mật khẩu |
+| `WEB_RESET_URL` | `http://localhost:5173/login` | Link trong email reset mật khẩu — **prod đổi thành domain frontend thật** |
+| `MAIL_HOST` / `MAIL_PORT` | `mailhog` / `1025` | SMTP server. Prod đổi sang SMTP thật (Gmail, SendGrid, SES...) |
+| `MAIL_USER` / `MAIL_PASSWORD` | rỗng | Tài khoản/API key đăng nhập SMTP thật (secret — không commit) |
+| `MAIL_SMTP_AUTH` / `MAIL_SMTP_STARTTLS` | `false` / `false` | Prod với SMTP thật **luôn set `true`** |
+| `MAIL_FROM` | `no-reply@techradar.vn` | Địa chỉ "From" — nên dùng domain đã xác thực SPF/DKIM |
 | `MLCLUSTER_S3_*` | rỗng | (Tuỳ chọn) artifact clustering trên S3 |
 
 ## 5. Thứ tự khởi động & health
@@ -90,5 +94,5 @@ Nginx tắt buffering cho `location /api` để **SSE** (`/api/v1/chat/session/{
 
 - Đặt `APP_ENV=prod`, `JWT_SECRET` ngẫu nhiên mạnh, `INTERNAL_API_TOKEN` riêng, `ALLOWED_ORIGINS`/`CORS_ORIGINS` giới hạn domain thật.
 - Đổi mật khẩu Postgres/Neo4j mặc định (đang hard-code cho môi trường dev) và đưa qua secret manager.
-- MailHog chỉ dành cho dev — thay bằng SMTP thật qua các biến `MAIL_*` (xem `apps/backend/src/main/resources/application.yml`).
+- MailHog chỉ dành cho dev — set các biến `MAIL_*` trong `.env` (xem chú thích chi tiết trong [`.env.docker.example`](../.env.docker.example)) để dùng SMTP thật.
 - Cân nhắc đặt sau reverse proxy/TLS; chỉ expose cổng `web` (và `8080` nếu cần gọi API trực tiếp).

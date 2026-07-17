@@ -54,7 +54,7 @@ class GetPublicStatsUseCaseTest {
     }
 
     private static CompanyProfile profile(String id) {
-        return new CompanyProfile(id, "Company " + id, "Hà Nội", List.of("Java"), 1);
+        return new CompanyProfile(id, "Company " + id, "Hà Nội", List.of("Java"), 1, null, null);
     }
 
     @Test

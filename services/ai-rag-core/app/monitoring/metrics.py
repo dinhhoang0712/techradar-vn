@@ -17,12 +17,6 @@ ai_latency_seconds = Histogram(
     buckets=[0.05, 0.1, 0.3, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0],
 )
 
-llm_tokens_total = Counter(
-    "ai_rag_llm_tokens_total",
-    "LLM token consumption",
-    ["provider", "model", "token_type"],
-)
-
 retrieval_results = Histogram(
     "ai_rag_retrieval_results",
     "Number of results returned per retrieval source",

@@ -113,9 +113,6 @@ app:
     pool-size: 50
     acquisition-timeout: 60000
 
-  storage:
-    export-dir: ${EXPORT_DIR:./exports}
-
   mail:
     from: ${MAIL_FROM:no-reply@techradar.vn}
 
@@ -145,15 +142,6 @@ app:
     # Min month-over-month growth (%) for a technology to raise a trend alert during the ETL.
     # Each alert is published to Kafka (trend.alerts) and fanned out to subscribed users.
     trend-threshold: ${NOTIF_TREND_THRESHOLD:30}
-
-  kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
-    consumer:
-      group-id: ${KAFKA_CONSUMER_GROUP:techradar-group}
-      auto-offset-reset: earliest
-      enable-auto-commit: true
-    producer:
-      retries: 3
 
 # Log appenders/patterns live in logback-spring.xml (console for dev, JSON+file for prod).
 # Only levels are configured here; LOG_DIR (file output dir) is read by logback-spring.xml.

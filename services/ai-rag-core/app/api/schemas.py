@@ -1,5 +1,4 @@
 import uuid
-from datetime import datetime
 from pydantic import BaseModel, Field
 
 
@@ -31,22 +30,6 @@ class ChatMessageItem(BaseModel):
     id:      uuid.UUID
     role:    str
     content: str
-
-
-# ── Session ───────────────────────────────────────────────────────────────────
-
-class SessionCreate(BaseModel):
-    user_id: uuid.UUID
-    title:   str | None = None
-
-
-class SessionResponse(BaseModel):
-    id:         uuid.UUID
-    user_id:    uuid.UUID
-    title:      str | None
-    created_at: datetime
-
-    model_config = {"from_attributes": True}
 
 
 # ── Health ────────────────────────────────────────────────────────────────────
@@ -198,6 +181,18 @@ class InterviewResponse(BaseModel):
     is_final:               bool
     turn:                    int
     final_summary:           InterviewFinalSummary | None = None
+
+
+# ── Company Insight ───────────────────────────────────────────────────────────
+
+class CompanyInsightRequest(BaseModel):
+    company_name: str = Field(..., min_length=1, max_length=300)
+
+
+class CompanyInsightResponse(BaseModel):
+    company_name: str
+    summary:      str
+    highlights:   list[str] = []
 
 
 # ── AI Agent Workflow ─────────────────────────────────────────────────────────

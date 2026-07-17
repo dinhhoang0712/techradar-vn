@@ -1,6 +1,8 @@
 """
 APScheduler setup cho Data Platform.
 Schedule mặc định (Asia/Ho_Chi_Minh):
+  02:00 daily   — Neo4j Article Sync (dp_processed_articles → Neo4j Article/Technology)
+  02:30 daily   — Neo4j Job Sync (dp_processed_jobs → Neo4j Job/Company)
   03:00 daily   — Gold PG ETL (rebuild tech_analytics)
   04:00 daily   — Embed Trigger (gọi ai-rag-core /embed/trigger)
   05:00 daily   — Neo4j Enricher (derived relationships + stats)
@@ -14,7 +16,9 @@ from config import Settings
 from scheduler.jobs import (
     job_embed_trigger,
     job_gold_pg_etl,
+    job_neo4j_article_sync,
     job_neo4j_enricher,
+    job_neo4j_job_sync,
     job_retrain_clustering,
 )
 
@@ -23,6 +27,36 @@ TZ = "Asia/Ho_Chi_Minh"
 
 def create_scheduler(settings: Settings) -> BackgroundScheduler:
     scheduler = BackgroundScheduler(timezone=TZ)
+
+    scheduler.add_job(
+        func=job_neo4j_article_sync,
+        trigger=CronTrigger(
+            hour=settings.article_sync_hour,
+            minute=settings.article_sync_minute,
+            timezone=TZ,
+        ),
+        args=[settings],
+        id="neo4j_article_sync",
+        name="Neo4j Article Sync",
+        max_instances=1,
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+
+    scheduler.add_job(
+        func=job_neo4j_job_sync,
+        trigger=CronTrigger(
+            hour=settings.job_sync_hour,
+            minute=settings.job_sync_minute,
+            timezone=TZ,
+        ),
+        args=[settings],
+        id="neo4j_job_sync",
+        name="Neo4j Job Sync",
+        max_instances=1,
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
 
     scheduler.add_job(
         func=job_gold_pg_etl,
@@ -86,8 +120,9 @@ def create_scheduler(settings: Settings) -> BackgroundScheduler:
     )
 
     logger.info(
-        "Scheduler configured: gold_pg_etl={}:{:02d}, neo4j_enricher={}:{:02d}, "
-        "embed={}:{:02d}, retrain_clustering={} {}:{:02d}",
+        "Scheduler configured: neo4j_article_sync={}:{:02d}, gold_pg_etl={}:{:02d}, "
+        "neo4j_enricher={}:{:02d}, embed={}:{:02d}, retrain_clustering={} {}:{:02d}",
+        settings.article_sync_hour, settings.article_sync_minute,
         settings.gold_etl_hour, settings.gold_etl_minute,
         settings.neo4j_enricher_hour, settings.neo4j_enricher_minute,
         settings.embed_trigger_hour, settings.embed_trigger_minute,

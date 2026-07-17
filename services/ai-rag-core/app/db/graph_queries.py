@@ -155,6 +155,23 @@ LIMIT 15
 """
 
 # ---------------------------------------------------------------------------
+# COMPANIES — single company context for the AI Company Insight feature.
+# Mirrors apps/backend's Neo4jCompanyRepository query (tech stack inferred from live job
+# postings) rather than the derived Company-[:USES]->Technology edge, for consistency with
+# what the Company page already shows.
+# ---------------------------------------------------------------------------
+COMPANY_INSIGHT_CONTEXT = """
+MATCH (c:Company)
+WHERE toLower(c.name) = toLower($company_name)
+OPTIONAL MATCH (c)<-[:POSTED_BY|HIRES_FOR]-(j:Job)-[:REQUIRES]->(t)
+WHERE t:Technology OR t:Skill
+WITH c, collect(DISTINCT t.name) AS tech_stack, count(DISTINCT j) AS job_count
+RETURN c.name AS name, c.location AS location, c.industry AS industry,
+       c.size AS size, tech_stack, job_count
+LIMIT 1
+"""
+
+# ---------------------------------------------------------------------------
 # TECH — related technologies via RELATED_TO (bidirectional)
 # ---------------------------------------------------------------------------
 TECH_RELATED = """

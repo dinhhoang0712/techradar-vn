@@ -1,6 +1,7 @@
 package com.techpulse.techradar.integration;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.http.MediaType;
 
 import java.util.Map;
@@ -9,6 +10,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Auth flows: register/login/refresh/logout envelope shape, and forgot/reset password. */
+@EnabledIfEnvironmentVariable(named = "POSTGRES_HOST", matches = ".+")
 class AuthIntegrationTest extends IntegrationTestSupport {
 
     @Test

@@ -25,7 +25,7 @@ Pipeline thu thập và xử lý dữ liệu công nghệ Việt Nam theo kiến
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        CRAWLER LAYER                                │
 │  VNExpress  GenK  DanTri  ICTNews  TopCV  ITviec  Viblo  GitHub   │
-│                      (knowledge-graph/crawl/)                       │
+│                      (services/crawler/)                       │
 └───────────────────────────┬─────────────────────────────────────────┘
                             │ Kafka Producer
                             ▼
@@ -79,7 +79,7 @@ Pipeline thu thập và xử lý dữ liệu công nghệ Việt Nam theo kiến
 
 ## 2. Crawler Layer
 
-**Vị trí:** `knowledge-graph/crawl/`
+**Vị trí:** `services/crawler/`
 
 Mỗi crawler chạy như một subprocess riêng biệt (qua `run_all.py`) để Chrome process không bị leak. Kết quả được gửi lên Kafka **và** lưu vào file JSON local (trong Docker volume `crawler_data`).
 
@@ -487,7 +487,7 @@ CREATE TABLE dp_pipeline_runs (
 | `ML_CLUSTERING_BASE_URL` | `http://localhost:8001` | ml-clustering base URL |
 | `RUN_JOBS_ON_START` | `false` | Trigger tất cả jobs khi start |
 
-**Crawler env vars** (`knowledge-graph/crawl/`):
+**Crawler env vars** (`services/crawler/`):
 
 | Env var | Default | Mô tả |
 |---------|---------|-------|
@@ -666,7 +666,7 @@ data-platform/
     ├── db.py                # get_pg_conn, get_neo4j_driver, get_minio_client
     └── logger.py            # Loguru setup
 
-knowledge-graph/crawl/
+services/crawler/
 ├── run_all.py               # Docker entrypoint — chạy crawlers tuần tự
 ├── kafka_producer.py        # CrawlerKafkaProducer (send_article, send_job)
 ├── VNExpress.py             # Selenium crawler — vnexpress.net

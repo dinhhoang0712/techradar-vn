@@ -124,11 +124,13 @@ class CrawlerKafkaProducer:
         source_url: str,
         posted_date: str = "",
         source_platform: str = "TopCV",
-        key: Optional[str] = None
+        key: Optional[str] = None,
+        company_size: str = "",
+        company_field: str = ""
     ) -> bool:
         """
         Send job data to Kafka.
-        
+
         Args:
             job_title: Job title
             company_name: Company name
@@ -143,14 +145,16 @@ class CrawlerKafkaProducer:
             posted_date: Posted date
             source_platform: Platform name
             key: Optional message key
-            
+            company_size: Company headcount, if scraped (e.g. TopCV "Quy mô")
+            company_field: Company industry, if scraped (e.g. TopCV "Lĩnh vực")
+
         Returns:
             True if sent successfully
         """
         if not self.producer:
             logger.warning("Producer not connected, skipping Kafka send")
             return False
-        
+
         message = {
             "message_type": "job",
             "source_platform": source_platform,
@@ -166,7 +170,9 @@ class CrawlerKafkaProducer:
                 "benefit": benefit,
                 "skills": skills if isinstance(skills, list) else [],
                 "source_url": source_url,
-                "posted_date": posted_date
+                "posted_date": posted_date,
+                "size": company_size,
+                "field": company_field
             }
         }
         

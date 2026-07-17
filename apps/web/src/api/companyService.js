@@ -30,3 +30,30 @@ export const getSimilarCompanies = async (companyId, limit) => {
         method: 'GET',
     });
 };
+
+/**
+ * Lấy tin tức nhắc đến công ty (quan hệ Article-[:MENTIONS]->Company).
+ * Endpoint: GET /companies/{id}/mentions
+ * @param {string} companyId
+ * @param {number} [limit]
+ */
+export const getCompanyMentions = async (companyId, limit) => {
+    const params = new URLSearchParams();
+    if (limit != null) params.set('limit', limit);
+    const query = params.toString();
+    return await apiClient(`/companies/${encodeURIComponent(companyId)}/mentions${query ? `?${query}` : ''}`, {
+        method: 'GET',
+    });
+};
+
+/**
+ * Sinh nhận định AI ngắn gọn về một công ty (tech stack, quy mô tuyển dụng...).
+ * Endpoint: POST /company-insight
+ * @param {string} companyName
+ */
+export const getCompanyInsight = async (companyName) => {
+    return await apiClient('/company-insight', {
+        method: 'POST',
+        body: JSON.stringify({ company_name: companyName }),
+    });
+};

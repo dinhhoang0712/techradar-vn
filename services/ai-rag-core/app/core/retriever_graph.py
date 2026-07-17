@@ -15,8 +15,10 @@ from app.db.graph_queries import (
 # ---------------------------------------------------------------------------
 # Query-time alias normalization
 # Maps tech names as extracted by entity_extractor to canonical graph forms.
-# Must mirror knowledge-graph/entity_resolution/aliases.json for variants
-# that actually appear in TECH_KEYWORDS / TECH_ABBREVS.
+# This is the only alias table left in the system (the older
+# knowledge-graph/entity_resolution/aliases.json this used to mirror has been
+# removed) — keep it in sync with variants that appear in TECH_KEYWORDS /
+# TECH_ABBREVS instead.
 # ---------------------------------------------------------------------------
 _QUERY_TECH_ALIASES: dict[str, str] = {
     "k8s": "Kubernetes",

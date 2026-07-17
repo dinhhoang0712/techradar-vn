@@ -167,4 +167,33 @@ abstract class IntegrationTestSupport {
                     Map.of("id", companyId, "name", name, "location", location, "techName", "Rust-" + companyId));
         }
     }
+
+    /** Same as {@link #seedCompany(String, String, String)}, also setting c.industry/c.size. */
+    void seedCompany(String companyId, String name, String location, String industry, String size) {
+        try (var session = neo4j.session()) {
+            session.run(
+                    "CREATE (c:Company {id: $id, name: $name, location: $location, " +
+                    "industry: $industry, size: $size}) " +
+                    "CREATE (t:Technology {name: $techName}) " +
+                    "CREATE (j:Job {title: 'Rust Dev'}) " +
+                    "CREATE (j)-[:REQUIRES]->(t) " +
+                    "CREATE (j)-[:POSTED_BY]->(c)",
+                    Map.of("id", companyId, "name", name, "location", location,
+                            "industry", industry, "size", size, "techName", "Rust-" + companyId));
+        }
+    }
+
+    /** Article-[:MENTIONS]->Company edge, for GET /companies/{id}/mentions. Requires the company
+     *  to already exist (see {@link #seedCompany}). */
+    void seedCompanyMention(String companyId, String title, String url, String publishDate, String sourcePlatform) {
+        try (var session = neo4j.session()) {
+            session.run(
+                    "MATCH (c:Company {id: $company_id}) " +
+                    "CREATE (a:Article {title: $title, source_url: $url, " +
+                    "publish_date: $publish_date, source_platform: $source_platform}) " +
+                    "CREATE (a)-[:MENTIONS]->(c)",
+                    Map.of("company_id", companyId, "title", title, "url", url,
+                            "publish_date", publishDate, "source_platform", sourcePlatform));
+        }
+    }
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { runInterviewTurn } from '../api/interviewService';
 import RingGauge from '../components/common/RingGauge';
 import './InterviewPage.css';
@@ -59,8 +60,11 @@ function inlineMarkdown(text) {
 }
 
 export default function InterviewPage() {
+    // Cho phép điều hướng từ trang Công ty với công ty mục tiêu điền sẵn
+    // (VD: nút "Luyện phỏng vấn công ty này" ở CompanyExplorer.jsx).
+    const location = useLocation();
     const [targetRole, setTargetRole] = useState('');
-    const [targetCompany, setTargetCompany] = useState('');
+    const [targetCompany, setTargetCompany] = useState(location.state?.targetCompany || '');
     const [started, setStarted] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');

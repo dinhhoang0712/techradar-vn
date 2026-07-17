@@ -3,13 +3,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies for Chrome
-RUN apt-get update && apt-get install -y \
+# Dependencies hệ thống cho Chrome (Selenium/undetected-chromedriver) + tool để tải .deb.
+RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
-    gnupg \
-    curl \
     unzip \
-    # Dependencies for Chrome
     libnss3 \
     libatk1.0-0 \
     libatk-bridge2.0-0 \
@@ -32,12 +29,19 @@ RUN apt-get update && apt-get install -y \
     xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Chrome using new method (apt-key is deprecated)
-RUN curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg \
-    && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
+# Pin Chrome ở đúng version đang chạy ổn định trong production (150.0.7871.128), tải trực
+# tiếp file .deb theo version cụ thể — thay vì add apt repo Google rồi install bản mới nhất.
+# "apt-get install google-chrome-stable" không pin version sẽ âm thầm đổi Chrome mỗi lần build
+# lại image, và đã từng gây lỗi thật: chromedriver do undetected-chromedriver tự fetch lệch
+# version với Chrome đã bake trong image cũ, ra lỗi "session not created: This version of
+# ChromeDriver only supports Chrome version X" (xem chrome_utils.py — nơi work around lỗi này
+# bằng cách detect version Chrome đã cài rồi truyền version_main= cho uc.Chrome()). Pin version
+# ở đây giúp build tái lập được, Chrome không đổi bất ngờ giữa các lần build.
+RUN CHROME_VERSION=150.0.7871.128 \
+    && wget -q "https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_${CHROME_VERSION}-1_amd64.deb" -O /tmp/chrome.deb \
     && apt-get update \
-    && apt-get install -y google-chrome-stable \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y --no-install-recommends /tmp/chrome.deb \
+    && rm -rf /tmp/chrome.deb /var/lib/apt/lists/*
 
 # Install Python dependencies
 COPY requirements.txt .

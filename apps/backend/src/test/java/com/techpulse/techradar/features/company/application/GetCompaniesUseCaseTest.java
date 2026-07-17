@@ -40,7 +40,7 @@ class GetCompaniesUseCaseTest {
 
     private static CompanyRepository.CompanyRaw raw(int i) {
         return new CompanyRepository.CompanyRaw(
-                "id-" + i, "Company " + i + "\nPro Company", "Hà Nội", List.of("Java"), i);
+                "id-" + i, "Company " + i + "\nPro Company", "Hà Nội", List.of("Java"), i, null, null);
     }
 
     @Test
@@ -95,8 +95,8 @@ class GetCompaniesUseCaseTest {
     void execute_withQuery_filtersCaseInsensitivelyByNameOnTheCachedList() {
         stubCacheAsPassThrough();
         when(companyRepository.findAllWithTechStack()).thenReturn(Flux.just(
-                new CompanyRepository.CompanyRaw("id-1", "Acme Corp", "Hà Nội", List.of("Java"), 1),
-                new CompanyRepository.CompanyRaw("id-2", "Beta Inc", "Đà Nẵng", List.of("Go"), 2)));
+                new CompanyRepository.CompanyRaw("id-1", "Acme Corp", "Hà Nội", List.of("Java"), 1, null, null),
+                new CompanyRepository.CompanyRaw("id-2", "Beta Inc", "Đà Nẵng", List.of("Go"), 2, null, null)));
 
         StepVerifier.create(useCase.execute("ACME", 0, 20).map(CompanyProfile::name))
                 .expectNext("Acme Corp")
@@ -107,8 +107,8 @@ class GetCompaniesUseCaseTest {
     void execute_withBlankOrNullQuery_behavesAsIfUnfiltered() {
         stubCacheAsPassThrough();
         when(companyRepository.findAllWithTechStack()).thenReturn(Flux.just(
-                new CompanyRepository.CompanyRaw("id-1", "Acme Corp", "Hà Nội", List.of("Java"), 1),
-                new CompanyRepository.CompanyRaw("id-2", "Beta Inc", "Đà Nẵng", List.of("Go"), 2)));
+                new CompanyRepository.CompanyRaw("id-1", "Acme Corp", "Hà Nội", List.of("Java"), 1, null, null),
+                new CompanyRepository.CompanyRaw("id-2", "Beta Inc", "Đà Nẵng", List.of("Go"), 2, null, null)));
 
         StepVerifier.create(useCase.execute(null, 0, 20)).expectNextCount(2).verifyComplete();
         StepVerifier.create(useCase.execute("   ", 0, 20)).expectNextCount(2).verifyComplete();
@@ -120,5 +120,33 @@ class GetCompaniesUseCaseTest {
         when(companyRepository.findAllWithTechStack()).thenReturn(Flux.just(raw(1), raw(2)));
 
         StepVerifier.create(useCase.execute(0, 20)).expectNextCount(2).verifyComplete();
+    }
+
+    @Test
+    void all_passesThroughIndustryAndSizeFromTheRepository() {
+        stubCacheAsPassThrough();
+        when(companyRepository.findAllWithTechStack()).thenReturn(Flux.just(
+                new CompanyRepository.CompanyRaw("id-1", "Acme Corp", "Hà Nội", List.of("Java"), 1, "Fintech", "100-500")));
+
+        StepVerifier.create(useCase.all())
+                .assertNext(profile -> {
+                    assertThat(profile.industry()).isEqualTo("Fintech");
+                    assertThat(profile.size()).isEqualTo("100-500");
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void all_toleratesNullIndustryAndSize() {
+        stubCacheAsPassThrough();
+        when(companyRepository.findAllWithTechStack()).thenReturn(Flux.just(
+                new CompanyRepository.CompanyRaw("id-1", "Acme Corp", "Hà Nội", List.of("Java"), 1, null, null)));
+
+        StepVerifier.create(useCase.all())
+                .assertNext(profile -> {
+                    assertThat(profile.industry()).isNull();
+                    assertThat(profile.size()).isNull();
+                })
+                .verifyComplete();
     }
 }

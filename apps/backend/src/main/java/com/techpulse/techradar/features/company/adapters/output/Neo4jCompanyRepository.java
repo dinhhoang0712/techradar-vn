@@ -1,11 +1,13 @@
 package com.techpulse.techradar.features.company.adapters.output;
 
+import com.techpulse.techradar.features.company.domain.CompanyMention;
 import com.techpulse.techradar.features.company.ports.CompanyRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.neo4j.driver.Driver;
 import org.neo4j.driver.Record;
 import org.neo4j.driver.Session;
+import org.neo4j.driver.Values;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -29,18 +31,27 @@ public class Neo4jCompanyRepository implements CompanyRepository {
     // company is hiring for right now, whereas USES is a derived, batch-enriched signal that only
     // refreshes on the enricher's schedule.
     //
-    // Job-[:POSTED_BY]->Company is written by the real-time Kafka pipeline
-    // (KafkaNeo4jWriterService); Job-[:HIRES_FOR]->Company is written by the batch
-    // knowledge-graph importer (import_multi_source.py) and is what every other reader
-    // (ai-rag-core, ml-clustering) relies on. A job seen by only one of the two pipelines has
-    // only one of these edges, so match both or company linkage silently goes missing.
+    // Job-[:POSTED_BY]->Company is the live edge, written by the real-time Kafka pipeline
+    // (KafkaNeo4jWriterService) and by data-platform/gold/neo4j_job_sync.py.
+    // Job-[:HIRES_FOR]->Company was written by the old knowledge-graph/ batch importer
+    // (removed from the repo — see docs/DATABASE.md §4.1); it's frozen historical data, no
+    // longer written by anything. Older jobs may only have HIRES_FOR, so match both or company
+    // linkage silently goes missing for them.
     private static final String QUERY =
             "MATCH (c:Company)<-[:POSTED_BY|HIRES_FOR]-(j:Job)-[:REQUIRES]->(t) " +
             "WHERE t:Technology OR t:Skill " +
             "WITH c, collect(DISTINCT t.name) AS techStack, count(DISTINCT j) AS jobCount " +
-            "RETURN c.id AS id, c.name AS name, c.location AS location, techStack, jobCount " +
+            "RETURN c.id AS id, c.name AS name, c.location AS location, techStack, jobCount, " +
+            "c.industry AS industry, c.size AS size " +
             "ORDER BY jobCount DESC " +
             "LIMIT 500";
+
+    private static final String MENTIONS_QUERY =
+            "MATCH (a:Article)-[:MENTIONS]->(c:Company {id: $company_id}) " +
+            "RETURN a.id AS id, a.title AS title, a.source_url AS url, " +
+            "a.publish_date AS publishDate, a.source_platform AS sourcePlatform " +
+            "ORDER BY a.publish_date DESC " +
+            "LIMIT $limit";
 
     @Override
     public Flux<CompanyRaw> findAllWithTechStack() {
@@ -54,11 +65,36 @@ public class Neo4jCompanyRepository implements CompanyRepository {
                             nullableString(r, "name"),
                             nullableString(r, "location"),
                             r.get("techStack").asList(v -> v.asString()),
-                            r.get("jobCount").asInt()
+                            r.get("jobCount").asInt(),
+                            nullableString(r, "industry"),
+                            nullableString(r, "size")
                     ));
                 }
             }
             log.info("Neo4jCompanyRepository found {} companies with a tech-stack signal", result.size());
+            return result;
+        })
+        .subscribeOn(Schedulers.boundedElastic())
+        .flatMapIterable(list -> list);
+    }
+
+    @Override
+    public Flux<CompanyMention> findMentions(String companyId, int limit) {
+        return Mono.fromCallable(() -> {
+            List<CompanyMention> result = new ArrayList<>();
+            try (Session session = driver.session()) {
+                var queryResult = session.run(MENTIONS_QUERY,
+                        Values.parameters("company_id", companyId, "limit", limit));
+                for (Record r : queryResult.list()) {
+                    result.add(new CompanyMention(
+                            r.get("id").asString(),
+                            nullableString(r, "title"),
+                            nullableString(r, "url"),
+                            nullableString(r, "publishDate"),
+                            nullableString(r, "sourcePlatform")
+                    ));
+                }
+            }
             return result;
         })
         .subscribeOn(Schedulers.boundedElastic())

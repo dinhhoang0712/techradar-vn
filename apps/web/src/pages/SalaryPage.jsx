@@ -152,7 +152,7 @@ export default function SalaryPage() {
     const [sortBy, setSortBy] = useState('median');
 
     useEffect(() => {
-        getSalaryTop(40, 3)
+        getSalaryTop(40, 1)
             .then(res => setData(res?.data ?? []))
             .catch(err => {
                 if (err.message === 'SERVER_MAINTENANCE') setError('MAINTENANCE');

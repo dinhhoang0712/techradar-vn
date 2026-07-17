@@ -8,13 +8,6 @@ const parseSseData = (line) => {
 };
 
 // ─────────────────────────────────────────────
-// GET /chat — Health check của RAG service
-// ─────────────────────────────────────────────
-export const checkChatHealth = async () => {
-    return await apiClient('/chat');
-};
-
-// ─────────────────────────────────────────────
 // POST /chat/session — Tạo session chat mới
 // Returns: { session_id: string, created_at: string }
 // ─────────────────────────────────────────────
@@ -45,18 +38,6 @@ export const getChatSessions = async () => {
 // ─────────────────────────────────────────────
 export const deleteChatSession = async (sessionId) => {
     return await apiClient(`/chat/session/${sessionId}`, { method: 'DELETE' });
-};
-
-// ─────────────────────────────────────────────
-// POST /chat/session/{session_id}/messages — Gửi message (non-stream)
-// Body:    { query: string }
-// Returns: { answer, entities, job_titles, query, session_id, sources }
-// ─────────────────────────────────────────────
-export const sendChatMessage = async (sessionId, query) => {
-    return await apiClient(`/chat/session/${sessionId}/messages`, {
-        method: 'POST',
-        body: JSON.stringify({ query }),
-    });
 };
 
 // ─────────────────────────────────────────────

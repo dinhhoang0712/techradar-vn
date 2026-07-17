@@ -14,6 +14,7 @@ import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 
+from chrome_utils import installed_chrome_major_version
 from kafka_producer import CrawlerKafkaProducer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -53,6 +54,30 @@ def _parse_skills(driver) -> list:
         return [t.text.strip() for t in tags if t.text.strip()]
     except Exception:
         return []
+
+
+def _extract_salary(driver) -> str:
+    """ITviec renders salary via a schema.org JobPosting JSON-LD block, not
+    visible DOM elements — job pages don't ship a `.salary`/`.box-salary`
+    node at all, so scraping only ever finds it here. Undisclosed salaries
+    show up as a non-numeric placeholder (e.g. "You'll love it"), which we
+    treat the same as no salary. A page can carry multiple ld+json blocks
+    (JobPosting, BreadcrumbList, WebSite), so we pick the JobPosting one
+    instead of assuming it's first."""
+    try:
+        for script in driver.find_elements(By.CSS_SELECTOR, "script[type='application/ld+json']"):
+            data = json.loads(script.get_attribute("innerHTML"))
+            if data.get("@type") != "JobPosting":
+                continue
+            base_salary = data.get("baseSalary") or {}
+            value = base_salary.get("value") or {}
+            min_v, max_v = value.get("minValue"), value.get("maxValue")
+            if min_v and max_v:
+                return f"{min_v} - {max_v} {base_salary.get('currency', '')}".strip()
+            return ""
+    except Exception:
+        pass
+    return ""
 
 
 def _extract_sections(driver) -> dict:
@@ -103,6 +128,7 @@ def main():
 
     def _make_options(factory):
         opts = factory()
+        opts.add_argument("--headless=new")
         opts.add_argument("--no-sandbox")
         opts.add_argument("--disable-dev-shm-usage")
         opts.add_argument("--disable-gpu")
@@ -114,18 +140,16 @@ def main():
         return opts
 
     try:
-        driver = uc.Chrome(headless=True, options=_make_options(uc.ChromeOptions))
+        driver = uc.Chrome(
+            options=_make_options(uc.ChromeOptions),
+            version_main=installed_chrome_major_version(),
+        )
         logger.info("Undetected ChromeDriver OK")
     except Exception as e:
         logger.warning("Undetected ChromeDriver failed: %s, fallback to regular Chrome", e)
         from selenium import webdriver as _wd
         from selenium.webdriver.chrome.options import Options as _Opts
-        from selenium.webdriver.chrome.service import Service as _Svc
-        from webdriver_manager.chrome import ChromeDriverManager as _CDM
-        driver = _wd.Chrome(
-            service=_Svc(_CDM().install()),
-            options=_make_options(_Opts),
-        )
+        driver = _wd.Chrome(options=_make_options(_Opts))
 
     try:
         job_urls = []
@@ -156,7 +180,7 @@ def main():
                 title = _safe(driver, "h1.job-title, h1[data-automation='job-title'], h1")
                 company = _safe(driver, "div.employer-name a, a.company-name, span.company-name")
                 location = _safe(driver, "div.location svg + span, span.location, div.address")
-                salary = _safe(driver, "div.salary-range, span.salary, div.box-salary")
+                salary = _extract_salary(driver)
                 level = _safe(driver, "div.job-level, span.level, li:contains('Level')")
 
                 sections = _extract_sections(driver)

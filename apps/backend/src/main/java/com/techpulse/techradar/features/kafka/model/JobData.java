@@ -24,4 +24,6 @@ public class JobData {
     private List<String> skills;
     private String sourceUrl;
     private String postedDate;
+    private String size;
+    private String field;
 }

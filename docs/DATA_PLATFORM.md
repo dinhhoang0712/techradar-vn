@@ -724,7 +724,7 @@ data-platform/
     ├── db.py                # get_pg_conn, get_neo4j_driver, get_minio_client
     └── logger.py            # Loguru setup
 
-knowledge-graph/crawl/
+services/crawler/
 ├── run_all.py               # Docker entrypoint — chạy crawlers tuần tự
 ├── kafka_producer.py        # CrawlerKafkaProducer (send_article, send_job)
 ├── VNExpress.py             # Selenium crawler — vnexpress.net

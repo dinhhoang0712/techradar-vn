@@ -70,5 +70,9 @@ env/
 *.pyo
 *.pyc
 
+# MLflow experiment tracking output
+mlruns/
+mlflow.db
+
 # Project specific
 /PROMPT

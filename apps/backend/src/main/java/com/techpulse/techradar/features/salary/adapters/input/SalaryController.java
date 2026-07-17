@@ -35,7 +35,7 @@ public class SalaryController {
     @GetMapping("/top")
     public Mono<ResponseEntity<ApiResponse<List<SalaryDtos.SalaryInsightResponse>>>> getTop(
             @RequestParam(defaultValue = "20") int limit,
-            @RequestParam(name = "min_jobs", defaultValue = "3") int minJobs
+            @RequestParam(name = "min_jobs", defaultValue = "1") int minJobs
     ) {
         return getSalaryInsightsUseCase.execute(limit, minJobs)
                 .map(SalaryDtos.SalaryInsightResponse::from)

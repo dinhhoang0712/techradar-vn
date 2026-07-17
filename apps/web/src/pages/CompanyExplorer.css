@@ -24,7 +24,17 @@
 .company-search {
     width: 100%;
     max-width: 480px;
+}
+
+.company-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
     margin-bottom: 20px;
+}
+
+.company-toolbar .company-search {
+    margin-bottom: 0;
 }
 
 .company-layout {
@@ -94,6 +104,12 @@
 .company-card-location {
     color: var(--text-3);
     font-size: 0.8rem;
+}
+
+.company-card-meta {
+    color: var(--text-3);
+    font-size: 0.76rem;
+    font-style: italic;
 }
 
 .company-empty-hint {
@@ -180,8 +196,228 @@
     margin: 4px 0 0;
 }
 
+.company-meta-badges {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+}
+
+.company-meta-badge {
+    font-size: 0.72rem;
+    color: var(--text-2);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 2px 10px;
+}
+
 .company-detail-stack {
     margin-bottom: 18px;
+}
+
+.company-detail-section {
+    margin-bottom: 18px;
+}
+
+.detail-section-toggle {
+    background: none;
+    border: none;
+    color: var(--primary);
+    font-size: 0.78rem;
+    cursor: pointer;
+    padding: 0;
+    margin-left: 8px;
+}
+
+.company-actions-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 18px;
+}
+
+.company-neighborhood-graph {
+    position: relative;
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #060810;
+}
+
+.company-mentions-list {
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.company-mention-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+.company-mention-title {
+    color: var(--text);
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.company-mention-title:hover {
+    color: var(--primary);
+    text-decoration: underline;
+}
+
+.company-mention-meta {
+    color: var(--text-3);
+    font-size: 0.74rem;
+}
+
+.company-ai-insight {
+    margin-top: 10px;
+}
+
+.company-ai-highlights {
+    margin: 8px 0 0;
+    padding-left: 18px;
+    color: var(--text-2);
+    font-size: 0.85rem;
+}
+
+.company-ai-highlights li {
+    margin-bottom: 4px;
+}
+
+/* Tooltip/AI-summary classes trùng với ComparePage.css — lặp lại ở đây vì trang này không
+   import ComparePage.css, để TechRadarChart/CompanyAiInsight dùng chung 1 kiểu hiển thị nhất quán. */
+.ai-summary-status {
+    color: var(--text-2);
+    font-size: 0.9rem;
+}
+
+.ai-summary-error {
+    color: var(--danger-light);
+}
+
+.ai-summary-text {
+    color: var(--text);
+    line-height: 1.6;
+    white-space: pre-line;
+}
+
+.chart-tooltip {
+    background: var(--bg-2);
+    border: 1px solid var(--border-2);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    box-shadow: var(--shadow-lg);
+    min-width: 160px;
+}
+
+.tooltip-month {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--text-2);
+    margin-bottom: 8px;
+}
+
+.tooltip-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+    font-size: 0.8rem;
+}
+
+.tooltip-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.tooltip-tech {
+    flex: 1;
+    color: var(--text);
+    font-weight: 500;
+}
+
+.tooltip-jobs {
+    color: var(--text);
+    font-weight: 600;
+}
+
+/* --- So sánh nhiều công ty (overlay/modal) --- */
+.compare-companies-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(6, 8, 16, 0.65);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 40px 16px;
+    overflow-y: auto;
+    z-index: 300;
+}
+
+.compare-companies-modal {
+    width: 100%;
+    max-width: 760px;
+    background: var(--card, var(--surface));
+    border-radius: 12px;
+}
+
+.compare-companies-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+.compare-companies-radar {
+    margin-top: 16px;
+}
+
+.compare-companies-table-wrap {
+    overflow-x: auto;
+    margin-top: 16px;
+}
+
+.compare-companies-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.compare-companies-table th,
+.compare-companies-table td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-2);
+    white-space: nowrap;
+}
+
+.compare-companies-table th {
+    color: var(--text-3);
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.compare-companies-identity {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .similar-company-list {

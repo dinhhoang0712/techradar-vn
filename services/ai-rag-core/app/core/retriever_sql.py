@@ -96,7 +96,7 @@ async def sql_tech_timeseries(tech_name: str, months: int = 12) -> list[dict]:
                         yoy_growth
                     FROM tech_analytics
                     WHERE technology_name = :name
-                      AND month >= (CURRENT_DATE - CAST(:months || ' months' AS INTERVAL))
+                      AND month >= (CURRENT_DATE - make_interval(months => :months))
                     ORDER BY month ASC
                 """),
                 {"name": tech_name, "months": months},

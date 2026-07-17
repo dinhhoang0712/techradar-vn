@@ -1,0 +1,10 @@
+Công ty: {company_name}
+Địa điểm: {location}
+Ngành: {industry}
+Quy mô: {size}
+Số tin tuyển dụng đang có: {job_count}
+Tech stack đang tuyển: {tech_stack}
+
+Hãy viết 1 đoạn nhận định ngắn gọn (2-3 câu, tiếng Việt) về công ty này dựa trên dữ liệu tuyển dụng
+ở trên — nêu định hướng công nghệ, quy mô tuyển dụng, và mức độ cạnh tranh nếu suy luận được.
+Chỉ dùng thông tin đã cho, không bịa thêm số liệu cụ thể không có trong dữ liệu.

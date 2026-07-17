@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     ml_clustering_base_url: str = "http://localhost:8001"
 
     # Scheduler cron (hour, minute in Asia/Ho_Chi_Minh)
+    article_sync_hour: int = 2
+    article_sync_minute: int = 0
+    job_sync_hour: int = 2
+    job_sync_minute: int = 30
     gold_etl_hour: int = 3
     gold_etl_minute: int = 0
     embed_trigger_hour: int = 4

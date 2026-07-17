@@ -16,14 +16,15 @@ export default function AdminSettings() {
     const loadSettings = async () => {
         try {
             const res = await fetchAdminSettings();
-            // Map backend keys to frontend state if they differ
-            if (res && res.data) {
+            // res.data is an array of {key, value} rows (ApiResponse<List<AppSettings>>), not a flat object
+            if (res && Array.isArray(res.data)) {
+                const byKey = Object.fromEntries(res.data.map((s) => [s.key, s.value]));
                 const mapped = {
-                    isWebMaintenance: res.data.maintenance_web === 'true' || res.data.maintenance_web === true,
-                    isAppMaintenance: res.data.maintenance_mobile === 'true' || res.data.maintenance_mobile === true,
-                    isGraphEnabled: res.data.feature_graph === 'true' || res.data.feature_graph === true,
-                    isChatEnabled: res.data.feature_chat === 'true' || res.data.feature_chat === true,
-                    isRagEnabled: res.data.feature_rag === 'true' || res.data.feature_rag === true,
+                    isWebMaintenance: byKey.maintenance_web === 'true' || byKey.maintenance_web === true,
+                    isAppMaintenance: byKey.maintenance_mobile === 'true' || byKey.maintenance_mobile === true,
+                    isGraphEnabled: byKey.feature_graph === 'true' || byKey.feature_graph === true,
+                    isChatEnabled: byKey.feature_chat === 'true' || byKey.feature_chat === true,
+                    isRagEnabled: byKey.feature_rag === 'true' || byKey.feature_rag === true,
                 };
                 setSettings(mapped);
             }

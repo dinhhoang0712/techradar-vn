@@ -119,6 +119,9 @@ def _process_job(conn, msg: dict) -> None:
     company_obj = data.get("company", {}) or {}
     company_name = job.get("company_name") or company_obj.get("name") or ""
     company_location = job.get("location") or company_obj.get("location") or ""
+    # Chỉ 1 số crawler (VD: TopCV) scrape được — rỗng/không có thì để None, không ghi đè "" vào cột.
+    company_industry = job.get("field") or company_obj.get("field") or None
+    company_size = job.get("size") or company_obj.get("size") or None
     skills = job.get("skills") or data.get("skills") or []
     techs = job.get("technologies") or data.get("technologies") or data.get("entity_techs") or []
 
@@ -131,8 +134,9 @@ def _process_job(conn, msg: dict) -> None:
             """INSERT INTO dp_processed_jobs
                (id, source_url, source_platform, job_title, company_name,
                 company_location, salary, description, requirement, benefit,
-                skills, technologies, content_hash, is_duplicate, quality_score, status)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'processed')
+                skills, technologies, content_hash, is_duplicate, quality_score, status,
+                company_industry, company_size)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'processed',%s,%s)
                ON CONFLICT (source_url) DO NOTHING""",
             (
                 job_id, source_url, job.get("source_platform") or msg.get("source_platform", "unknown"),
@@ -144,6 +148,8 @@ def _process_job(conn, msg: dict) -> None:
                 job.get("benefit") or "",
                 skills, techs,
                 chash, is_dup, quality,
+                company_industry[:200] if company_industry else None,
+                company_size[:100] if company_size else None,
             ),
         )
     conn.commit()

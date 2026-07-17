@@ -2,6 +2,7 @@ package com.techpulse.techradar.integration;
 
 import com.techpulse.techradar.features.system.ports.ActivityLogRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 
@@ -10,6 +11,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** /status flags, admin settings/dashboard/users/CMS CRUD, and activity_log tracking. */
+@EnabledIfEnvironmentVariable(named = "POSTGRES_HOST", matches = ".+")
 class SystemAdminIntegrationTest extends IntegrationTestSupport {
 
     @Autowired

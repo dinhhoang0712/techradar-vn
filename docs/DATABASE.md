@@ -23,7 +23,7 @@ là nơi DUY NHẤT tạo/sửa DDL.
 | Datastore | Vai trò | Ai tạo schema | Ai ghi | Ai đọc |
 |---|---|---|---|---|
 | **PostgreSQL** | Nguồn sự thật quan hệ: user/auth, chat, social feed, messaging, analytics time-series, CMS, notification, data-platform catalog | **Flyway** trong `apps/backend` (duy nhất) | `apps/backend` (hầu hết bảng) · `services/ai-rag-core` (chỉ `chat_message`) · `data-platform` (chỉ các bảng `dp_*`) | `apps/backend`, `services/ai-rag-core` (đọc `user_profile`, `chat_message`) |
-| **Neo4j** | Đồ thị tri thức: Article/Technology/Skill/Company/Job/Person + quan hệ suy luận (MENTIONS, REQUIRES, USES, RELATED_TO...) | `knowledge-graph/utils/schema_define.py` (constraints/indexes) | `knowledge-graph` (crawl + entity resolution + import), `data-platform/gold/neo4j_enricher.py` (derived relationships/stats) | `apps/backend` (graph/company/job features), `services/ai-rag-core` (RAG context, interview grounding), `services/ml-clustering` (đọc để train/serve cluster) |
+| **Neo4j** | Đồ thị tri thức: Article/Technology/Skill/Company/Job/Person + quan hệ suy luận (MENTIONS, REQUIRES, USES, RELATED_TO...) | ⚠️ Không còn script nào tạo constraints/indexes — trước đây là `knowledge-graph/utils/schema_define.py`, đã bị xoá khỏi repo (xem §4.2); AuraDB hiện tại đã có schema từ trước, nhưng dựng lại instance mới sẽ cần viết lại script này | `apps/backend` (`KafkaNeo4jWriterService`, real-time), `data-platform/gold/{neo4j_article_sync,neo4j_job_sync}.py` (batch) cho node gốc; `data-platform/gold/neo4j_enricher.py` (derived relationships/stats) | `apps/backend` (graph/company/job features), `services/ai-rag-core` (RAG context, interview grounding), `services/ml-clustering` (đọc để train/serve cluster) |
 | **Redis** | Cache tra cứu nhanh + state tạm thời, KHÔNG phải nguồn sự thật, có thể mất dữ liệu mà không hỏng nghiệp vụ (trừ token blacklist) | `apps/backend` (mọi key) | `apps/backend` | `apps/backend` |
 
 Không service nào khác ghi trực tiếp vào Postgres của backend hay Redis; `services/ai-rag-core`
@@ -44,7 +44,7 @@ và `data-platform` chỉ được cấp quyền ghi đúng phạm vi bảng c�
 | `content_report` | backend | Content moderation (V11/V12) — user report post/comment vi phạm; admin xem/dismiss qua `SocialModerationService`/`AdminSocialController`. |
 | `conversation`, `direct_message` | backend | Direct messaging (V9); realtime là SSE, fan-out qua Redis Pub/Sub (`MessageBroadcaster`, xem §5) nên chạy đúng với nhiều instance backend. |
 | `dp_bronze_catalog`, `dp_processed_articles`, `dp_processed_jobs`, `dp_pipeline_runs` | **data-platform** (Python) | Backend/Flyway chỉ tạo bảng (V7); ghi/đọc thuộc service `data-platform` (bronze/silver medallion catalog). `ai-rag-core` và `apps/backend` không đụng vào các bảng này. |
-| Neo4j node/relationship gốc (Article, Technology, Skill, Company, Job, Person) | `knowledge-graph` (crawl + entity resolution + import pipeline) | Xem §4. |
+| Neo4j node/relationship gốc (Article, Technology, Skill, Company, Job, Person) | `apps/backend` (real-time) + `data-platform/gold` (batch) | Xem §4. |
 | Neo4j derived relationships (`USES`, `RELATED_TO`) + stats (`trend_score`, `article_count`, `job_count` trên `Technology`) | `data-platform/gold/neo4j_enricher.py` | Chạy như một Gold-layer job (ghi log vào `dp_pipeline_runs`, `job_name='neo4j_enricher'`). |
 | Redis keys | backend | Không có service nào khác dùng chung Redis instance cho dữ liệu nghiệp vụ. |
 
@@ -132,8 +132,8 @@ DDL đầy đủ từng cột/index: [`apps/backend/.../db/README.md`](../apps/b
 **Relationship types:**
 - `MENTIONS`: Article → Technology/Company/Person
 - `REQUIRES`: Job → Technology/Skill (dùng bởi **Job Matching** — `Neo4jJobRepository`)
-- `HIRES_FOR`: Job → Company — ghi bởi batch importer `knowledge-graph` (dùng bởi **AI Interview** grounding — `graph_queries.JOBS_BY_TITLE_AND_COMPANY`, và bởi `ml-clustering`/`ai-rag-core` nói chung).
-- `POSTED_BY`: Job → Company — **cùng ý nghĩa với `HIRES_FOR`** nhưng ghi bởi pipeline real-time riêng của `apps/backend` (`KafkaNeo4jWriterService`, consume topic `extracted.jobs`); một Job chỉ đi qua một trong hai pipeline sẽ chỉ có một trong hai cạnh này. `Neo4jJobRepository`/`Neo4jCompanyRepository` match cả `POSTED_BY|HIRES_FOR` để không bỏ sót company linkage của job chỉ được batch-import.
+- `HIRES_FOR`: Job → Company — **không còn pipeline nào ghi cạnh này**: nó được tạo bởi batch importer của `knowledge-graph/` (đã xoá khỏi repo, xem §4.2). Các cạnh `HIRES_FOR` hiện có trong AuraDB là dữ liệu lịch sử, không tăng thêm nữa. `graph_queries.JOBS_BY_TITLE_AND_COMPANY` và `Neo4jJobRepository`/`Neo4jCompanyRepository` vẫn match cả `POSTED_BY|HIRES_FOR` để không bỏ sót company linkage của các Job cũ.
+- `POSTED_BY`: Job → Company — **cùng ý nghĩa với `HIRES_FOR`**, ghi bởi pipeline real-time của `apps/backend` (`KafkaNeo4jWriterService`, consume topic `extracted.jobs`) và bởi `data-platform/gold/neo4j_job_sync.py` (batch/nightly) — đây là cạnh **duy nhất còn được ghi mới** cho Job → Company kể từ khi `knowledge-graph/` bị xoá.
 - `USES`: Company → Technology — **derived**, ghi bởi `data-platform/gold/neo4j_enricher.py` (MERGE, tăng `evidence_count`/`first_seen`); theo snapshot của `ml-clustering` (06/05/2026) có ~11.3k cạnh này trong AuraDB. `apps/backend` cố tình **không** đọc `USES` trực tiếp cho Company Explorer (xem ghi chú dưới).
 - `RELATED_TO`: Technology → Technology — derived, cũng ghi bởi `neo4j_enricher.py` (co-mention count)
 - `WORKS_AT`: Person → Company (derived)
@@ -149,23 +149,14 @@ DDL đầy đủ từng cột/index: [`apps/backend/.../db/README.md`](../apps/b
 
 ### 4.2 Ai ghi gì
 
-- **`knowledge-graph`** (crawl → entity resolution → import): tạo node gốc (Article/Technology/Skill/Company/Job/Person) + cạnh trực tiếp (`MENTIONS`, `REQUIRES`, `HIRES_FOR`).
+- **`apps/backend`** (`features/kafka/KafkaNeo4jWriterService.java`): consume `extracted.articles`/`extracted.jobs` real-time, MERGE node gốc (Article/Technology/Skill/Company/Job/Location) + cạnh trực tiếp (`MENTIONS`, `REQUIRES`, `POSTED_BY`).
+- **`data-platform/gold/neo4j_article_sync.py` + `neo4j_job_sync.py`**: batch/nightly, đọc `dp_processed_articles`/`dp_processed_jobs` (Postgres silver layer) và MERGE lại cùng loại node + cạnh trực tiếp — chạy song song với writer real-time ở trên (không phải nguồn duy nhất).
 - **`data-platform/gold/neo4j_enricher.py`**: chạy sau, MERGE các cạnh **derived** (`USES`, `RELATED_TO`) và cập nhật thống kê trên `Technology` (`article_count`, `job_count`, `trend_score`); log mỗi lần chạy vào `dp_pipeline_runs` (Postgres, `job_name='neo4j_enricher'`).
 - **`services/ml-clustering`**: chỉ **đọc** (qua `neo4j_loader.py`, export ra parquet làm input huấn luyện cluster) — không ghi ngược kết quả cluster vào Neo4j; kết quả cluster được serve qua API riêng của `ml-clustering` (không lưu trong graph).
 - **`services/ai-rag-core`**: chỉ đọc (RAG context cho `/chat`, và grounding cho `/interview` qua `graph_queries.py`).
-- **`apps/backend`**: chủ yếu đọc (graph explore/road-analysis, company similarity, job matching, salary/sentiment filter trên `graph`/`company`/`job` features) — nhưng **cũng ghi** qua `KafkaNeo4jWriterService` (`features/kafka`): consume `extracted.articles`/`extracted.jobs`, MERGE Article/Technology/Skill/Company/Job + cạnh `MENTIONS`/`REQUIRES`/`POSTED_BY` real-time, song song với batch import của `knowledge-graph`.
+- **`apps/backend`**: cũng đọc nhiều hơn ghi (graph explore/road-analysis, company similarity, job matching, salary/sentiment filter trên `graph`/`company`/`job` features).
 
-### 4.3 Modules ghi/xử lý graph (knowledge-graph)
-
-```
-knowledge-graph/
-├── entity_resolution/     # Alias normalization (tech_resolver, company_resolver)
-├── ontology/              # Taxonomy classification
-├── cypher_repo/           # Cypher query constants
-├── analytics/             # trend_scorer, demand_scorer
-├── crawl/                 # VNExpress, GenK, DanTri, ICTNews, TopCV, ITviec, Viblo, GitHub...
-└── utils/                 # schema_define (constraints/index), import_multi_source, run_complete_pipeline
-```
+> Lưu ý: thư mục `knowledge-graph/` (crawl + entity resolution + import độc lập) từng là bản đầu tiên của pipeline này nhưng đã bị thay thế bởi `services/crawler/` (crawl) + hai nguồn ghi ở trên, và đã được xoá khỏi repo — không dùng làm tài liệu tham khảo runtime nữa.
 
 ---
 

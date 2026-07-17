@@ -13,6 +13,8 @@ from datetime import datetime
 import gc
 import logging
 
+from chrome_utils import installed_chrome_major_version
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -119,7 +121,7 @@ def save_processed_url(url_cache_file, url):
 
 
 # CSV fieldnames for jobs
-JOB_FIELDNAMES = ["title", "description", "requirement", "benefit", "location", "due_date", "Company", "size", "field", "source_url"]
+JOB_FIELDNAMES = ["title", "description", "requirement", "benefit", "location", "salary", "due_date", "Company", "size", "field", "source_url"]
 
 
 def scrape_job_details(driver):
@@ -135,7 +137,13 @@ def scrape_job_details(driver):
         or find_label_value(root, ["Địa điểm"], ["Kinh nghiệm", "Hạn nộp"])
         or ""
     )
-    
+
+    details['salary'] = (
+        safe_find_from(root, ".job-detail__info--salary")
+        or find_label_value(root, ["Mức lương", "Lương"], ["Kinh nghiệm", "Địa điểm", "Hạn nộp"])
+        or ""
+    )
+
     due_date_raw = safe_find_from(root, ".job-detail__info--deadline") or ""
     if due_date_raw:
         match = re.search(r"\d{1,2}/\d{1,2}/\d{4}", due_date_raw)
@@ -215,7 +223,10 @@ def main():
         return opts
 
     try:
-        driver = uc.Chrome(options=_build_options(uc.ChromeOptions), version_main=None)
+        driver = uc.Chrome(
+            options=_build_options(uc.ChromeOptions),
+            version_main=installed_chrome_major_version(),
+        )
         logger.info("✓ Undetected ChromeDriver initialized successfully")
     except Exception as e:
         logger.warning(f"⚠ Undetected ChromeDriver failed: {e}, trying regular Chrome")
@@ -238,14 +249,19 @@ def main():
 
     base_url_page1 = "https://www.topcv.vn/tim-viec-lam-cong-nghe-thong-tin-cr257?type_keyword=1&category_family=r257&saturday_status=0"
     base_url_paged = "https://www.topcv.vn/tim-viec-lam-cong-nghe-thong-tin-cr257?type_keyword=1&page={page}&category_family=r257&saturday_status=0"
-    num_pages = 1
+    # TopCV ghim tin "nổi bật" ở đầu danh sách nên các trang đầu gần như không
+    # đổi qua từng ngày; phải đi đủ sâu mới chạm tới tin thật sự mới.
+    num_pages = 20
 
     today_str = datetime.now().strftime("%d_%m_%Y")
     base_dir = os.path.dirname(os.path.abspath(__file__))
     output_dir = os.path.join(base_dir, "data", "raw", "topcv")
     os.makedirs(output_dir, exist_ok=True)
     output_file = os.path.join(output_dir, f"{today_str}.csv")
-    url_cache_file = os.path.join(output_dir, f"{today_str}_urls.txt")
+    # Cache tích lũy xuyên suốt (không reset theo ngày) để không quét lại các
+    # tin cũ đã thấy ở lần chạy trước — nếu reset theo ngày, mỗi ngày crawler
+    # lại tốn hết ngân sách request vào đúng các tin "nổi bật" bất biến đó.
+    url_cache_file = os.path.join(output_dir, "processed_urls.txt")
 
     processed_urls = load_processed_urls(url_cache_file)
     print(f"Đã xử lý trước đó: {len(processed_urls)} bài")
@@ -306,6 +322,7 @@ def main():
                     "requirement": details.get('requirement', ''),
                     "benefit": details.get('benefit', ''),
                     "location": details.get('location', ''),
+                    "salary": details.get('salary', ''),
                     "due_date": details.get('due_date', ''),
                     "Company": details.get('Company', ''),
                     "size": details.get('size', ''),
@@ -326,7 +343,7 @@ def main():
                         job_title=title,
                         company_name=details.get('Company', ''),
                         location=details.get('location', ''),
-                        salary="",  # TopCV doesn't show salary in listing
+                        salary=details.get('salary', ''),
                         level="",   # Could be extracted from title
                         description=details.get('description', ''),
                         requirement=details.get('requirement', ''),
@@ -334,7 +351,9 @@ def main():
                         skills=[],  # Could be extracted from description
                         source_url=link,
                         posted_date="",
-                        source_platform="TopCV"
+                        source_platform="TopCV",
+                        company_size=details.get('size', ''),
+                        company_field=details.get('field', '')
                     )
                 
                 total_articles += 1

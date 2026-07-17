@@ -110,8 +110,8 @@ public class KafkaExtractorService {
                 jobInfo,
                 new com.techpulse.techradar.features.kafka.model.CompanyInfo(
                         jobData.getCompanyName(),
-                        "",
-                        "",
+                        jobData.getSize() != null ? jobData.getSize() : "",
+                        jobData.getField() != null ? jobData.getField() : "",
                         jobData.getLocation()
                 ),
                 jobData.getSkills() != null ? new ArrayList<>(jobData.getSkills()) : List.of(),

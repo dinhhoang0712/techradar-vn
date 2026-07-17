@@ -1,12 +1,96 @@
 import { useState, useEffect, useMemo } from 'react';
-import { getCompanies, getSimilarCompanies } from '../api/companyService';
+import { useNavigate } from 'react-router-dom';
+import {
+    getCompanies, getSimilarCompanies, getCompanyMentions, getCompanyInsight,
+} from '../api/companyService';
 import CompanyLogo from '../components/common/CompanyLogo';
 import RingGauge from '../components/common/RingGauge';
+import TechRadarChart from '../components/company/TechRadarChart';
+import CompanyNeighborhoodGraph from '../components/company/CompanyNeighborhoodGraph';
+import CompareCompaniesPanel from '../components/company/CompareCompaniesPanel';
 import './CompanyExplorer.css';
 
-function SimilarPanel({ company, onClose }) {
+function CompanyMentions({ companyId }) {
+    const [mentions, setMentions] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        let cancelled = false;
+        const fetchMentions = () => {
+            setLoading(true);
+            getCompanyMentions(companyId, 5)
+                .then(res => { if (!cancelled) setMentions(res?.data ?? []); })
+                .catch(() => { if (!cancelled) setMentions([]); })
+                .finally(() => { if (!cancelled) setLoading(false); });
+        };
+        fetchMentions();
+        return () => { cancelled = true; };
+    }, [companyId]);
+
+    if (loading) return <div className="detail-loading"><div className="loading-spinner" /></div>;
+    if (!mentions?.length) return <p className="company-empty-hint">Chưa có tin tức nào nhắc đến công ty này.</p>;
+
+    return (
+        <ul className="company-mentions-list">
+            {mentions.map(m => (
+                <li key={m.id} className="company-mention-item">
+                    <a href={m.url} target="_blank" rel="noopener noreferrer" className="company-mention-title">
+                        {m.title}
+                    </a>
+                    <span className="company-mention-meta">{m.sourcePlatform} · {m.publishDate || 'Chưa rõ ngày'}</span>
+                </li>
+            ))}
+        </ul>
+    );
+}
+
+function CompanyAiInsight({ company }) {
+    const [requested, setRequested] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [insight, setInsight] = useState(null);
+
+    const handleRequest = () => {
+        setRequested(true);
+        setLoading(true);
+        setError('');
+        getCompanyInsight(company.name)
+            .then(res => setInsight(res?.data ?? null))
+            .catch(() => setError('Không thể tạo nhận định AI lúc này.'))
+            .finally(() => setLoading(false));
+    };
+
+    if (!requested) {
+        return (
+            <button type="button" className="btn btn-secondary" onClick={handleRequest}>
+                ✨ Xem nhận định AI
+            </button>
+        );
+    }
+
+    return (
+        <div className="company-ai-insight">
+            {loading && <p className="ai-summary-status">Đang tạo nhận định...</p>}
+            {error && <p className="ai-summary-status ai-summary-error">{error}</p>}
+            {!loading && !error && insight && (
+                <>
+                    <p className="ai-summary-text">{insight.summary}</p>
+                    {insight.highlights?.length > 0 && (
+                        <ul className="company-ai-highlights">
+                            {insight.highlights.map((h, i) => <li key={i}>{h}</li>)}
+                        </ul>
+                    )}
+                </>
+            )}
+        </div>
+    );
+}
+
+function SimilarPanel({ company, onClose, onCompare }) {
     const [similar, setSimilar] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [showGraph, setShowGraph] = useState(false);
+    const navigate = useNavigate();
 
     useEffect(() => {
         getSimilarCompanies(company.id)
@@ -14,6 +98,8 @@ function SimilarPanel({ company, onClose }) {
             .catch(() => setSimilar([]))
             .finally(() => setLoading(false));
     }, [company]);
+
+    const hasMeta = company.industry || company.size;
 
     return (
         <div className="company-detail-panel">
@@ -23,9 +109,15 @@ function SimilarPanel({ company, onClose }) {
                     <div>
                         <h3 className="company-detail-title">{company.name}</h3>
                         <p className="company-detail-sub">{company.location || 'Chưa rõ địa điểm'} · {company.job_count} tin tuyển dụng</p>
+                        {hasMeta && (
+                            <div className="company-meta-badges">
+                                <span className="company-meta-badge">{company.industry || 'Chưa rõ ngành'}</span>
+                                <span className="company-meta-badge">{company.size || 'Chưa rõ quy mô'}</span>
+                            </div>
+                        )}
                     </div>
                 </div>
-                <button className="detail-close" onClick={onClose}>✕</button>
+                <button className="detail-close" onClick={onClose} aria-label="Đóng">✕</button>
             </div>
 
             <div className="company-detail-stack">
@@ -35,6 +127,40 @@ function SimilarPanel({ company, onClose }) {
                         <span key={t} className="skill-chip skill-chip--have">{t}</span>
                     ))}
                 </div>
+            </div>
+
+            <div className="company-detail-section">
+                <p className="detail-section-label">Hồ sơ công nghệ (Tech DNA)</p>
+                <TechRadarChart series={[{ name: company.name, techStack: company.tech_stack, color: '#4f9dff' }]} height={220} />
+            </div>
+
+            <div className="company-actions-row">
+                <button type="button" className="btn btn-ghost" onClick={() => onCompare(company)}>
+                    So sánh với công ty khác
+                </button>
+                <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => navigate('/interview', { state: { targetCompany: company.name } })}
+                >
+                    Luyện phỏng vấn công ty này
+                </button>
+                <CompanyAiInsight company={company} />
+            </div>
+
+            <div className="company-detail-section">
+                <p className="detail-section-label">
+                    Bản đồ liên kết
+                    <button type="button" className="detail-section-toggle" onClick={() => setShowGraph(v => !v)}>
+                        {showGraph ? 'Ẩn' : 'Hiện'}
+                    </button>
+                </p>
+                {showGraph && <CompanyNeighborhoodGraph companyName={company.name} height={280} />}
+            </div>
+
+            <div className="company-detail-section">
+                <p className="detail-section-label">Tin tức liên quan</p>
+                <CompanyMentions companyId={company.id} />
             </div>
 
             <p className="detail-section-label">Công ty có tech stack tương tự</p>
@@ -76,6 +202,7 @@ export default function CompanyExplorer() {
     const [error, setError] = useState('');
     const [search, setSearch] = useState('');
     const [selected, setSelected] = useState(null);
+    const [compareSeed, setCompareSeed] = useState(null);
 
     useEffect(() => {
         getCompanies()
@@ -143,12 +270,17 @@ export default function CompanyExplorer() {
                 </p>
             </div>
 
-            <input
-                className="company-search form-input"
-                placeholder="Tìm công ty hoặc công nghệ (VD: React, AWS)..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-            />
+            <div className="company-toolbar">
+                <input
+                    className="company-search form-input"
+                    placeholder="Tìm công ty hoặc công nghệ (VD: React, AWS)..."
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                />
+                <button type="button" className="btn btn-secondary" onClick={() => setCompareSeed([])}>
+                    So sánh nhiều công ty
+                </button>
+            </div>
 
             <div className={`company-layout${selected ? ' has-detail' : ''}`}>
                 <div className="company-grid">
@@ -167,6 +299,9 @@ export default function CompanyExplorer() {
                                 <span className="company-card-jobs">{c.job_count} tin</span>
                             </div>
                             {c.location && <span className="company-card-location">{c.location}</span>}
+                            {(c.industry || c.size) && (
+                                <span className="company-card-meta">{[c.industry, c.size].filter(Boolean).join(' · ')}</span>
+                            )}
                             <div className="skills-chips">
                                 {c.tech_stack.slice(0, 6).map(t => (
                                     <span key={t} className="skill-chip skill-chip--have">{t}</span>
@@ -183,9 +318,22 @@ export default function CompanyExplorer() {
                 </div>
 
                 {selected && (
-                    <SimilarPanel key={selected.id} company={selected} onClose={() => setSelected(null)} />
+                    <SimilarPanel
+                        key={selected.id}
+                        company={selected}
+                        onClose={() => setSelected(null)}
+                        onCompare={(c) => setCompareSeed([c])}
+                    />
                 )}
             </div>
+
+            {compareSeed !== null && (
+                <CompareCompaniesPanel
+                    companies={companies}
+                    initialSelected={compareSeed}
+                    onClose={() => setCompareSeed(null)}
+                />
+            )}
         </div>
     );
 }

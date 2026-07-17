@@ -8,6 +8,28 @@ from loguru import logger
 from config import Settings
 
 
+def job_neo4j_article_sync(settings: Settings) -> None:
+    """Đồng bộ Article/Technology/Company từ dp_processed_articles (Postgres) sang Neo4j."""
+    logger.info("=== JOB: neo4j_article_sync ===")
+    try:
+        from gold.neo4j_article_sync import run
+        rows = run(settings)
+        logger.info("neo4j_article_sync: {} articles synced", rows)
+    except Exception:
+        logger.exception("neo4j_article_sync FAILED")
+
+
+def job_neo4j_job_sync(settings: Settings) -> None:
+    """Đồng bộ Job/Company từ dp_processed_jobs (Postgres) sang Neo4j."""
+    logger.info("=== JOB: neo4j_job_sync ===")
+    try:
+        from gold.neo4j_job_sync import run
+        rows = run(settings)
+        logger.info("neo4j_job_sync: {} jobs synced", rows)
+    except Exception:
+        logger.exception("neo4j_job_sync FAILED")
+
+
 def job_gold_pg_etl(settings: Settings) -> None:
     """Rebuild tech_analytics từ Neo4j → PostgreSQL."""
     logger.info("=== JOB: gold_pg_etl ===")

@@ -3,6 +3,7 @@ package com.techpulse.techradar.integration;
 import com.techpulse.techradar.features.notification.domain.TrendSubscriber;
 import com.techpulse.techradar.features.notification.ports.NotificationRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 
@@ -15,6 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Job-match subscriber lookup (SQL correctness; the Kafka round-trip itself needs a live broker
  * and is exercised manually against the docker-compose stack, not here).
  */
+@EnabledIfEnvironmentVariable(named = "POSTGRES_HOST", matches = ".+")
 class JobMatchIntegrationTest extends IntegrationTestSupport {
 
     @Autowired

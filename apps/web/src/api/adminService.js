@@ -2,23 +2,23 @@ import { apiClient } from '../utils/apiClient';
 
 // --- Dashboard Stats ---
 
-export const fetchMonthlyVisits = async () => {
+const fetchMonthlyVisits = async () => {
     return await apiClient('/admin/dashboard/monthly-visits');
 };
 
-export const fetchSearchesToday = async () => {
+const fetchSearchesToday = async () => {
     return await apiClient('/admin/dashboard/searches-today');
 };
 
-export const fetchTopKeywords = async () => {
+const fetchTopKeywords = async () => {
     return await apiClient('/admin/dashboard/top-keywords');
 };
 
-export const fetchUserCount = async () => {
+const fetchUserCount = async () => {
     return await apiClient('/admin/dashboard/user-count');
 };
 
-export const fetchVisitsToday = async () => {
+const fetchVisitsToday = async () => {
     return await apiClient('/admin/dashboard/visits-today');
 };
 

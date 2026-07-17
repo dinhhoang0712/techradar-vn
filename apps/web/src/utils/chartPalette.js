@@ -5,7 +5,3 @@ export const CHART_PALETTE = [
     '#FF8C00', '#7FBA00', '#E040FB', '#FF5252', '#00B4D8',
     '#9B59B6', '#1ABC9C', '#F1C40F', '#3498DB', '#E67E22',
 ];
-
-export function colorForIndex(index) {
-    return CHART_PALETTE[index % CHART_PALETTE.length];
-}

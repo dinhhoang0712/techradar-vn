@@ -3,6 +3,7 @@ package com.techpulse.techradar.features.radar.etl;
 import com.techpulse.techradar.features.kafka.KafkaTopicConstants;
 import com.techpulse.techradar.features.kafka.producer.KafkaProducerService;
 import com.techpulse.techradar.features.notification.event.TrendAlertEvent;
+import com.techpulse.techradar.features.radar.domain.FlexibleDateParser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.neo4j.driver.Driver;
@@ -99,30 +100,21 @@ public class RadarAnalyticsEtlService {
         Map<String, Integer> snapshot = new HashMap<>();
 
         try (Session session = driver.session()) {
-            // Article mentions per tech per month (supports ISO YYYY-MM-DD and DD/MM/YYYY).
+            // Article mentions per tech per month. Date parsing happens in Java (see
+            // FlexibleDateParser) rather than in Cypher: published_date mixes ISO,
+            // dd/MM/yyyy and MM/dd/yyyy depending on crawler source, and disambiguating
+            // the two slash formats needs real conditional logic, not string surgery.
             String articleQ = "MATCH (t:Technology)<-[:MENTIONS]-(a:Article) " +
                     "WHERE a.published_date IS NOT NULL " +
-                    "WITH t.name AS tech, toString(a.published_date) AS raw " +
-                    "WITH tech, CASE " +
-                    "  WHEN raw =~ '^\\d{4}-\\d{2}' THEN substring(raw, 0, 7) " +
-                    "  WHEN raw =~ '^\\d{2}/\\d{2}/\\d{4}' THEN substring(raw, 6, 4) + '-' + substring(raw, 3, 2) " +
-                    "  ELSE null END AS ym " +
-                    "WHERE ym IS NOT NULL " +
-                    "RETURN tech, ym, count(*) AS c";
+                    "RETURN t.name AS tech, toString(a.published_date) AS raw";
             for (Record rec : session.run(articleQ).list()) {
                 bucket(data, rec, 1);
             }
 
             // Job postings per tech per month (only where a job date exists).
             String jobMonthQ = "MATCH (t:Technology)<-[:REQUIRES]-(j:Job) " +
-                    "WITH t.name AS tech, j, " +
-                    "     toString(coalesce(j.posted_date, j.due_date, j.created_at)) AS raw " +
-                    "WITH tech, j, CASE " +
-                    "  WHEN raw =~ '^\\d{4}-\\d{2}' THEN substring(raw, 0, 7) " +
-                    "  WHEN raw =~ '^\\d{2}/\\d{2}/\\d{4}' THEN substring(raw, 6, 4) + '-' + substring(raw, 3, 2) " +
-                    "  ELSE null END AS ym " +
-                    "WHERE ym IS NOT NULL " +
-                    "RETURN tech, ym, count(DISTINCT j) AS c";
+                    "RETURN t.name AS tech, " +
+                    "       toString(coalesce(j.posted_date, j.due_date, j.created_at)) AS raw";
             for (Record rec : session.run(jobMonthQ).list()) {
                 bucket(data, rec, 0);
             }
@@ -157,16 +149,16 @@ public class RadarAnalyticsEtlService {
     }
 
     private void bucket(Map<String, Map<YearMonth, int[]>> data, Record rec, int index) {
-        if (rec.get("tech").isNull()) {
+        if (rec.get("tech").isNull() || rec.get("raw").isNull()) {
             return;
         }
-        YearMonth ym = parseYearMonth(rec.get("ym").asString());
+        YearMonth ym = FlexibleDateParser.parseYearMonth(rec.get("raw").asString());
         if (ym == null) {
             return;
         }
         int[] cell = data.computeIfAbsent(rec.get("tech").asString(), k -> new HashMap<>())
                 .computeIfAbsent(ym, k -> new int[2]);
-        cell[index] += rec.get("c").asInt();
+        cell[index] += 1;
     }
 
     private List<Row> buildRows(Map<String, Map<YearMonth, int[]>> data,
@@ -226,13 +218,5 @@ public class RadarAnalyticsEtlService {
         spec = row.ranking() != null ? spec.bind("ranking", row.ranking()) : spec.bindNull("ranking", Integer.class);
 
         return spec.fetch().rowsUpdated();
-    }
-
-    private static YearMonth parseYearMonth(String ym) {
-        try {
-            return YearMonth.parse(ym); // expects yyyy-MM
-        } catch (RuntimeException e) {
-            return null;
-        }
     }
 }

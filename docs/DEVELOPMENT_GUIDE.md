@@ -253,19 +253,7 @@ docker run -d \
 - Download Redis từ https://redis.io/download
 - Chạy `redis-server`
 
-### 2.6 Knowledge Graph Setup
-
-```bash
-cd knowledge-graph
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run complete pipeline
-python utils/run_complete_pipeline.py
-```
-
-### 2.7 Data Platform Setup
+### 2.6 Data Platform Setup
 
 ```bash
 cd data-platform
@@ -1099,7 +1087,6 @@ services:
 - [AI Platform](./AI_PLATFORM.md)
 - [API Documentation](./API_DOCs_v1.md)
 - [Deployment Guide](./DEPLOYMENT.md)
-- [Knowledge Graph](../knowledge-graph/README.md)
 - [Data Platform](../data-platform/README.md)
 
 ### External Resources

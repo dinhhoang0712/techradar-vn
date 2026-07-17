@@ -117,7 +117,7 @@ class CreatePostUseCaseTest {
     void execute_resolvesAndSnapshotsTaggedCompany() {
         String companyId = "neo4j-company-1";
         when(getCompaniesUseCase.all()).thenReturn(Flux.just(
-                new CompanyProfile(companyId, "Acme Corp", "Hà Nội", List.of("Java"), 5)));
+                new CompanyProfile(companyId, "Acme Corp", "Hà Nội", List.of("Java"), 5, null, null)));
 
         useCase.execute(userId, "Working at Acme!", null, companyId, null).block();
 

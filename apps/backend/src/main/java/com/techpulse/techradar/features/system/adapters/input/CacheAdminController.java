@@ -15,7 +15,7 @@ import reactor.core.publisher.Mono;
 /**
  * Admin-triggered cache eviction for lookaside caches that have no ETL/rebuild step to hang an
  * eviction off of. Company/job tech-stack data streams in continuously (Kafka + batch
- * knowledge-graph import) — unlike radar's {@code tech_analytics} (see
+ * data-platform sync) — unlike radar's {@code tech_analytics} (see
  * {@link com.techpulse.techradar.features.radar.adapters.input.AnalyticsAdminController}), there's
  * no rebuild to trigger, just a cache that goes stale for up to {@code app.redis.company-cache-ttl}
  * / {@code app.redis.job-cache-ttl} seconds after new data lands (see docs/DATABASE.md §5).

@@ -12,6 +12,7 @@ from app.api.routes_health import router as health_router
 from app.api.routes_internal import router as internal_router
 from app.api.routes_agent import router as agent_router
 from app.api.routes_career import router as career_router
+from app.api.routes_company_insight import router as company_insight_router
 from app.api.routes_forecast import router as forecast_router
 from app.api.routes_interview import router as interview_router
 from app.api.routes_recommend import router as recommend_router
@@ -107,6 +108,7 @@ app.include_router(summarize_router)
 app.include_router(report_router)
 app.include_router(agent_router)
 app.include_router(interview_router)
+app.include_router(company_insight_router)
 
 
 @app.get("/metrics", include_in_schema=False)

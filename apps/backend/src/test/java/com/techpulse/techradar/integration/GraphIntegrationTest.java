@@ -1,12 +1,14 @@
 package com.techpulse.techradar.integration;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.http.MediaType;
 
 import java.util.List;
 import java.util.Map;
 
 /** Graph explore/road-analysis/filter against a real Neo4j instance. */
+@EnabledIfEnvironmentVariable(named = "POSTGRES_HOST", matches = ".+")
 class GraphIntegrationTest extends IntegrationTestSupport {
 
     @Test

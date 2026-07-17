@@ -1,21 +1,27 @@
-FROM python:3.11-slim
+# Build stage: cần build-essential/libpq-dev để pip build vài native wheel (asyncpg, onnxruntime...).
+# Toolchain này KHÔNG cần lúc runtime nên bị loại khỏi stage cuối để giảm size image.
+FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
-# Cài system deps cần cho torch và asyncpg
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Cài Python packages cho deploy API
 COPY requirements-deploy.txt .
-RUN pip install --no-cache-dir -r requirements-deploy.txt
 
-# Copy source
-COPY . .
+# Cài torch bản CPU-only TRƯỚC (mặc định pip sẽ kéo bản GPU/CUDA nặng hơn nhiều lần dù stack
+# này chỉ chạy CPU — không có cấu hình GPU nào trong docker-compose.yml). Cùng pattern đã dùng
+# ở services/embedding-service/Dockerfile.
+RUN pip install --no-cache-dir --user --timeout 600 \
+    torch==2.2.0+cpu \
+    --index-url https://download.pytorch.org/whl/cpu
 
-# Download models lúc build (tránh download lại mỗi lần start)
+RUN pip install --no-cache-dir --user --timeout 600 -r requirements-deploy.txt
+
+# Download models NGAY SAU khi cài dependency, TRƯỚC khi copy source code — để sửa code
+# không làm invalidate cache của bước download model nặng (vài GB) này ở các lần build sau.
 RUN python -c "\
 from sentence_transformers import SentenceTransformer; \
 from transformers import AutoTokenizer, AutoModelForTokenClassification; \
@@ -34,6 +40,18 @@ snapshot_download( \
 ); \
 AutoTokenizer.from_pretrained('NlpHust/ner-vietnamese-electra-base'); \
 AutoModelForTokenClassification.from_pretrained('NlpHust/ner-vietnamese-electra-base')"
+
+# Runtime stage: không có compiler toolchain, chỉ có package + model đã tải sẵn từ builder.
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY --from=builder /root/.local /root/.local
+COPY --from=builder /root/.cache /root/.cache
+ENV PATH=/root/.local/bin:$PATH
+
+# Copy source
+COPY . .
 
 EXPOSE 8000
 

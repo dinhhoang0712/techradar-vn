@@ -50,10 +50,15 @@ services:
       PYTHON_AI_BASE_URL: http://ai-rag-core:8000
       PYTHON_ML_CLUSTERING_BASE_URL: http://ml-clustering:8001
       PYTHON_INTERNAL_TOKEN: ${INTERNAL_API_TOKEN:-techradar-internal-secret}
-      # Mail (MailHog — UI at http://localhost:8025)
-      MAIL_HOST: mailhog
-      MAIL_PORT: "1025"
-      MAIL_FROM: no-reply@techradar.vn
+      # Mail/SMTP (gửi email reset mật khẩu). Mặc định trỏ MailHog (dev, UI: http://localhost:8025).
+      # Set các biến MAIL_* trong .env để dùng SMTP thật ở production — xem chú thích trong .env.docker.example.
+      MAIL_HOST: ${MAIL_HOST:-mailhog}
+      MAIL_PORT: ${MAIL_PORT:-1025}
+      MAIL_USER: ${MAIL_USER:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-false}
+      MAIL_SMTP_STARTTLS: ${MAIL_SMTP_STARTTLS:-false}
+      MAIL_FROM: ${MAIL_FROM:-no-reply@techradar.vn}
       # Kafka (only reachable under `--profile vector`; harmless retries otherwise)
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       # Redis (token blacklist, cache, rate limiting)
@@ -63,15 +68,27 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change-this-in-production-with-at-least-256-bits}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-*}
       WEB_RESET_URL: ${WEB_RESET_URL:-http://localhost:5173/login}
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:8080/api/v1/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          # JVM đã tự giới hạn heap ở 512m (JAVA_OPTS), cap container ở mức rộng hơn nhiều
+          # chỉ để chặn trường hợp bất thường (leak off-heap/thread), không ảnh hưởng vận hành bình thường.
+          memory: 1536m
     depends_on:
       postgres:
         condition: service_healthy
       neo4j:
         condition: service_started
       ai-rag-core:
-        condition: service_started
+        condition: service_healthy
       ml-clustering:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_started
     restart: unless-stopped
@@ -102,13 +119,25 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       MODEL_WARMUP: ${MODEL_WARMUP:-background}
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/metrics', timeout=3)\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          # Service AI nặng nhất (torch + nhiều model embedding/rerank/NER cùng lúc) — cap rộng
+          # để chặn runaway ảnh hưởng các service khác trên cùng host, không phải giới hạn chặt.
+          memory: 4g
     depends_on:
       postgres:
         condition: service_healthy
       neo4j:
         condition: service_started
       redis:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
 
   # ----------------------------- ML clustering service (FastAPI) --------------------------
@@ -133,6 +162,16 @@ services:
       MLCLUSTER_S3_REGION: ${MLCLUSTER_S3_REGION:-ap-southeast-1}
       MLCLUSTER_S3_ACCESS_KEY_ID: ${MLCLUSTER_S3_ACCESS_KEY_ID:-}
       MLCLUSTER_S3_SECRET_ACCESS_KEY: ${MLCLUSTER_S3_SECRET_ACCESS_KEY:-}
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=3)\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
     volumes:
       - ml_clustering_cache:/tmp/ml-clustering-cache
     depends_on:
@@ -187,10 +226,17 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     restart: unless-stopped
 
   mailhog:
-    image: mailhog/mailhog:latest
+    # Pin theo digest — mailhog không publish tag version, "latest" là tag duy nhất nên
+    # phải pin bằng digest để tránh image âm thầm đổi giữa các lần `docker compose pull`.
+    image: mailhog/mailhog@sha256:8d76a3d4ffa32a3661311944007a415332c4bb855657f4f6c57996405c009bea
     container_name: techradar-mailhog
     ports:
       - "1025:1025"     # SMTP
@@ -199,7 +245,7 @@ services:
 
   # ----------------------------- MinIO (Bronze/Silver object storage) --------------------
   minio:
-    image: minio/minio:latest
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
     container_name: techradar-minio
     ports:
       - "9000:9000"     # S3 API
@@ -235,6 +281,7 @@ services:
       RAG_BASE_URL: http://ai-rag-core:8000
       EMBED_SECRET: ${EMBED_SECRET:-changeme}
       INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-techradar-internal-secret}
+      RUN_JOBS_ON_START: ${RUN_JOBS_ON_START:-false}
     depends_on:
       kafka:
         condition: service_started
@@ -259,11 +306,15 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       CRAWL_INTERVAL_HOURS: ${CRAWL_INTERVAL_HOURS:-6}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      # Subscribes to crawler:trigger for the admin "Kích hoạt Radar" on-demand run.
+      REDIS_URL: redis://redis:6379
     volumes:
       - crawler_data:/app/data
     depends_on:
       kafka:
         condition: service_started
+      redis:
+        condition: service_healthy
     restart: unless-stopped
 
   # Kafka runs by default: it backs the ingestion pipeline AND the notification domain events
@@ -288,7 +339,7 @@ services:
 
   # ----------------------------- Vector store + writer (opt-in: --profile vector) ---------
   qdrant:
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:v1.18.2
     container_name: techradar-qdrant
     profiles: ["vector"]
     ports:

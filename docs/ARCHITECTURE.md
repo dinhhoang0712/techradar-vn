@@ -629,41 +629,15 @@ services/ml-clustering/
 
 ### 8.2 Modules
 
-```
-knowledge-graph/
-├── entity_resolution/           # Alias normalization
-│   ├── aliases.json
-│   ├── tech_resolver.py
-│   └── company_resolver.py
-├── ontology/                    # Taxonomy classification
-│   ├── taxonomy.py
-│   └── tech_classifier.py
-├── cypher_repo/                 # Cypher query constants
-│   └── repository.py
-├── analytics/                   # Score computation
-│   ├── trend_scorer.py
-│   └── demand_scorer.py
-├── crawl/                       # Web crawlers
-│   ├── base_crawler.py
-│   ├── VNExpress.py
-│   ├── GenK.py
-│   ├── DanTri.py
-│   ├── ICTNews.py
-│   ├── TopCV.py
-│   ├── ITviec.py
-│   ├── Viblo.py
-│   ├── GitHub.py
-│   └── run_all.py
-├── utils/
-│   ├── neo4j_config.py
-│   ├── schema_define.py
-│   ├── database_connection.py
-│   ├── import_multi_source.py
-│   └── run_complete_pipeline.py
-└── scripts/
-    ├── seed_sample_graph.cypher
-    └── fix_json_files.py
-```
+Không còn thư mục `knowledge-graph/` riêng (đã xoá — đó là bản đầu tiên, độc lập
+của pipeline này). Việc ghi vào graph hiện nằm ở:
+
+- `services/crawler/` — crawl 8 nguồn (VNExpress, GenK, DanTri, ICTNews, TopCV, ITviec, Viblo, GitHub), publish Kafka.
+- `apps/backend` (`features/kafka/KafkaNeo4jWriterService.java`) — consume Kafka real-time, MERGE node gốc + cạnh trực tiếp.
+- `data-platform/gold/{neo4j_article_sync,neo4j_job_sync}.py` — batch/nightly, MERGE lại cùng loại node/cạnh.
+- `data-platform/gold/neo4j_enricher.py` — cạnh derived (`USES`, `RELATED_TO`) + stats.
+
+Chi tiết "ai ghi gì" ở [`docs/DATABASE.md`](./DATABASE.md) §4.2.
 
 ---
 
@@ -855,5 +829,4 @@ Xem thêm:
 - [AI Platform Documentation](./AI_PLATFORM.md) - Chi tiết về AI services
 - [API Documentation](./API_DOCs_v1.md) - API endpoints
 - [Deployment Guide](./DEPLOYMENT.md) - Docker Compose deployment
-- [Knowledge Graph Documentation](../knowledge-graph/README.md) - Knowledge Graph subsystem
 - [Data Platform Documentation](../data-platform/README.md) - Data pipeline details

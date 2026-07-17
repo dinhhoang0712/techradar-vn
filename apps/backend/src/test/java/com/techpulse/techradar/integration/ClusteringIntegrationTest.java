@@ -1,12 +1,14 @@
 package com.techpulse.techradar.integration;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.http.MediaType;
 
 import java.util.List;
 import java.util.Map;
 
 /** Clustering endpoints proxy through to the mocked Python ClusteringServicePort. */
+@EnabledIfEnvironmentVariable(named = "POSTGRES_HOST", matches = ".+")
 class ClusteringIntegrationTest extends IntegrationTestSupport {
 
     @Test

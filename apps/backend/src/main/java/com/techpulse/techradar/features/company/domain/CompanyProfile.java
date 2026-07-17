@@ -11,6 +11,8 @@ public record CompanyProfile(
         String name,
         String location,
         List<String> techStack,
-        int jobCount
+        int jobCount,
+        String industry,
+        String size
 ) {
 }

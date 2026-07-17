@@ -509,24 +509,6 @@ TECH-RADAR/
 │       ├── requirements.txt
 │       └── Dockerfile
 │
-├── knowledge-graph/          # Knowledge Graph subsystem
-│   ├── crawl/                # Web crawlers
-│   │   ├── VNExpress.py
-│   │   ├── GenK.py
-│   │   ├── DanTri.py
-│   │   ├── ICTNews.py
-│   │   ├── TopCV.py
-│   │   ├── ITviec.py
-│   │   ├── Viblo.py
-│   │   └── GitHub.py
-│   ├── entity_resolution/    # Alias normalization
-│   ├── ontology/             # Taxonomy classification
-│   ├── cypher_repo/          # Cypher query constants
-│   ├── analytics/            # Score computation
-│   ├── services/             # Embedding, Qdrant writer
-│   ├── utils/                # Neo4j config, schema
-│   └── scripts/              # Seed, data-fix helpers
-│
 ├── data-platform/           # Data Platform (Bronze/Silver/Gold)
 │   ├── bronze/               # Kafka → MinIO writer
 │   ├── silver/               # Kafka → PostgreSQL processor
@@ -574,7 +556,7 @@ TECH-RADAR/
 
 ### Quick Start với Docker Compose
 
-Cách nhanh nhất để chạy toàn bộ hệ thống:
+Cách nhanh nhất để chạy toàn bộ hệ thống, có dữ liệu thật ngay từ lần chạy đầu:
 
 ```bash
 # 1. Clone repository
@@ -585,10 +567,13 @@ cd tech-radar
 cp .env.docker.example .env
 # Edit .env và điền OPENAI_API_KEY hoặc GEMINI_API_KEY cho chatbot
 
-# 3. Khởi động toàn bộ hệ thống
-docker compose up --build
+# 3. Khởi động toàn bộ hệ thống + bật crawler + seed dữ liệu ngay (khuyến nghị)
+RUN_JOBS_ON_START=true COMPOSE_PROFILES=crawl,vector docker compose up --build -d
 
-# 4. Truy ứng dụng
+# Theo dõi crawler đang lấy dữ liệu:
+docker logs techradar-crawler -f
+
+# 4. Truy cập ứng dụng
 # Web: http://localhost:5173
 # API: http://localhost:8080/api/v1
 # Swagger: http://localhost:8080/swagger-ui.html
@@ -596,16 +581,21 @@ docker compose up --build
 # MailHog: http://localhost:8025
 ```
 
-**Docker Compose Profiles:**
+> 💡 **Vì sao có `RUN_JOBS_ON_START` và `COMPOSE_PROFILES`?** Mặc định (`docker compose up --build` trơn) hệ thống chạy nhưng **không có dữ liệu thật** — crawler và các job đồng bộ/ETL đều opt-in hoặc theo lịch cron ban đêm. `COMPOSE_PROFILES=crawl,vector` bật crawler (Neo4j/Postgres có dữ liệu thật gần như ngay lập tức qua đường Kafka realtime) và Qdrant vector store cho RAG; `RUN_JOBS_ON_START=true` khiến `data-platform` chạy ngay 5 job đồng bộ/rebuild (kể cả `tech_analytics` nuôi Trend Radar) thay vì đợi tới 02:00–06:00 sáng. Chi tiết: [Data Platform Guide](docs/DATA_PLATFORM.md).
 
+**Docker Compose Profiles (opt-in):**
+
+| Profile | Bật thêm gì | Lệnh riêng lẻ |
+|---|---|---|
+| _(none)_ | App stack cơ bản — **không** có crawler, Postgres/Neo4j sẽ trống | `docker compose up --build` |
+| `crawl` | Crawler lấy dữ liệu thật từ 8 nguồn (VNExpress, GenK, DanTri, ICTNews, TopCV, ITviec, Viblo, GitHub) | `docker compose --profile crawl up -d` |
+| `vector` | Qdrant vector store cho Graph RAG | `docker compose --profile vector up -d` |
+| `observability` | Grafana + Loki + Promtail (log tập trung) | `docker compose --profile observability up -d` |
+
+Kết hợp nhiều profile cùng lúc bằng `COMPOSE_PROFILES=crawl,vector,observability` (như bước 3) hoặc lặp lại `--profile <name>` nhiều lần.
+
+Chỉ chạy database services (không app):
 ```bash
-# App stack (khuyến nghị cho development)
-docker compose up --build
-
-# Full stack với data pipeline (cần nhiều resources hơn)
-docker compose --profile vector up --build
-
-# Chỉ database services
 docker compose up postgres neo4j redis qdrant
 ```
 

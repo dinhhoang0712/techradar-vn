@@ -40,7 +40,6 @@
 
 ### Subsystem Documentation
 
-- **[Knowledge Graph](../knowledge-graph/README.md)** - Tài liệu về Knowledge Graph subsystem, bao gồm schema, entity resolution, ontology và crawlers.
 - **[Data Platform](../data-platform/README.md)** - Tài liệu gốc về Data Platform, bao gồm Bronze/Silver/Gold layers, scheduler và ETL pipelines.
 - **[Data Platform Guide](./DATA_PLATFORM.md)** - Tài liệu chi tiết về Data Platform cho developers, bao gồm kiến trúc Medallion, crawlers, processing layers, monitoring và troubleshooting.
 
@@ -103,8 +102,7 @@ docker compose up --build
 
 1. [Architecture Overview](./ARCHITECTURE.md) - Phần AI Services
 2. [AI Platform](./AI_PLATFORM.md) - Chi tiết AI services
-3. [Knowledge Graph](../knowledge-graph/README.md) - Graph data
-4. [Data Platform](../data-platform/README.md) - Data pipeline
+3. [Data Platform](../data-platform/README.md) - Data pipeline (crawl → import → graph)
 
 ### Cho DevOps Engineer
 
@@ -149,11 +147,9 @@ techradar-vn/
 │   ├── crawler/          # Web Crawlers
 │   ├── embedding-service/# Embedding Service
 │   └── qdrant-writer/    # Qdrant Writer
-├── knowledge-graph/      # Knowledge Graph Subsystem
 ├── data-platform/        # Data Platform (Bronze/Silver/Gold)
 ├── infrastructure/       # Infrastructure configs
 ├── docs/                 # Documentation (thư mục này)
-├── tests/                # Cross-service tests
 └── docker-compose.yml    # Full stack orchestration
 ```
 

@@ -1,5 +1,6 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ToastContext } from './toastContext';
+import { registerToastHandler } from './toastBridge';
 import './ToastProvider.css';
 
 let nextId = 1;
@@ -26,6 +27,12 @@ export function ToastProvider({ children }) {
         }
         return id;
     }, [dismiss]);
+
+    // Cho phép code ngoài React (apiClient.js) hiện toast qua toastBridge.
+    useEffect(() => {
+        registerToastHandler(showToast);
+        return () => registerToastHandler(null);
+    }, [showToast]);
 
     return (
         <ToastContext.Provider value={showToast}>

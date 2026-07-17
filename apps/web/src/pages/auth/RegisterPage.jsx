@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { registerUser } from '../../api/authService';
+import AuthStatsRow from '../../components/common/AuthStatsRow';
 import { useToast } from '../../components/common/toastContext';
 import './Auth.css';
 
@@ -149,11 +150,7 @@ export default function RegisterPage() {
                 <p className="auth-artwork-subtitle">
                     Gia nhập cộng đồng người dùng TechRadar để tiếp cận các dữ liệu tuyển dụng và báo cáo chi tiết nhất.
                 </p>
-                <div className="auth-stats-row">
-                    <span className="auth-stat-chip">500+ công ty</span>
-                    <span className="auth-stat-chip">10k+ báo cáo</span>
-                    <span className="auth-stat-chip">1000+ tin tuyển dụng</span>
-                </div>
+                <AuthStatsRow />
             </div>
         </div>
     );

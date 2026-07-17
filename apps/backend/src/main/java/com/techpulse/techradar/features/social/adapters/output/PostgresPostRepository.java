@@ -9,6 +9,8 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
 
 @Repository
@@ -21,19 +23,28 @@ public class PostgresPostRepository implements PostRepository {
             "SELECT p.id, p.user_id, u.full_name, up.avatar_url, p.content, p.created_at, " +
             "       (SELECT count(*) FROM post_like pl WHERE pl.post_id = p.id) AS like_count, " +
             "       (SELECT count(*) FROM post_comment pc WHERE pc.post_id = p.id) AS comment_count, " +
-            "       EXISTS(SELECT 1 FROM post_like pl2 WHERE pl2.post_id = p.id AND pl2.user_id = :viewer_id) AS liked_by_me " +
+            "       EXISTS(SELECT 1 FROM post_like pl2 WHERE pl2.post_id = p.id AND pl2.user_id = :viewer_id) AS liked_by_me, " +
+            "       (SELECT array_agg(pi.id ORDER BY pi.ordinal) FROM post_image pi WHERE pi.post_id = p.id) AS image_ids, " +
+            "       p.hashtags, p.tagged_company_id, p.tagged_company_name, p.tagged_company_location " +
             "FROM post p " +
             "JOIN users u ON u.id = p.user_id " +
             "LEFT JOIN user_profile up ON up.user_id = p.user_id ";
 
     @Override
-    public Mono<Void> insert(UUID postId, UUID userId, String content, LocalDateTime createdAt) {
-        return dbClient.sql("INSERT INTO post (id, user_id, content, created_at) VALUES (:id, :user_id, :content, :created_at)")
-                .bind("id", postId)
-                .bind("user_id", userId)
-                .bind("content", content)
-                .bind("created_at", createdAt)
-                .fetch().rowsUpdated().then();
+    public Mono<Void> insert(NewPost post) {
+        String[] hashtags = post.hashtags() == null ? new String[0] : post.hashtags().toArray(new String[0]);
+        DatabaseClient.GenericExecuteSpec spec = dbClient.sql(
+                "INSERT INTO post (id, user_id, content, hashtags, tagged_company_id, tagged_company_name, tagged_company_location, created_at) " +
+                "VALUES (:id, :user_id, :content, :hashtags, :tagged_company_id, :tagged_company_name, :tagged_company_location, :created_at)")
+                .bind("id", post.id())
+                .bind("user_id", post.userId())
+                .bind("content", post.content())
+                .bind("hashtags", hashtags)
+                .bind("created_at", post.createdAt());
+        spec = bindNullable(spec, "tagged_company_id", post.taggedCompanyId());
+        spec = bindNullable(spec, "tagged_company_name", post.taggedCompanyName());
+        spec = bindNullable(spec, "tagged_company_location", post.taggedCompanyLocation());
+        return spec.fetch().rowsUpdated().then();
     }
 
     @Override
@@ -46,17 +57,34 @@ public class PostgresPostRepository implements PostRepository {
     }
 
     @Override
-    public Flux<FeedRow> findFeed(UUID viewerId, int limit, int offset) {
-        return dbClient.sql(
-                SELECT_FEED_ROW +
-                "WHERE p.user_id = :viewer_id " +
-                "   OR p.user_id IN (SELECT followee_id FROM follow WHERE follower_id = :viewer_id) " +
-                "ORDER BY p.created_at DESC LIMIT :limit OFFSET :offset")
+    public Flux<FeedRow> findFeed(UUID viewerId, String hashtagFilter, int limit, int offset) {
+        String sql = SELECT_FEED_ROW +
+                "WHERE (p.user_id = :viewer_id OR p.user_id IN (SELECT followee_id FROM follow WHERE follower_id = :viewer_id)) " +
+                (hashtagFilter != null ? "AND p.hashtags @> :hashtag_arr " : "") +
+                "ORDER BY p.created_at DESC LIMIT :limit OFFSET :offset";
+        DatabaseClient.GenericExecuteSpec spec = dbClient.sql(sql)
                 .bind("viewer_id", viewerId)
                 .bind("limit", limit)
-                .bind("offset", offset)
-                .map((row, meta) -> mapRow(row))
-                .all();
+                .bind("offset", offset);
+        if (hashtagFilter != null) {
+            spec = spec.bind("hashtag_arr", new String[]{hashtagFilter});
+        }
+        return spec.map((row, meta) -> mapRow(row)).all();
+    }
+
+    @Override
+    public Flux<FeedRow> findExplore(UUID viewerId, String hashtagFilter, int limit, int offset) {
+        String sql = SELECT_FEED_ROW +
+                (hashtagFilter != null ? "WHERE p.hashtags @> :hashtag_arr " : "") +
+                "ORDER BY p.created_at DESC LIMIT :limit OFFSET :offset";
+        DatabaseClient.GenericExecuteSpec spec = dbClient.sql(sql)
+                .bind("viewer_id", viewerId)
+                .bind("limit", limit)
+                .bind("offset", offset);
+        if (hashtagFilter != null) {
+            spec = spec.bind("hashtag_arr", new String[]{hashtagFilter});
+        }
+        return spec.map((row, meta) -> mapRow(row)).all();
     }
 
     @Override
@@ -130,7 +158,12 @@ public class PostgresPostRepository implements PostRepository {
                         row.get("created_at", LocalDateTime.class),
                         row.get("like_count", Long.class),
                         row.get("comment_count", Long.class),
-                        false))
+                        false,
+                        List.of(),
+                        List.of(),
+                        null,
+                        null,
+                        null))
                 .all();
     }
 
@@ -183,6 +216,8 @@ public class PostgresPostRepository implements PostRepository {
     }
 
     private static FeedRow mapRow(Row row) {
+        UUID[] imageIds = row.get("image_ids", UUID[].class);
+        String[] hashtags = row.get("hashtags", String[].class);
         return new FeedRow(
                 row.get("id", UUID.class),
                 row.get("user_id", UUID.class),
@@ -192,7 +227,17 @@ public class PostgresPostRepository implements PostRepository {
                 row.get("created_at", LocalDateTime.class),
                 row.get("like_count", Long.class),
                 row.get("comment_count", Long.class),
-                Boolean.TRUE.equals(row.get("liked_by_me", Boolean.class))
+                Boolean.TRUE.equals(row.get("liked_by_me", Boolean.class)),
+                imageIds == null ? List.of() : Arrays.asList(imageIds),
+                hashtags == null ? List.of() : Arrays.asList(hashtags),
+                row.get("tagged_company_id", String.class),
+                row.get("tagged_company_name", String.class),
+                row.get("tagged_company_location", String.class)
         );
+    }
+
+    private static DatabaseClient.GenericExecuteSpec bindNullable(
+            DatabaseClient.GenericExecuteSpec spec, String name, String value) {
+        return value != null ? spec.bind(name, value) : spec.bindNull(name, String.class);
     }
 }

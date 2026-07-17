@@ -5,6 +5,7 @@ import com.techpulse.techradar.features.social.application.CreatePostUseCase;
 import com.techpulse.techradar.features.social.application.DeletePostUseCase;
 import com.techpulse.techradar.features.social.application.GetCommentsUseCase;
 import com.techpulse.techradar.features.social.application.GetFeedUseCase;
+import com.techpulse.techradar.features.social.application.PostImageService;
 import com.techpulse.techradar.features.social.application.ReportContentUseCase;
 import com.techpulse.techradar.features.social.application.ToggleLikeUseCase;
 import com.techpulse.techradar.shared.dto.ApiResponse;
@@ -12,6 +13,7 @@ import com.techpulse.techradar.shared.security.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,6 +26,7 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Social feed — posts, likes, comments. Follows/profile live in {@link UserSocialController}.
@@ -40,15 +43,18 @@ public class PostController {
     private final GetCommentsUseCase getCommentsUseCase;
     private final AddCommentUseCase addCommentUseCase;
     private final ReportContentUseCase reportContentUseCase;
+    private final PostImageService postImageService;
 
-    @Operation(summary = "Feed: posts by the current user and everyone they follow")
+    @Operation(summary = "Feed: 'following' (self + followees, default) or 'explore' (every public post)")
     @GetMapping("/feed")
     public Mono<ResponseEntity<ApiResponse<List<SocialDtos.FeedPostResponse>>>> feed(
+            @RequestParam(defaultValue = "following") String scope,
+            @RequestParam(required = false) String hashtag,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
         return SecurityUtils.currentUserId()
-                .flatMapMany(userId -> getFeedUseCase.execute(userId, page, size))
+                .flatMapMany(userId -> getFeedUseCase.execute(userId, scope, hashtag, page, size))
                 .map(SocialDtos.FeedPostResponse::from)
                 .collectList()
                 .map(list -> ResponseEntity.ok(ApiResponse.success(list, "Feed")));
@@ -58,7 +64,9 @@ public class PostController {
     @PostMapping("/posts")
     public Mono<ResponseEntity<ApiResponse<Map<String, String>>>> create(@RequestBody SocialDtos.CreatePostRequest request) {
         return SecurityUtils.currentUserId()
-                .flatMap(userId -> createPostUseCase.execute(userId, request.getContent()))
+                .flatMap(userId -> createPostUseCase.execute(
+                        userId, request.getContent(), request.getImages(),
+                        request.getTaggedCompanyId(), request.getMentionedUserIds()))
                 .map(postId -> ResponseEntity.ok(ApiResponse.success(Map.of("id", postId), "Post created")));
     }
 
@@ -68,6 +76,19 @@ public class PostController {
         return SecurityUtils.currentUserId()
                 .flatMap(userId -> deletePostUseCase.execute(id, userId))
                 .thenReturn(ResponseEntity.ok(ApiResponse.<Void>success(null, "Post deleted")));
+    }
+
+    @Operation(summary = "Serve a post image (public)")
+    @GetMapping("/posts/{postId}/images/{imageId}")
+    public Mono<ResponseEntity<byte[]>> image(@PathVariable String postId, @PathVariable String imageId) {
+        return postImageService.get(UUID.fromString(imageId))
+                .map(image -> ResponseEntity.ok()
+                        .contentType(MediaType.parseMediaType(
+                                image.contentType() != null ? image.contentType() : "image/png"))
+                        .header("X-Content-Type-Options", "nosniff")
+                        .header("Content-Disposition", "inline; filename=\"post-image\"")
+                        .body(image.data()))
+                .defaultIfEmpty(ResponseEntity.notFound().build());
     }
 
     @Operation(summary = "Like a post")
@@ -86,7 +107,7 @@ public class PostController {
                 .thenReturn(ResponseEntity.ok(ApiResponse.<Void>success(null, "Unliked")));
     }
 
-    @Operation(summary = "List comments on a post")
+    @Operation(summary = "List comments on a post (flat list; each item carries parent_id for client-side threading)")
     @GetMapping("/posts/{id}/comments")
     public Mono<ResponseEntity<ApiResponse<List<SocialDtos.CommentResponse>>>> comments(
             @PathVariable String id,
@@ -99,14 +120,15 @@ public class PostController {
                 .map(list -> ResponseEntity.ok(ApiResponse.success(list, "Comments")));
     }
 
-    @Operation(summary = "Add a comment to a post")
+    @Operation(summary = "Add a comment to a post (optionally a reply via parent_id)")
     @PostMapping("/posts/{id}/comments")
     public Mono<ResponseEntity<ApiResponse<Map<String, String>>>> addComment(
             @PathVariable String id,
             @RequestBody SocialDtos.AddCommentRequest request
     ) {
         return SecurityUtils.currentUserId()
-                .flatMap(userId -> addCommentUseCase.execute(id, userId, request.getContent()))
+                .flatMap(userId -> addCommentUseCase.execute(
+                        id, userId, request.getContent(), request.getParentId(), request.getMentionedUserIds()))
                 .map(commentId -> ResponseEntity.ok(ApiResponse.success(Map.of("id", commentId), "Comment added")));
     }
 

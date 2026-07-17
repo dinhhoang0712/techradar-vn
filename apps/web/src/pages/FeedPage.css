@@ -99,10 +99,79 @@
     box-shadow: 0 0 0 3px var(--primary-glow);
 }
 
+.feed-composer-tools {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.feed-composer-tool-btn {
+    font-size: 0.8rem;
+    padding: 6px 12px;
+    cursor: pointer;
+}
+
+.feed-composer-tool-btn.is-disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.feed-composer-image-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.feed-composer-thumb {
+    position: relative;
+    width: 72px;
+    height: 72px;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    border: 1px solid var(--border);
+}
+
+.feed-composer-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.feed-composer-thumb-remove {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: rgba(6, 8, 16, 0.75);
+    color: #fff;
+    border: none;
+    font-size: 0.65rem;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 .feed-composer-footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
+}
+
+.feed-scope-toggle {
+    margin-bottom: 4px;
+}
+
+.feed-hashtag-filter-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
 }
 
 .feed-composer-count {
@@ -190,6 +259,9 @@
     flex-shrink: 0;
     position: sticky;
     top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
 }
 
 @media (max-width: 900px) {

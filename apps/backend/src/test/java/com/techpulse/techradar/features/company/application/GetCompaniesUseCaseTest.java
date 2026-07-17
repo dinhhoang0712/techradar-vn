@@ -90,4 +90,35 @@ class GetCompaniesUseCaseTest {
                 .expectNextCount(100)
                 .verifyComplete();
     }
+
+    @Test
+    void execute_withQuery_filtersCaseInsensitivelyByNameOnTheCachedList() {
+        stubCacheAsPassThrough();
+        when(companyRepository.findAllWithTechStack()).thenReturn(Flux.just(
+                new CompanyRepository.CompanyRaw("id-1", "Acme Corp", "Hà Nội", List.of("Java"), 1),
+                new CompanyRepository.CompanyRaw("id-2", "Beta Inc", "Đà Nẵng", List.of("Go"), 2)));
+
+        StepVerifier.create(useCase.execute("ACME", 0, 20).map(CompanyProfile::name))
+                .expectNext("Acme Corp")
+                .verifyComplete();
+    }
+
+    @Test
+    void execute_withBlankOrNullQuery_behavesAsIfUnfiltered() {
+        stubCacheAsPassThrough();
+        when(companyRepository.findAllWithTechStack()).thenReturn(Flux.just(
+                new CompanyRepository.CompanyRaw("id-1", "Acme Corp", "Hà Nội", List.of("Java"), 1),
+                new CompanyRepository.CompanyRaw("id-2", "Beta Inc", "Đà Nẵng", List.of("Go"), 2)));
+
+        StepVerifier.create(useCase.execute(null, 0, 20)).expectNextCount(2).verifyComplete();
+        StepVerifier.create(useCase.execute("   ", 0, 20)).expectNextCount(2).verifyComplete();
+    }
+
+    @Test
+    void execute_twoArgOverload_delegatesToUnfilteredThreeArgVersion() {
+        stubCacheAsPassThrough();
+        when(companyRepository.findAllWithTechStack()).thenReturn(Flux.just(raw(1), raw(2)));
+
+        StepVerifier.create(useCase.execute(0, 20)).expectNextCount(2).verifyComplete();
+    }
 }

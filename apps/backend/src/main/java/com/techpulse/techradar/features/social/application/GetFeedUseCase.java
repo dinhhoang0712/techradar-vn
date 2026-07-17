@@ -8,7 +8,7 @@ import reactor.core.publisher.Flux;
 
 import java.util.UUID;
 
-/** Posts by the current user and everyone they follow, newest first. */
+/** Posts by the current user and everyone they follow (default), or every public post ("explore"). */
 @Component
 @RequiredArgsConstructor
 public class GetFeedUseCase {
@@ -18,11 +18,16 @@ public class GetFeedUseCase {
 
     private final PostRepository postRepository;
 
-    public Flux<FeedPost> execute(String userId, int page, int size) {
+    public Flux<FeedPost> execute(String userId, String scope, String hashtag, int page, int size) {
         int effectiveSize = size <= 0 ? DEFAULT_SIZE : Math.min(size, MAX_SIZE);
         int offset = Math.max(page, 0) * effectiveSize;
+        String hashtagFilter = (hashtag == null || hashtag.isBlank()) ? null : hashtag.trim().toLowerCase();
+        UUID viewerId = UUID.fromString(userId);
 
-        return postRepository.findFeed(UUID.fromString(userId), effectiveSize, offset)
-                .map(FeedMapper::toFeedPost);
+        Flux<PostRepository.FeedRow> rows = "explore".equals(scope)
+                ? postRepository.findExplore(viewerId, hashtagFilter, effectiveSize, offset)
+                : postRepository.findFeed(viewerId, hashtagFilter, effectiveSize, offset);
+
+        return rows.map(FeedMapper::toFeedPost);
     }
 }

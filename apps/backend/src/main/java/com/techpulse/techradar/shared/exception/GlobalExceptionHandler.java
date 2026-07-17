@@ -2,6 +2,7 @@ package com.techpulse.techradar.shared.exception;
 
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.buffer.DataBufferLimitException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -23,6 +24,12 @@ public class GlobalExceptionHandler {
         }
         return ResponseEntity.status(ex.getStatusCode())
                 .body(ApiResponse.error(ex.getMessage(), ex.getErrorCode()));
+    }
+
+    @ExceptionHandler(DataBufferLimitException.class)
+    public ResponseEntity<ApiResponse<Void>> handleBodyTooLarge(DataBufferLimitException ex) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(ApiResponse.error("Request body too large", "PAYLOAD_TOO_LARGE"));
     }
 
     @ExceptionHandler(WebExchangeBindException.class)

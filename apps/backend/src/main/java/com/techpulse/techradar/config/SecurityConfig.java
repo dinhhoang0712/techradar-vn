@@ -47,6 +47,7 @@ public class SecurityConfig {
             "/auth/reset-password",
             "/health",
             "/status",
+            "/stats/public",
             "/actuator/**",
             "/swagger-ui.html",
             "/swagger-ui/**",
@@ -76,6 +77,7 @@ public class SecurityConfig {
         ServerWebExchangeMatcher publicMatcher = ServerWebExchangeMatchers.matchers(
                 ServerWebExchangeMatchers.pathMatchers(HttpMethod.OPTIONS, "/**"),
                 ServerWebExchangeMatchers.pathMatchers(HttpMethod.GET, "/user/avatar/**"),
+                ServerWebExchangeMatchers.pathMatchers(HttpMethod.GET, "/posts/*/images/**"),
                 ServerWebExchangeMatchers.pathMatchers(PUBLIC_PATHS));
         jwtFilter.setRequiresAuthenticationMatcher(new NegatedServerWebExchangeMatcher(publicMatcher));
 
@@ -84,6 +86,7 @@ public class SecurityConfig {
                 .authorizeExchange(authorize -> authorize
                         .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/user/avatar/**").permitAll()  // public avatar images
+                        .pathMatchers(HttpMethod.GET, "/posts/*/images/**").permitAll()  // public post images
                         .pathMatchers(PUBLIC_PATHS).permitAll()
                         .anyExchange().authenticated())
                 .addFilterAt(jwtFilter, SecurityWebFiltersOrder.AUTHENTICATION)

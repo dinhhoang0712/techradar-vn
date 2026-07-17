@@ -10,6 +10,9 @@ spring:
     property-naming-strategy: SNAKE_CASE
     default-property-inclusion: non_null
 
+  codec:
+    max-in-memory-size: 20MB
+
   webflux:
     base-path: /api/v1
     cors:
@@ -126,6 +129,7 @@ app:
     radar-cache-ttl: ${REDIS_RADAR_CACHE_TTL:3600}
     company-cache-ttl: ${REDIS_COMPANY_CACHE_TTL:1800}
     job-cache-ttl: ${REDIS_JOB_CACHE_TTL:1800}
+    public-stats-cache-ttl: ${REDIS_PUBLIC_STATS_CACHE_TTL:1800}
     chat-rate-limit:
       max-requests: ${CHAT_RATE_LIMIT_MAX:20}
       window-seconds: ${CHAT_RATE_LIMIT_WINDOW:60}

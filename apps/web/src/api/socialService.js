@@ -1,21 +1,34 @@
 import { apiClient } from '../utils/apiClient';
 
 /**
- * Bảng tin: bài viết của bản thân + người đang theo dõi, mới nhất trước.
+ * Bảng tin: bài viết của bản thân + người đang theo dõi (mặc định), hoặc mọi bài viết công khai
+ * (scope='explore'), mới nhất trước. Có thể lọc theo hashtag.
  * Endpoint: GET /feed
  */
-export const getFeed = async (page = 0, size = 20) => {
-    return await apiClient(`/feed?page=${page}&size=${size}`, { method: 'GET' });
+export const getFeed = async (page = 0, size = 20, { scope, hashtag } = {}) => {
+    const params = new URLSearchParams();
+    params.set('page', page);
+    params.set('size', size);
+    if (scope) params.set('scope', scope);
+    if (hashtag) params.set('hashtag', hashtag);
+    return await apiClient(`/feed?${params.toString()}`, { method: 'GET' });
 };
 
 /**
- * Đăng bài mới.
+ * Đăng bài mới, có thể kèm ảnh (tối đa 4), gắn thẻ công ty, và nhắc (@mention) người dùng khác.
  * Endpoint: POST /posts
+ * @param {string} content
+ * @param {{images?: {contentType: string, dataBase64: string}[], taggedCompanyId?: string, mentionedUserIds?: string[]}} [opts]
  */
-export const createPost = async (content) => {
+export const createPost = async (content, { images, taggedCompanyId, mentionedUserIds } = {}) => {
     return await apiClient('/posts', {
         method: 'POST',
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({
+            content,
+            images: images?.map((img) => ({ content_type: img.contentType, data_base64: img.dataBase64 })),
+            tagged_company_id: taggedCompanyId,
+            mentioned_user_ids: mentionedUserIds,
+        }),
     });
 };
 
@@ -44,7 +57,8 @@ export const unlikePost = async (id) => {
 };
 
 /**
- * Lấy danh sách bình luận của một bài viết, cũ nhất trước.
+ * Lấy danh sách bình luận của một bài viết (danh sách phẳng, cũ nhất trước — mỗi item có
+ * parent_id để nhóm lại thành cây bình luận ở phía client, xem utils/comments.js).
  * Endpoint: GET /posts/{id}/comments
  */
 export const getComments = async (postId, page = 0, size = 20) => {
@@ -54,13 +68,16 @@ export const getComments = async (postId, page = 0, size = 20) => {
 };
 
 /**
- * Thêm bình luận vào bài viết.
+ * Thêm bình luận vào bài viết, hoặc trả lời một bình luận cấp cao nhất (parentId).
  * Endpoint: POST /posts/{id}/comments
+ * @param {string} postId
+ * @param {string} content
+ * @param {{parentId?: string, mentionedUserIds?: string[]}} [opts]
  */
-export const addComment = async (postId, content) => {
+export const addComment = async (postId, content, { parentId, mentionedUserIds } = {}) => {
     return await apiClient(`/posts/${encodeURIComponent(postId)}/comments`, {
         method: 'POST',
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, parent_id: parentId, mentioned_user_ids: mentionedUserIds }),
     });
 };
 
@@ -126,4 +143,21 @@ export const unfollowUser = async (userId) => {
  */
 export const getSuggestedUsers = async (limit = 10) => {
     return await apiClient(`/users/suggested?limit=${limit}`, { method: 'GET' });
+};
+
+/**
+ * Tìm người dùng theo tên (một phần) — dùng cho ô chọn @mention.
+ * Endpoint: GET /users/search
+ */
+export const searchUsers = async (q, limit = 8) => {
+    if (!q || !q.trim()) return { data: [] };
+    return await apiClient(`/users/search?q=${encodeURIComponent(q)}&limit=${limit}`, { method: 'GET' });
+};
+
+/**
+ * Hashtag nổi bật (thịnh hành) trong 7 ngày gần nhất.
+ * Endpoint: GET /hashtags/trending
+ */
+export const getTrendingHashtags = async (limit = 10) => {
+    return await apiClient(`/hashtags/trending?limit=${limit}`, { method: 'GET' });
 };

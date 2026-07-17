@@ -26,6 +26,9 @@ public interface FollowRepository {
     /** Users {@code viewerId} doesn't already follow, for a "who to follow" widget. */
     Flux<UserSummaryRow> suggested(UUID viewerId, int limit);
 
+    /** Users whose full name contains {@code pattern} (case-insensitive), for an @mention picker. */
+    Flux<UserSummaryRow> searchByName(UUID viewerId, String pattern, int limit);
+
     record ProfileBasics(String fullName, String avatarUrl, String bio, String jobRole, String location) {
     }
 

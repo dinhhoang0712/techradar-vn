@@ -4,17 +4,21 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 public interface PostRepository {
 
-    Mono<Void> insert(UUID postId, UUID userId, String content, LocalDateTime createdAt);
+    Mono<Void> insert(NewPost post);
 
     /** @return true if a post with this id owned by this user was deleted. */
     Mono<Boolean> deleteOwnedBy(UUID postId, UUID userId);
 
     /** Posts by {@code viewerId} and everyone they follow, newest first. */
-    Flux<FeedRow> findFeed(UUID viewerId, int limit, int offset);
+    Flux<FeedRow> findFeed(UUID viewerId, String hashtagFilter, int limit, int offset);
+
+    /** Every post regardless of author/followers ("explore"), newest first. */
+    Flux<FeedRow> findExplore(UUID viewerId, String hashtagFilter, int limit, int offset);
 
     /** A single user's own posts (their profile feed), as seen by {@code viewerId}. */
     Flux<FeedRow> findByUser(UUID targetUserId, UUID viewerId, int limit, int offset);
@@ -44,6 +48,18 @@ public interface PostRepository {
     /** Users with the most posts, for an admin "most active" widget. */
     Flux<TopPosterRow> topPosters(int limit);
 
+    record NewPost(
+            UUID id,
+            UUID userId,
+            String content,
+            List<String> hashtags,
+            String taggedCompanyId,
+            String taggedCompanyName,
+            String taggedCompanyLocation,
+            LocalDateTime createdAt
+    ) {
+    }
+
     record FeedRow(
             UUID id,
             UUID authorId,
@@ -53,7 +69,12 @@ public interface PostRepository {
             LocalDateTime createdAt,
             long likeCount,
             long commentCount,
-            boolean likedByMe
+            boolean likedByMe,
+            List<UUID> imageIds,
+            List<String> hashtags,
+            String taggedCompanyId,
+            String taggedCompanyName,
+            String taggedCompanyLocation
     ) {
     }
 

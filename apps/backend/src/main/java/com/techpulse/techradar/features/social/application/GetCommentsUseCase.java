@@ -27,6 +27,7 @@ public class GetCommentsUseCase {
                         row.id().toString(),
                         new UserSummary(row.authorId().toString(), row.authorName(), row.authorAvatarUrl()),
                         row.content(),
+                        row.parentCommentId() == null ? null : row.parentCommentId().toString(),
                         row.createdAt()
                 ));
     }

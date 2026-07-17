@@ -11,6 +11,7 @@ import reactor.core.publisher.Flux;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Companies with an inferred tech-stack fingerprint, ranked by job count.
@@ -43,9 +44,17 @@ public class GetCompaniesUseCase {
     }
 
     public Flux<CompanyProfile> execute(int page, int size) {
+        return execute(null, page, size);
+    }
+
+    /** @param q optional case-insensitive name filter, applied to the already-cached list (no new Cypher query). */
+    public Flux<CompanyProfile> execute(String q, int page, int size) {
         int effectivePage = Math.max(page, 0);
         int effectiveSize = size <= 0 ? DEFAULT_SIZE : Math.min(size, MAX_SIZE);
-        return all()
+        Flux<CompanyProfile> source = (q == null || q.isBlank())
+                ? all()
+                : all().filter(c -> c.name() != null && c.name().toLowerCase(Locale.ROOT).contains(q.toLowerCase(Locale.ROOT)));
+        return source
                 .skip((long) effectivePage * effectiveSize)
                 .take(effectiveSize);
     }

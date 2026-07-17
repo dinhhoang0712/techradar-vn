@@ -107,4 +107,25 @@ public class PostgresFollowRepository implements FollowRepository {
                 ))
                 .all();
     }
+
+    @Override
+    public Flux<UserSummaryRow> searchByName(UUID viewerId, String pattern, int limit) {
+        // Escape the caller's own LIKE metacharacters before wrapping in %...% — otherwise a
+        // literal "%" or "_" in the query would change what it matches.
+        String escaped = pattern.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+        return dbClient.sql(
+                "SELECT u.id, u.full_name, up.avatar_url " +
+                "FROM users u LEFT JOIN user_profile up ON up.user_id = u.id " +
+                "WHERE u.id <> :viewer_id AND u.full_name ILIKE :pattern ESCAPE '\\' " +
+                "ORDER BY u.full_name LIMIT :limit")
+                .bind("viewer_id", viewerId)
+                .bind("pattern", "%" + escaped + "%")
+                .bind("limit", limit)
+                .map((row, meta) -> new UserSummaryRow(
+                        row.get("id", UUID.class),
+                        row.get("full_name", String.class),
+                        row.get("avatar_url", String.class)
+                ))
+                .all();
+    }
 }

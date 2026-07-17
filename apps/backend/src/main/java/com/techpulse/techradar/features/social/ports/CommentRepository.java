@@ -8,9 +8,12 @@ import java.util.UUID;
 
 public interface CommentRepository {
 
-    Mono<Void> insert(UUID commentId, UUID postId, UUID userId, String content, LocalDateTime createdAt);
+    Mono<Void> insert(UUID commentId, UUID postId, UUID userId, String content, UUID parentCommentId, LocalDateTime createdAt);
 
     Flux<CommentRow> findByPost(UUID postId, int limit, int offset);
+
+    /** For validating/threading a reply target. Empty if the parent comment doesn't exist. */
+    Mono<ParentInfo> findParentInfo(UUID commentId);
 
     /** Admin moderation: delete any comment by id. @return true if it existed. */
     Mono<Boolean> deleteById(UUID commentId);
@@ -23,7 +26,11 @@ public interface CommentRepository {
             String authorName,
             String authorAvatarUrl,
             String content,
+            UUID parentCommentId,
             LocalDateTime createdAt
     ) {
+    }
+
+    record ParentInfo(UUID postId, UUID authorId, UUID parentCommentId) {
     }
 }

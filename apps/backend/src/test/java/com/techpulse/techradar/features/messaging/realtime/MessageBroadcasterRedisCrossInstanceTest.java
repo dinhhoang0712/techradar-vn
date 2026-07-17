@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * impossible before this fix (publish() only ever touched its own instance's in-memory map).
  * <p>
  * Gated on REDIS_HOST since it needs a real Redis reachable, same convention as
- * {@link com.techpulse.techradar.ApiIntegrationTest}.
+ * {@link com.techpulse.techradar.integration.IntegrationTestSupport}.
  */
 @EnabledIfEnvironmentVariable(named = "REDIS_HOST", matches = ".+")
 class MessageBroadcasterRedisCrossInstanceTest {

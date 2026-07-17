@@ -1,5 +1,7 @@
 // Utility func để call API với Base URL
 // Dùng path tương đối để Vite proxy tự forward sang backend (tránh CORS)
+import { showGlobalToast } from '../components/common/toastBridge';
+
 const API_BASE_URL = '/api/v1';
 
 // Single-flight refresh: nhiều request 401 cùng lúc chỉ refresh 1 lần.
@@ -21,7 +23,6 @@ const tryRefreshToken = async () => {
                 if (data && data.access_token) {
                     localStorage.setItem('access_token', data.access_token);
                     if (data.refresh_token) localStorage.setItem('refresh_token', data.refresh_token);
-                    localStorage.setItem('login_timestamp', Date.now().toString());
                     return true;
                 }
                 return false;
@@ -37,29 +38,6 @@ const tryRefreshToken = async () => {
 };
 
 export const apiClient = async (endpoint, options = {}, _retried = false) => {
-    // 1. Kiểm tra thời gian phiên đăng nhập (900 giây = 15 phút)
-    // Bỏ qua /auth/* (login, register, refresh...): các endpoint này không cần token
-    // hợp lệ để gọi, và việc chặn ở đây khiến chính request login bị lỗi giả trước khi
-    // kịp gửi lên server.
-    const loginTimestamp = endpoint.startsWith('/auth/') ? null : localStorage.getItem('login_timestamp');
-    if (loginTimestamp) {
-        const diffSeconds = (Date.now() - parseInt(loginTimestamp)) / 1000;
-        if (diffSeconds > 900) {
-            console.warn('Session timeout reached (900s). Kicking to login...');
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
-            localStorage.removeItem('user');
-            localStorage.removeItem('login_timestamp');
-            
-            if (!window.location.pathname.includes('/login')) {
-                window.location.href = '/login';
-            }
-            const timeoutError = new Error('SESSION_TIMEOUT');
-            timeoutError.status = 401;
-            throw timeoutError;
-        }
-    }
-
     // Lấy token từ localStorage
     const token = localStorage.getItem('access_token');
 
@@ -103,10 +81,15 @@ export const apiClient = async (endpoint, options = {}, _retried = false) => {
                 localStorage.removeItem('access_token');
                 localStorage.removeItem('refresh_token');
                 localStorage.removeItem('user');
-                localStorage.removeItem('login_timestamp');
-                
+
                 // Tránh loop redirect nếu đang ở trang login
                 if (!window.location.pathname.includes('/login')) {
+                    showGlobalToast({
+                        title: 'Phiên đăng nhập đã hết hạn',
+                        body: 'Vui lòng đăng nhập lại.',
+                        variant: 'error',
+                        duration: 4000,
+                    });
                     window.location.href = '/login';
                 }
                 

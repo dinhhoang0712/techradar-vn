@@ -80,6 +80,13 @@ public class PostgresUserRepository implements UserRepository {
                 .rowsUpdated();
     }
 
+    @Override
+    public Mono<Long> countAll() {
+        return dbClient.sql("SELECT COUNT(*) AS c FROM users")
+                .map(row -> ((Row) row).get("c", Long.class))
+                .one();
+    }
+
     private Mono<User> insert(User user) {
         UUID id = UUID.randomUUID();
         LocalDateTime now = LocalDateTime.now();

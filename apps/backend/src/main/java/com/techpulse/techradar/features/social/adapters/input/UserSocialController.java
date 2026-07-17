@@ -3,6 +3,7 @@ package com.techpulse.techradar.features.social.adapters.input;
 import com.techpulse.techradar.features.social.application.GetProfileSummaryUseCase;
 import com.techpulse.techradar.features.social.application.GetSuggestedUsersUseCase;
 import com.techpulse.techradar.features.social.application.GetUserPostsUseCase;
+import com.techpulse.techradar.features.social.application.SearchUsersUseCase;
 import com.techpulse.techradar.features.social.application.ToggleFollowUseCase;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import com.techpulse.techradar.shared.security.SecurityUtils;
@@ -34,6 +35,7 @@ public class UserSocialController {
     private final GetUserPostsUseCase getUserPostsUseCase;
     private final ToggleFollowUseCase toggleFollowUseCase;
     private final GetSuggestedUsersUseCase getSuggestedUsersUseCase;
+    private final SearchUsersUseCase searchUsersUseCase;
 
     @Operation(summary = "Public profile summary (bio, follower/following counts, is-following)")
     @GetMapping("/{id}/profile-summary")
@@ -84,5 +86,18 @@ public class UserSocialController {
                 .map(SocialDtos.UserSummaryResponse::from)
                 .collectList()
                 .map(list -> ResponseEntity.ok(ApiResponse.success(list, "Suggested users")));
+    }
+
+    @Operation(summary = "Search users by (partial) full name — backs the @mention picker")
+    @GetMapping("/search")
+    public Mono<ResponseEntity<ApiResponse<List<SocialDtos.UserSummaryResponse>>>> search(
+            @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "8") int limit
+    ) {
+        return SecurityUtils.currentUserId()
+                .flatMapMany(viewerId -> searchUsersUseCase.execute(viewerId, q, limit))
+                .map(SocialDtos.UserSummaryResponse::from)
+                .collectList()
+                .map(list -> ResponseEntity.ok(ApiResponse.success(list, "Search results")));
     }
 }

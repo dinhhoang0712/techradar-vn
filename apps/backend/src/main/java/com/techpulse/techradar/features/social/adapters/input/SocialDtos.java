@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 import lombok.Value;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 public class SocialDtos {
 
@@ -33,6 +34,25 @@ public class SocialDtos {
 
     @Value
     @Builder
+    public static class TaggedCompanyResponse {
+        String id;
+        String name;
+        String location;
+
+        public static TaggedCompanyResponse from(FeedPost.TaggedCompany c) {
+            if (c == null) {
+                return null;
+            }
+            return TaggedCompanyResponse.builder()
+                    .id(c.id())
+                    .name(c.name())
+                    .location(c.location())
+                    .build();
+        }
+    }
+
+    @Value
+    @Builder
     public static class FeedPostResponse {
         String id;
         UserSummaryResponse author;
@@ -41,6 +61,9 @@ public class SocialDtos {
         long likeCount;
         long commentCount;
         boolean likedByMe;
+        List<String> imageUrls;
+        List<String> hashtags;
+        TaggedCompanyResponse taggedCompany;
 
         public static FeedPostResponse from(FeedPost p) {
             return FeedPostResponse.builder()
@@ -51,6 +74,9 @@ public class SocialDtos {
                     .likeCount(p.likeCount())
                     .commentCount(p.commentCount())
                     .likedByMe(p.likedByMe())
+                    .imageUrls(p.imageUrls())
+                    .hashtags(p.hashtags())
+                    .taggedCompany(TaggedCompanyResponse.from(p.taggedCompany()))
                     .build();
         }
     }
@@ -61,6 +87,7 @@ public class SocialDtos {
         String id;
         UserSummaryResponse author;
         String content;
+        String parentId;
         LocalDateTime createdAt;
 
         public static CommentResponse from(PostComment c) {
@@ -68,6 +95,7 @@ public class SocialDtos {
                     .id(c.id())
                     .author(UserSummaryResponse.from(c.author()))
                     .content(c.content())
+                    .parentId(c.parentId())
                     .createdAt(c.createdAt())
                     .build();
         }
@@ -107,8 +135,19 @@ public class SocialDtos {
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
+    public static class ImageInput {
+        private String contentType;   // e.g. image/png
+        private String dataBase64;    // raw base64 or data URL
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class CreatePostRequest {
         private String content;
+        private List<ImageInput> images;
+        private String taggedCompanyId;
+        private List<String> mentionedUserIds;
     }
 
     @Data
@@ -116,6 +155,8 @@ public class SocialDtos {
     @AllArgsConstructor
     public static class AddCommentRequest {
         private String content;
+        private String parentId;
+        private List<String> mentionedUserIds;
     }
 
     @Data

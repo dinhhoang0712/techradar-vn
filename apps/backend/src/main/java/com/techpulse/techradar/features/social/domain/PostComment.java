@@ -6,6 +6,7 @@ public record PostComment(
         String id,
         UserSummary author,
         String content,
+        String parentId,
         LocalDateTime createdAt
 ) {
 }

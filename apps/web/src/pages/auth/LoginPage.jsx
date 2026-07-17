@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { loginUser, getCurrentUser, getSystemStatus, forgotPassword, resetPassword } from '../../api/authService';
 import Modal from '../../components/common/Modal';
+import AuthStatsRow from '../../components/common/AuthStatsRow';
 import { useToast } from '../../components/common/toastContext';
 import './Auth.css';
 
@@ -76,7 +77,6 @@ export default function LoginPage() {
                 if (res.refresh_token) {
                     localStorage.setItem('refresh_token', res.refresh_token);
                 }
-                localStorage.setItem('login_timestamp', Date.now().toString());
 
                 // Check user role for redirection and maintenance bypass
                 let userRole = 'user';
@@ -93,7 +93,6 @@ export default function LoginPage() {
                 if (status && status.maintenance_web === true && userRole !== 'admin') {
                     localStorage.removeItem('access_token');
                     localStorage.removeItem('refresh_token');
-                    localStorage.removeItem('login_timestamp');
                     setError('Hệ thống đang bảo trì phiên bản Web. Vui lòng quay lại sau.');
                     setLoading(false);
                     return;
@@ -181,11 +180,7 @@ export default function LoginPage() {
                 <p className="auth-artwork-subtitle">
                     Hệ thống trích xuất và phân tích xu hướng công nghệ TechRadar - Mang lợi thế cạnh tranh vào lòng bàn tay bạn.
                 </p>
-                <div className="auth-stats-row">
-                    <span className="auth-stat-chip">500+ công ty</span>
-                    <span className="auth-stat-chip">10k+ báo cáo</span>
-                    <span className="auth-stat-chip">1000+ tin tuyển dụng</span>
-                </div>
+                <AuthStatsRow />
             </div>
 
             {authModal === 'forgot' && (

@@ -87,32 +87,6 @@ describe('apiClient — error mapping', () => {
   });
 });
 
-describe('apiClient — session timeout (15 min)', () => {
-  it('throws SESSION_TIMEOUT and clears storage without calling fetch', async () => {
-    localStorage.setItem('access_token', 'abc');
-    localStorage.setItem('login_timestamp', String(Date.now() - 901 * 1000));
-    const fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
-
-    await expect(apiClient('/user/profile')).rejects.toMatchObject({
-      message: 'SESSION_TIMEOUT',
-      status: 401,
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(localStorage.getItem('access_token')).toBeNull();
-  });
-
-  it('does NOT time out when the session is fresh', async () => {
-    localStorage.setItem('access_token', 'abc');
-    localStorage.setItem('login_timestamp', String(Date.now() - 60 * 1000));
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { ok: true }));
-    vi.stubGlobal('fetch', fetchMock);
-
-    await apiClient('/user/profile');
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
-});
-
 describe('apiClient — refresh-on-401', () => {
   it('refreshes the token once, stores it, and retries the original request', async () => {
     localStorage.setItem('access_token', 'expired');

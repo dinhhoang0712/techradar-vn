@@ -18,22 +18,25 @@ public class PostgresCommentRepository implements CommentRepository {
     private final DatabaseClient dbClient;
 
     @Override
-    public Mono<Void> insert(UUID commentId, UUID postId, UUID userId, String content, LocalDateTime createdAt) {
-        return dbClient.sql(
-                "INSERT INTO post_comment (id, post_id, user_id, content, created_at) " +
-                "VALUES (:id, :post_id, :user_id, :content, :created_at)")
+    public Mono<Void> insert(UUID commentId, UUID postId, UUID userId, String content, UUID parentCommentId, LocalDateTime createdAt) {
+        DatabaseClient.GenericExecuteSpec spec = dbClient.sql(
+                "INSERT INTO post_comment (id, post_id, user_id, content, parent_comment_id, created_at) " +
+                "VALUES (:id, :post_id, :user_id, :content, :parent_comment_id, :created_at)")
                 .bind("id", commentId)
                 .bind("post_id", postId)
                 .bind("user_id", userId)
                 .bind("content", content)
-                .bind("created_at", createdAt)
-                .fetch().rowsUpdated().then();
+                .bind("created_at", createdAt);
+        spec = parentCommentId != null
+                ? spec.bind("parent_comment_id", parentCommentId)
+                : spec.bindNull("parent_comment_id", UUID.class);
+        return spec.fetch().rowsUpdated().then();
     }
 
     @Override
     public Flux<CommentRow> findByPost(UUID postId, int limit, int offset) {
         return dbClient.sql(
-                "SELECT c.id, c.user_id, u.full_name, up.avatar_url, c.content, c.created_at " +
+                "SELECT c.id, c.user_id, u.full_name, up.avatar_url, c.content, c.parent_comment_id, c.created_at " +
                 "FROM post_comment c " +
                 "JOIN users u ON u.id = c.user_id " +
                 "LEFT JOIN user_profile up ON up.user_id = c.user_id " +
@@ -44,6 +47,17 @@ public class PostgresCommentRepository implements CommentRepository {
                 .bind("offset", offset)
                 .map((row, meta) -> mapRow(row))
                 .all();
+    }
+
+    @Override
+    public Mono<ParentInfo> findParentInfo(UUID commentId) {
+        return dbClient.sql("SELECT post_id, user_id, parent_comment_id FROM post_comment WHERE id = :id")
+                .bind("id", commentId)
+                .map((row, meta) -> new ParentInfo(
+                        row.get("post_id", UUID.class),
+                        row.get("user_id", UUID.class),
+                        row.get("parent_comment_id", UUID.class)))
+                .one();
     }
 
     @Override
@@ -69,6 +83,7 @@ public class PostgresCommentRepository implements CommentRepository {
                 row.get("full_name", String.class),
                 row.get("avatar_url", String.class),
                 row.get("content", String.class),
+                row.get("parent_comment_id", UUID.class),
                 row.get("created_at", LocalDateTime.class)
         );
     }

@@ -3,9 +3,15 @@ import { apiClient } from '../utils/apiClient';
 /**
  * Lấy danh sách công ty kèm tech stack suy ra từ tin tuyển dụng.
  * Endpoint: GET /companies
+ * @param {{q?: string, page?: number, size?: number}} [opts] q: lọc theo tên (không phân biệt hoa/thường)
  */
-export const getCompanies = async () => {
-    return await apiClient('/companies', {
+export const getCompanies = async ({ q, page, size } = {}) => {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (page != null) params.set('page', page);
+    if (size != null) params.set('size', size);
+    const query = params.toString();
+    return await apiClient(`/companies${query ? `?${query}` : ''}`, {
         method: 'GET',
     });
 };

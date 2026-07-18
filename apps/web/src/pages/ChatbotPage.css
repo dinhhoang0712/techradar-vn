@@ -417,6 +417,37 @@
     color: var(--text);
 }
 
+.chat-sources {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--text-2);
+}
+
+.chat-sources summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--text-3);
+}
+
+.chat-sources ul {
+    margin: 8px 0 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.chat-source-title {
+    color: var(--text);
+}
+
+.chat-source-meta {
+    color: var(--text-3);
+    margin-left: 6px;
+}
+
 /* Markdown styles inside bubbles */
 .md-heading {
     font-size: 0.95rem;

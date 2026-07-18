@@ -104,6 +104,27 @@ class GetCompaniesUseCaseTest {
     }
 
     @Test
+    void execute_withQuery_alsoMatchesCaseInsensitivelyAgainstTechStack() {
+        stubCacheAsPassThrough();
+        when(companyRepository.findAllWithTechStack()).thenReturn(Flux.just(
+                new CompanyRepository.CompanyRaw("id-1", "Acme Corp", "Hà Nội", List.of("React", "AWS"), 1, null, null),
+                new CompanyRepository.CompanyRaw("id-2", "Beta Inc", "Đà Nẵng", List.of("Go", "Kubernetes"), 2, null, null)));
+
+        StepVerifier.create(useCase.execute("react", 0, 20).map(CompanyProfile::name))
+                .expectNext("Acme Corp")
+                .verifyComplete();
+    }
+
+    @Test
+    void execute_withQuery_toleratesCompaniesWithNullTechStack() {
+        stubCacheAsPassThrough();
+        when(companyRepository.findAllWithTechStack()).thenReturn(Flux.just(
+                new CompanyRepository.CompanyRaw("id-1", "Acme Corp", "Hà Nội", null, 1, null, null)));
+
+        StepVerifier.create(useCase.execute("react", 0, 20)).expectNextCount(0).verifyComplete();
+    }
+
+    @Test
     void execute_withBlankOrNullQuery_behavesAsIfUnfiltered() {
         stubCacheAsPassThrough();
         when(companyRepository.findAllWithTechStack()).thenReturn(Flux.just(

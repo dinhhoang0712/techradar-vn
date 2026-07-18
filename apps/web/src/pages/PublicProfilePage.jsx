@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getProfileSummary, getUserPosts, followUser, unfollowUser } from '../api/socialService';
-import { getUserProfile } from '../api/userService';
 import { useToast } from '../components/common/toastContext';
 import { useMessagingContext } from '../contexts/messagingStore';
 import Avatar from '../components/common/Avatar';
@@ -11,7 +10,6 @@ import './PublicProfilePage.css';
 export default function PublicProfilePage() {
     const { id } = useParams();
     const navigate = useNavigate();
-    const [currentUserId, setCurrentUserId] = useState(null);
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
@@ -20,16 +18,7 @@ export default function PublicProfilePage() {
     const [posts, setPosts] = useState([]);
     const [postsLoading, setPostsLoading] = useState(true);
     const notify = useToast();
-    const { openConversationWith } = useMessagingContext();
-
-    useEffect(() => {
-        getUserProfile()
-            .then((res) => {
-                const data = res?.data ?? res ?? {};
-                setCurrentUserId(data.id ?? data.user?.id ?? null);
-            })
-            .catch(() => {});
-    }, []);
+    const { currentUserId, openConversationWith } = useMessagingContext();
 
     const loadProfile = useCallback(async () => {
         setLoading(true);

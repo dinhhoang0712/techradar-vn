@@ -13,6 +13,12 @@ LƯU Ý trên AuraDB:
     sau khi gộp tất cả label) vẫn rất nhỏ, không cần lo.
   - Mỗi lần `gds.fastRP.stream` đều mutate trong session, nên chạy tuần tự.
   - Không gọi `gds.*.write` để tránh ghi rác lên DB chung; dùng `.stream`.
+
+TRẠNG THÁI THỰC TẾ (2026): `gds.graph.project` cần session-based GDS API riêng
+mà AuraDB free tier chưa hỗ trợ trực tiếp — toàn bộ hàm trong file này hiện
+KHÔNG được gọi từ `pipelines/stage_02_features.py` (xem `params.yaml`, mọi
+flag `features.*.enabled` của module này đều `false`). Node2Vec đã có bản thay
+thế chạy client-side, không cần GDS: `graph_features.build_client_node2vec_embedding`.
 """
 
 from __future__ import annotations

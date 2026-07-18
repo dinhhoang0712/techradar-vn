@@ -57,6 +57,20 @@ class LlmSummaryResponse(BaseModel):
     summary: str
 
 
+# ── Internal: moderation suggestion (gọi từ Spring gateway) ───────────────────
+
+class ModerationSuggestionRequest(BaseModel):
+    target_type:    str = Field(..., pattern="^(POST|COMMENT)$")
+    target_content: str = Field(..., min_length=1, max_length=5000)
+    report_reason:  str = Field(..., min_length=1, max_length=500)
+
+
+class ModerationSuggestionResponse(BaseModel):
+    action:     str   = Field(..., pattern="^(REMOVE|DISMISS)$")
+    reason:     str
+    confidence: float = Field(..., ge=0.0, le=1.0)
+
+
 # ── Recommendation ────────────────────────────────────────────────────────────
 
 class RecommendRequest(BaseModel):

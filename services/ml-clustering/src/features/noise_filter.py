@@ -79,7 +79,7 @@ def filter_noise(
         too_rare = df_with_count["job_count"].fillna(0) < params.min_job_count
         n_rare = too_rare.sum()
         if n_rare > 0:
-            logger.info("noise_filter min_job_count<{}: loại {} tech", params.min_job_count, n_rare)
+            logger.info("noise_filter min_job_count<%s: loại %s tech", params.min_job_count, n_rare)
         keep_mask &= ~too_rare
 
     # 2. Blocklist — so sánh case-insensitive
@@ -89,7 +89,7 @@ def filter_noise(
         n_blocked = in_blocklist.sum()
         if n_blocked > 0:
             blocked_names = df_tech.loc[in_blocklist, "name"].tolist()
-            logger.info("noise_filter blocklist: loại {} tech: {}", n_blocked, blocked_names)
+            logger.info("noise_filter blocklist: loại %s tech: %s", n_blocked, blocked_names)
         keep_mask &= ~in_blocklist
 
     # 3. Heuristic patterns
@@ -106,13 +106,13 @@ def filter_noise(
         n_pattern = by_pattern.sum()
         if n_pattern > 0:
             pattern_names = df_tech.loc[by_pattern, "name"].tolist()
-            logger.info("noise_filter heuristic: loại {} tech: {}", n_pattern, pattern_names)
+            logger.info("noise_filter heuristic: loại %s tech: %s", n_pattern, pattern_names)
         keep_mask &= ~by_pattern
 
     df_filtered = df_tech[keep_mask].reset_index(drop=True)
     removed = original_count - len(df_filtered)
     logger.info(
-        "noise_filter hoàn tất: {} → {} tech (loại {} noise)",
+        "noise_filter hoàn tất: %s → %s tech (loại %s noise)",
         original_count, len(df_filtered), removed,
     )
     return df_filtered

@@ -46,24 +46,11 @@
 .feed-composer {
     position: relative;
     z-index: 0;
-}
-
-.feed-composer::before {
-    content: '';
-    position: absolute;
-    inset: -2px;
-    border-radius: calc(var(--radius) + 2px);
-    background: var(--gradient-brand);
-    z-index: -1;
-    opacity: 0;
-    transition: opacity var(--t);
-}
-
-.feed-composer.is-focused::before {
-    opacity: 1;
+    transition: border-color var(--t), box-shadow var(--t);
 }
 
 .feed-composer.is-focused {
+    border-color: var(--primary);
     box-shadow: 0 0 22px var(--primary-glow), 0 0 34px var(--accent-glow);
 }
 

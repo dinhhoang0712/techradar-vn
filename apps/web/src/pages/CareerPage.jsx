@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { getCareerAdvice } from '../api/careerService';
 import { getUserProfile } from '../api/userService';
 import { getJobMatches } from '../api/jobService';
+import { renderMarkdown } from '../utils/markdown';
 import './CareerPage.css';
 
 const COMMON_ROLES = [
@@ -207,19 +208,9 @@ export default function CareerPage() {
                         {result.roadmap && (
                             <div className="card">
                                 <h3 className="section-title">Lộ trình học tập</h3>
-                                <div
-                                    className="career-roadmap-content"
-                                    dangerouslySetInnerHTML={{
-                                        __html: result.roadmap
-                                            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-                                            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                                            .replace(/^## (.*)/gm, '<h3>$1</h3>')
-                                            .replace(/^# (.*)/gm, '<h2>$1</h2>')
-                                            .replace(/^- (.*)/gm, '<li>$1</li>')
-                                            .replace(/\n\n/g, '</p><p>')
-                                            .replace(/\n/g, '<br/>')
-                                    }}
-                                />
+                                <div className="career-roadmap-content">
+                                    {renderMarkdown(result.roadmap)}
+                                </div>
                             </div>
                         )}
                     </div>

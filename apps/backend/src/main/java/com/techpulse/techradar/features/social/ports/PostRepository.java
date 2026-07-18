@@ -23,6 +23,9 @@ public interface PostRepository {
     /** A single user's own posts (their profile feed), as seen by {@code viewerId}. */
     Flux<FeedRow> findByUser(UUID targetUserId, UUID viewerId, int limit, int offset);
 
+    /** Single post lookup, e.g. to build the payload for a live feed broadcast right after a write. */
+    Mono<FeedRow> findById(UUID postId, UUID viewerId);
+
     Mono<Long> countByUser(UUID userId);
 
     /** For notifying the author on comment/like; empty if the post doesn't exist. */

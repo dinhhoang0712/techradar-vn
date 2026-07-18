@@ -134,6 +134,8 @@ class FeatureParams(BaseModel):
     use_job_tfidf: bool = True
     tfidf_min_df: int = 2
     tfidf_max_features: int = 500
+    use_skill_jaccard: bool = True        # bag-of-skills qua job bridge (tech->job->skill)
+    use_article_temporal_stats: bool = True  # recency + sentiment từ Article mentions
     feature_weights: dict[str, float] = {}  # nhân vào block sau scale: {"job_tfidf": 2.0, ...}
     scaler: Literal["standard", "minmax", "robust"] = "standard"
     reduce_dim: ReduceDimParams
@@ -158,10 +160,15 @@ class KMeansGrid(BaseModel):
 
 
 class SelectionParams(BaseModel):
-    primary_metric: Literal["silhouette", "davies_bouldin", "calinski_harabasz"]
+    primary_metric: Literal["silhouette", "davies_bouldin", "calinski_harabasz", "dbcv"]
     require_min_clusters: int = 5
     require_max_clusters: int = 9999  # không giới hạn mặc định
     require_max_noise_ratio: float = 0.6
+    # Ràng buộc tuỳ chọn dựa trên cạnh RELATED_TO đã curate thủ công (xem
+    # evaluator.compute_related_split_ratio) — None = không ép buộc (mặc định,
+    # không đổi hành vi cũ). Đặt vd 0.3 để loại trial có >30% cặp biết-liên-quan
+    # bị xếp khác cụm, dù trial đó thắng về Silhouette/DBCV.
+    require_max_related_split_ratio: float | None = None
 
 
 class ClusteringParams(BaseModel):

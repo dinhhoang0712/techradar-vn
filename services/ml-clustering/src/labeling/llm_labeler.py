@@ -29,6 +29,34 @@ from conf.config import LabelingParams, get_settings
 
 _REQUIRED_KEYS = {"label", "label_en", "description", "domain", "confidence", "outliers"}
 
+# Phải khớp đúng danh sách domain liệt kê trong prompts/cluster_label.txt.
+# LLM đôi khi trả domain lệch enum (typo, viết hoa khác, domain tự bịa) → phá
+# group-by-domain ở UI; validate + fallback "Other" thay vì tin tưởng mù quáng.
+_ALLOWED_DOMAINS = {
+    "AI/ML", "Web Frontend", "Web Backend", "Mobile", "Data Engineering",
+    "DevOps/Cloud", "Security", "Database", "Hardware", "Soft Skills",
+    "Mixed/Noise", "Other",
+}
+
+# Rate-limit giữa các lần gọi LLM cho từng cluster. Chỉ Gemini free tier
+# (~10 RPM) cần giãn cách; OpenAI (mặc định hiện tại trong params.yaml)
+# không cần — sleep cứng 5s trước đây làm chậm vô ích ~2-3 phút mỗi lần retrain.
+_INTER_CLUSTER_DELAY_SECONDS = {"gemini": 5.0}
+
+
+def _inter_cluster_delay_seconds(provider: str) -> float:
+    return _INTER_CLUSTER_DELAY_SECONDS.get(provider, 0.0)
+
+
+def _normalize_domain(domain: str, cluster_id: int) -> str:
+    if domain in _ALLOWED_DOMAINS:
+        return domain
+    logger.warning(
+        "Cluster {}: domain '{}' không khớp enum cho phép — fallback 'Other'.",
+        cluster_id, domain,
+    )
+    return "Other"
+
 # Lazy template cache: path → content
 _template_cache: dict[str, str] = {}
 
@@ -353,7 +381,9 @@ def label_all_clusters(
                 top_members=top_names,
             )
             data = call_gemini(prompt, params, cache_dir=params.cache_dir)
-            time.sleep(5)  # tránh rate limit Gemini (free tier ~10 RPM)
+            delay = _inter_cluster_delay_seconds(params.provider)
+            if delay > 0:
+                time.sleep(delay)
             is_coherent = bool(data.get("is_coherent", True))
             allowed_outliers = set(top_names)
             outliers = [
@@ -365,7 +395,7 @@ def label_all_clusters(
                 label=data["label"],
                 label_en=data["label_en"],
                 description=data["description"],
-                domain=data["domain"],
+                domain=_normalize_domain(data["domain"], cluster_id),
                 confidence=float(data["confidence"]),
                 is_coherent=is_coherent,
                 coherence_reason=data.get("coherence_reason", ""),

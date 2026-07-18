@@ -73,23 +73,34 @@ def train_hdbscan(
     metric: str = "euclidean",
 ) -> tuple[Any, np.ndarray]:
     """
-    Fit HDBSCAN (gói `hdbscan`) — model lý tưởng cho data có ~53% node noise.
+    Fit HDBSCAN bằng gói `hdbscan` gốc (KHÔNG dùng `sklearn.cluster.HDBSCAN`)
+    — model lý tưởng cho data có ~53% node noise.
+
+    Lý do dùng gói `hdbscan` thay vì sklearn: gói gốc cho `model.probabilities_`
+    (độ tin cậy gán cụm — soft clustering), `model.outlier_scores_` (GLOSH
+    outlier score, phân biệt "chắc chắn noise" với "cận biên") và
+    `model.relative_validity_` (xấp xỉ DBCV — metric nội tại thiết kế riêng
+    cho density-based clustering, phù hợp hơn Silhouette/Davies-Bouldin vốn
+    giả định cụm dạng lồi). sklearn's HDBSCAN không expose các thuộc tính này.
+    `hdbscan==0.8.x` tương thích với `scikit-learn==1.5.2` đang pin trong
+    requirements.txt (chỉ xung đột với scikit-learn >= 1.6).
 
     Yêu cầu logic:
       - Cosine không support trực tiếp ở `hdbscan` — caller phải L2-normalize
         trước, dùng metric="euclidean" (tương đương cosine sau L2).
       - `min_samples=None` → để mặc định theo `min_cluster_size`.
-      - Không expose `prediction_data=True` (không cần predict cho điểm mới).
+      - `gen_min_span_tree=True` để có `relative_validity_` (DBCV).
+      - `prediction_data=True` để có membership vector / outlier score.
     """
-    # Dùng sklearn.cluster.HDBSCAN (sklearn >= 1.3) thay vì package hdbscan cũ
-    # vì hdbscan==0.8.x không tương thích với scikit-learn >= 1.6
-    from sklearn.cluster import HDBSCAN
+    import hdbscan as hdbscan_pkg
 
-    model = HDBSCAN(
+    model = hdbscan_pkg.HDBSCAN(
         min_cluster_size=min_cluster_size,
         min_samples=min_samples,
         cluster_selection_method=cluster_selection_method,
         metric=metric,
+        gen_min_span_tree=True,
+        prediction_data=True,
     )
     model.fit(X)
     return model, model.labels_

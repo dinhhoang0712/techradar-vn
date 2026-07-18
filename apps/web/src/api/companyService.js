@@ -3,7 +3,7 @@ import { apiClient } from '../utils/apiClient';
 /**
  * Lấy danh sách công ty kèm tech stack suy ra từ tin tuyển dụng.
  * Endpoint: GET /companies
- * @param {{q?: string, page?: number, size?: number}} [opts] q: lọc theo tên (không phân biệt hoa/thường)
+ * @param {{q?: string, page?: number, size?: number}} [opts] q: lọc theo tên hoặc tech stack (không phân biệt hoa/thường)
  */
 export const getCompanies = async ({ q, page, size } = {}) => {
     const params = new URLSearchParams();

@@ -133,39 +133,39 @@ async def _llm_synthesize(
     """
     LLM tổng hợp signals → (predicted_direction, confidence, reasoning).
     """
-    template = _load_template("forecast_template.txt")
-
-    signals_text = "\n".join(
-        f"- {s.signal}: {s.value} (trọng số {s.weight})" for s in signals
-    )
-    trend_text = "\n".join(
-        f"  {str(r.get('month', ''))[:7]}: {r.get('job_count', 0)} việc, "
-        f"tăng trưởng {r.get('growth_rate') or 0:+.1f}%"
-        for r in trend_data[-6:]
-    )
-
-    prompt = template.format(
-        technology=tech,
-        horizon_months=horizon_months,
-        current_status=str(current_status),
-        signals=signals_text,
-        trend_data=trend_text,
-    )
-
-    messages = [
-        {
-            "role": "system",
-            "content": (
-                "Bạn là chuyên gia phân tích xu hướng công nghệ tại Việt Nam. "
-                "Dựa hoàn toàn vào dữ liệu được cung cấp, không bịa thêm số liệu. "
-                "Trả về JSON: {\"direction\": \"growing|stable|declining\", "
-                "\"confidence\": 0.0-1.0, \"reasoning\": \"...\"}"
-            ),
-        },
-        {"role": "user", "content": prompt},
-    ]
-
     try:
+        template = _load_template("forecast_template.txt")
+
+        signals_text = "\n".join(
+            f"- {s.signal}: {s.value} (trọng số {s.weight})" for s in signals
+        )
+        trend_text = "\n".join(
+            f"  {str(r.get('month', ''))[:7]}: {r.get('job_count', 0)} việc, "
+            f"tăng trưởng {r.get('growth_rate') or 0:+.1f}%"
+            for r in trend_data[-6:]
+        )
+
+        prompt = template.format(
+            technology=tech,
+            horizon_months=horizon_months,
+            current_status=str(current_status),
+            signals=signals_text,
+            trend_data=trend_text,
+        )
+
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "Bạn là chuyên gia phân tích xu hướng công nghệ tại Việt Nam. "
+                    "Dựa hoàn toàn vào dữ liệu được cung cấp, không bịa thêm số liệu. "
+                    "Trả về JSON: {\"direction\": \"growing|stable|declining\", "
+                    "\"confidence\": 0.0-1.0, \"reasoning\": \"...\"}"
+                ),
+            },
+            {"role": "user", "content": prompt},
+        ]
+
         raw = await generate(messages)
         import json, re
 

@@ -7,6 +7,7 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminModeration from './pages/admin/AdminModeration';
 import AdminReports from './pages/admin/AdminReports';
 import AdminCMS from './pages/admin/AdminCMS';
+import AdminClusters from './pages/admin/AdminClusters';
 import AdminSettings from './pages/admin/AdminSettings';
 import AdminUsers from './pages/admin/AdminUsers';
 import TrendDashboard from './pages/TrendDashboard';
@@ -27,6 +28,7 @@ import MessagesPage from './pages/MessagesPage';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
 import NotFoundPage from './pages/NotFoundPage';
+import ForbiddenPage from './pages/ForbiddenPage';
 import './styles/global.css';
 
 export default function App() {
@@ -38,6 +40,7 @@ export default function App() {
           {/* Màn hình xác thực (Không có layout header) */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/403" element={<ForbiddenPage />} />
 
           {/* Module dành cho Người dùng */}
         <Route element={<UserLayout />}>
@@ -66,6 +69,7 @@ export default function App() {
             <Route path="reports" element={<AdminReports />} />
             <Route path="users" element={<AdminUsers />} />
             <Route path="cms" element={<AdminCMS />} />
+            <Route path="clusters" element={<AdminClusters />} />
             <Route path="settings" element={<AdminSettings />} />
           </Route>
 

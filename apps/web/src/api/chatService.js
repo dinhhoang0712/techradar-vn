@@ -80,6 +80,7 @@ export const streamChatMessage = async (sessionId, query, onToken, onDone, onErr
         const reader = response.body.getReader();
         const decoder = new TextDecoder('utf-8');
         let buffer = '';
+        let currentEvent = 'message'; // SSE default event type, per spec
 
         while (true) {
             const { done, value } = await reader.read();
@@ -92,15 +93,31 @@ export const streamChatMessage = async (sessionId, query, onToken, onDone, onErr
             buffer = lines.pop(); // Phần chưa hoàn chỉnh giữ lại
 
             for (const line of lines) {
-                if (!line.trim()) continue;
+                if (!line.trim()) {
+                    currentEvent = 'message'; // dòng trống kết thúc 1 event, reset về default
+                    continue;
+                }
 
                 if (line.startsWith('event:')) {
-                    // Bỏ qua dòng event type, xử lý ở data
+                    currentEvent = line.slice(6).trim();
                     continue;
                 }
 
                 if (line.startsWith('data:')) {
                     const rawData = parseSseData(line);
+
+                    if (currentEvent === 'error') {
+                        // Backend báo lỗi LLM (vd hết quota) rồi đóng stream — phải báo cho
+                        // người dùng thay vì để bong bóng chat kẹt "đang gõ" vĩnh viễn.
+                        let message = rawData;
+                        try {
+                            message = JSON.parse(rawData).detail || rawData;
+                        } catch {
+                            // rawData không phải JSON — dùng nguyên văn
+                        }
+                        onError?.(new Error(message));
+                        return;
+                    }
 
                     // Thử parse JSON (event done)
                     try {

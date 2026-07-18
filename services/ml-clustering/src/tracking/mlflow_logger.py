@@ -22,9 +22,10 @@ from typing import Any, Iterator
 import mlflow
 import mlflow.sklearn
 import numpy as np
+from mlflow.exceptions import MlflowException
 
 from conf.config import MLflowParams
-from src.clustering.tuner import TrialResult
+from src.clustering.tuner import PrimaryMetric, TrialResult, normalize_metric_for_comparison
 
 logger = logging.getLogger(__name__)
 
@@ -112,8 +113,8 @@ def log_trial(trial: TrialResult, parent_run_id: str | None = None) -> str:
             "wall_seconds":       trial.wall_seconds,
             "passed_constraints": 1.0 if trial.passed_constraints else 0.0,
         }
-        for key in ("silhouette", "davies_bouldin", "calinski_harabasz"):
-            val = getattr(trial, key)
+        for key in ("silhouette", "davies_bouldin", "calinski_harabasz", "dbcv"):
+            val = getattr(trial, key, None)
             if val is not None and not (isinstance(val, float) and np.isnan(val)):
                 metrics[key] = float(val)
 
@@ -150,8 +151,8 @@ def log_best_run(
             "noise_ratio":  best_trial.noise_ratio,
             "wall_seconds": best_trial.wall_seconds,
         }
-        for key in ("silhouette", "davies_bouldin", "calinski_harabasz"):
-            val = getattr(best_trial, key)
+        for key in ("silhouette", "davies_bouldin", "calinski_harabasz", "dbcv"):
+            val = getattr(best_trial, key, None)
             if val is not None and not (isinstance(val, float) and np.isnan(val)):
                 metrics[key] = float(val)
         mlflow.log_metrics(metrics)
@@ -178,21 +179,69 @@ def log_best_run(
         return run_id
 
 
-def register_best_model(run_id: str, registry_name: str) -> int:
+def register_best_model(
+    run_id: str,
+    registry_name: str,
+    primary_metric: PrimaryMetric | None = None,
+    primary_metric_value: float | None = None,
+) -> dict[str, Any]:
     """
-    Đăng ký model vào MLflow Model Registry, set alias 'champion'.
-    Trả về version number.
+    Đăng ký model mới vào MLflow Model Registry — LUÔN đăng ký (giữ lịch sử version
+    để xem lại/rollback thủ công), nhưng chỉ gán lại alias 'champion' nếu model mới
+    tốt hơn (hoặc bằng) champion hiện tại theo `primary_metric`, hoặc nếu chưa có
+    champion nào. Trước đây gán 'champion' vô điều kiện — 1 lần retrain ra model tệ
+    hơn (dữ liệu xấu, hyperparameter tệ...) sẽ âm thầm ghi đè kết quả đang serve tốt hơn.
+
+    Bỏ qua so sánh (luôn promote) nếu không truyền `primary_metric`/`primary_metric_value`
+    — giữ tương thích ngược cho caller cũ chưa cập nhật.
+
+    Trả về dict {"version", "promoted", "reason"} thay vì chỉ version, để caller log
+    rõ quyết định.
     """
     model_uri = f"runs:/{run_id}/model"
     result = mlflow.register_model(model_uri, registry_name)
     version = int(result.version)
-
     client = mlflow.tracking.MlflowClient()
-    client.set_registered_model_alias(registry_name, "champion", version)
-    logger.info(
-        "Model registered: %s v%d (alias=champion)", registry_name, version
-    )
-    return version
+
+    promoted = True
+    reason = "không so sánh (thiếu primary_metric)"
+
+    if primary_metric is not None and primary_metric_value is not None:
+        new_value = normalize_metric_for_comparison(primary_metric_value, primary_metric)
+        try:
+            champion_version = client.get_model_version_by_alias(registry_name, "champion")
+        except MlflowException:
+            champion_version = None
+
+        if champion_version is None:
+            reason = "chưa có champion — promote lần đầu"
+        else:
+            champion_run = client.get_run(champion_version.run_id)
+            champion_raw = champion_run.data.metrics.get(primary_metric)
+            champion_value = normalize_metric_for_comparison(champion_raw, primary_metric)
+            if champion_value is None:
+                reason = f"champion hiện tại (v{champion_version.version}) thiếu metric {primary_metric} — promote"
+            elif new_value is not None and new_value >= champion_value:
+                reason = (
+                    f"{primary_metric}: model mới {primary_metric_value:.4f} >= "
+                    f"champion v{champion_version.version} {champion_raw:.4f}"
+                )
+            else:
+                promoted = False
+                reason = (
+                    f"{primary_metric}: model mới {primary_metric_value:.4f} < "
+                    f"champion v{champion_version.version} {champion_raw:.4f} — GIỮ champion cũ"
+                )
+
+    if promoted:
+        client.set_registered_model_alias(registry_name, "champion", version)
+        logger.info("Model registered: %s v%d — PROMOTED to champion (%s)", registry_name, version, reason)
+    else:
+        logger.info(
+            "Model registered: %s v%d — KHÔNG promote, giữ champion cũ (%s)", registry_name, version, reason
+        )
+
+    return {"version": version, "promoted": promoted, "reason": reason}
 
 
 def write_metrics_file(

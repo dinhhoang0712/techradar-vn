@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { likePost, unlikePost, getComments, addComment, deletePost, reportPost, reportComment } from '../../api/socialService';
 import { useToast } from '../common/toastContext';
@@ -9,18 +9,8 @@ import MentionTextarea from './MentionTextarea';
 import ImageLightbox from './ImageLightbox';
 import { tokenizeHashtags } from '../../utils/hashtags';
 import { groupComments } from '../../utils/comments';
+import { timeAgo } from '../../utils/timeAgo';
 import './PostCard.css';
-
-function timeAgo(iso) {
-    if (!iso) return '';
-    const then = new Date(iso).getTime();
-    if (Number.isNaN(then)) return '';
-    const diff = Math.max(0, Date.now() - then) / 1000;
-    if (diff < 60) return 'vừa xong';
-    if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
-    return `${Math.floor(diff / 86400)} ngày trước`;
-}
 
 function CommentRow({ comment, currentUserId, onReply, onReport }) {
     return (
@@ -75,6 +65,16 @@ export default function PostCard({ post, currentUserId, onDeleted, onHashtagClic
     const isOwn = currentUserId && post.author?.id === currentUserId;
     const images = post.image_urls || [];
     const { topLevel, repliesByParentId } = groupComments(comments);
+
+    // Feed sends live updates by patching this post's like_count/comment_count in place (see
+    // FeedPage's SSE handler) — resync local state so counts update for posts already on screen.
+    useEffect(() => {
+        setLikeCount(post.like_count || 0);
+    }, [post.like_count]);
+
+    useEffect(() => {
+        setCommentCount(post.comment_count || 0);
+    }, [post.comment_count]);
 
     const toggleLike = async () => {
         const next = !liked;

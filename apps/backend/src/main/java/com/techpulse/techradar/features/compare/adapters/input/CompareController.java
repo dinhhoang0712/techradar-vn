@@ -51,7 +51,7 @@ public class CompareController {
         for (MonthlyCount row : rows) {
             CompareDtos.CompareItem item = byTech.computeIfAbsent(row.name(),
                     k -> new CompareDtos.CompareItem(row.name(), 0.0, 0.0, 0.0, new ArrayList<>()));
-            item.getMonthly().add(new CompareDtos.MonthlyPoint(row.month(), row.year(), row.activity()));
+            item.getMonthly().add(new CompareDtos.MonthlyPoint(row.month(), row.year(), row.activity(), row.articleCount()));
             // rows are ordered ascending, so the last assignment reflects the most recent month.
             item.setYoyRate(row.yoyRate());
             item.setMomRate(row.momRate());

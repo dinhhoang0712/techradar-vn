@@ -20,6 +20,8 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import normalize
 
+from src.features.acronym_map import expand_tech_names
+
 logger = logging.getLogger(__name__)
 
 EMB_DIM = 768
@@ -124,10 +126,16 @@ def embed_tech_names_fallback(
     """
     Fallback: encode tên tech bằng sentence-transformers khi không có bài viết nào.
     Prefix "passage:" theo quy định của e5 model.
+
+    Mở rộng acronym trước khi encode (VD "SSH" → "SSH (Secure Shell)"): tên viết
+    tắt ngắn bị embedding model encode theo mặt chữ (gần như vô nghĩa về ngữ
+    nghĩa) → cluster sai. Xem `src.features.acronym_map`.
+
     Trả về np.ndarray shape (N, 768).
     """
     model = _get_model(model_name)
-    prefixed = [f"passage: {name}" for name in tech_names]
+    expanded_names = expand_tech_names(tech_names)
+    prefixed = [f"passage: {name}" for name in expanded_names]
     embeddings = model.encode(prefixed, normalize_embeddings=True, show_progress_bar=False)
     return embeddings.astype(np.float32)
 

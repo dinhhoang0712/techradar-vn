@@ -64,3 +64,79 @@
     color: var(--text-2);
     font-size: 0.95rem;
 }
+
+.cluster-pipeline-card .setting-info { flex: 1; }
+
+.cluster-pipeline-progress {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.cluster-pipeline-steps {
+    display: flex;
+    gap: 4px;
+}
+
+.cluster-pipeline-step {
+    height: 6px;
+    flex: 1;
+    border-radius: 99px;
+    background: var(--border);
+    transition: background var(--t);
+}
+.cluster-pipeline-step.done { background: var(--primary); }
+.cluster-pipeline-step.active {
+    background: var(--gradient-brand);
+    animation: cluster-step-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes cluster-step-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.cluster-pipeline-error {
+    color: var(--danger-light);
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+.data-platform-jobs-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+}
+
+.data-platform-jobs-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.data-platform-job-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 0;
+    border-top: 1px solid var(--border);
+}
+.data-platform-job-row:first-child { border-top: none; padding-top: 0; }
+.data-platform-job-row .setting-info { flex: 1; }
+.data-platform-job-row .setting-info h4 {
+    margin: 0 0 6px 0;
+    color: var(--text);
+    font-size: 1rem;
+}
+.data-platform-job-row .setting-info p {
+    margin: 0 0 4px 0;
+}
+
+@media (max-width: 640px) {
+    .data-platform-job-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+}

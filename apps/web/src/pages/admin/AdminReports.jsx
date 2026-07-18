@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { fetchAdminReports, dismissAdminReport, deleteAdminPost, deleteAdminComment, ADMIN_REPORTS_CHANGED_EVENT } from '../../api/adminService';
+import {
+    fetchAdminReports, dismissAdminReport, deleteAdminPost, deleteAdminComment,
+    fetchReportAiSuggestion, ADMIN_REPORTS_CHANGED_EVENT,
+} from '../../api/adminService';
 import Modal from '../../components/common/Modal';
+import RingGauge from '../../components/common/RingGauge';
 import { useToast } from '../../components/common/toastContext';
 import './AdminModeration.css';
 
@@ -20,6 +24,7 @@ export default function AdminReports() {
     const [loading, setLoading] = useState(true);
     const [dismissTarget, setDismissTarget] = useState(null);
     const [deleteTarget, setDeleteTarget] = useState(null);
+    const [suggesting, setSuggesting] = useState({});
     const notify = useToast();
 
     const loadReports = useCallback(async (targetPage) => {
@@ -75,6 +80,32 @@ export default function AdminReports() {
         }
     };
 
+    const handleGetAiSuggestion = async (report, force = false) => {
+        setSuggesting(prev => ({ ...prev, [report.id]: true }));
+        try {
+            const res = await fetchReportAiSuggestion(report.id, force);
+            const updated = res?.data;
+            if (updated) {
+                setReports(prev => prev.map(r => (r.id === report.id ? updated : r)));
+            }
+        } catch (error) {
+            console.error('Failed to get AI suggestion:', error);
+            notify({ title: 'Không lấy được gợi ý AI', variant: 'error' });
+        } finally {
+            setSuggesting(prev => ({ ...prev, [report.id]: false }));
+        }
+    };
+
+    // AI suggestion is advisory only — pre-select the modal it recommends, never bypass
+    // the confirmation step (deleting content is irreversible).
+    const handleApplySuggestion = (report) => {
+        if (report.ai_suggested_action === 'REMOVE') {
+            setDeleteTarget(report);
+        } else {
+            setDismissTarget(report);
+        }
+    };
+
     return (
         <div className="admin-moderation">
             <div className="moderation-header">
@@ -92,16 +123,17 @@ export default function AdminReports() {
                             <th>Loại</th>
                             <th>Nội dung bị báo cáo</th>
                             <th>Lý do</th>
+                            <th>Gợi ý AI</th>
                             <th>Thời gian</th>
                             <th>Hành động</th>
                         </tr>
                     </thead>
                     <tbody>
                         {loading && (
-                            <tr><td colSpan={6} className="moderation-state-cell">Đang tải hàng đợi báo cáo…</td></tr>
+                            <tr><td colSpan={7} className="moderation-state-cell">Đang tải hàng đợi báo cáo…</td></tr>
                         )}
                         {!loading && reports.length === 0 && (
-                            <tr><td colSpan={6} className="moderation-state-cell">Không có báo cáo nào đang chờ xử lý 🎉</td></tr>
+                            <tr><td colSpan={7} className="moderation-state-cell">Không có báo cáo nào đang chờ xử lý 🎉</td></tr>
                         )}
                         {!loading && reports.map(r => (
                             <tr key={r.id}>
@@ -116,8 +148,46 @@ export default function AdminReports() {
                                     <div className="report-target-author">bởi {r.target_author_name || 'không rõ'}</div>
                                 </td>
                                 <td className="report-reason-cell" title={r.reason}>{r.reason}</td>
+                                <td className="ai-suggestion-cell">
+                                    {!r.ai_suggested_action && (
+                                        <button
+                                            className="m-btn view"
+                                            disabled={!!suggesting[r.id]}
+                                            onClick={() => handleGetAiSuggestion(r)}
+                                        >
+                                            {suggesting[r.id] ? 'Đang phân tích…' : 'Gợi ý AI'}
+                                        </button>
+                                    )}
+                                    {r.ai_suggested_action && (
+                                        <>
+                                            <span className={`ai-action-badge ${r.ai_suggested_action === 'REMOVE' ? 'remove' : 'dismiss'}`}>
+                                                {r.ai_suggested_action === 'REMOVE' ? 'Nên xoá' : 'Nên bỏ qua'}
+                                            </span>
+                                            <RingGauge
+                                                percent={(r.ai_confidence || 0) * 100}
+                                                size={32}
+                                                strokeWidth={3}
+                                                label={Math.round((r.ai_confidence || 0) * 100)}
+                                            />
+                                            <span className="ai-suggestion-reason" title={r.ai_suggested_reason || ''}>
+                                                {r.ai_suggested_reason}
+                                            </span>
+                                            <button
+                                                className="m-btn view"
+                                                disabled={!!suggesting[r.id]}
+                                                title="Phân tích lại"
+                                                onClick={() => handleGetAiSuggestion(r, true)}
+                                            >
+                                                🔄
+                                            </button>
+                                        </>
+                                    )}
+                                </td>
                                 <td className="post-time">{formatDateTime(r.created_at)}</td>
                                 <td className="m-actions">
+                                    {r.ai_suggested_action && (
+                                        <button className="m-btn view" onClick={() => handleApplySuggestion(r)}>Áp dụng gợi ý</button>
+                                    )}
                                     <button className="m-btn del" onClick={() => setDeleteTarget(r)}>Xoá nội dung</button>
                                     <button className="m-btn view" onClick={() => setDismissTarget(r)}>Bỏ qua</button>
                                 </td>

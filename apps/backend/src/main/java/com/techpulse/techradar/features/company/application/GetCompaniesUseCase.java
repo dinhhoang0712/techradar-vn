@@ -47,16 +47,27 @@ public class GetCompaniesUseCase {
         return execute(null, page, size);
     }
 
-    /** @param q optional case-insensitive name filter, applied to the already-cached list (no new Cypher query). */
+    /**
+     * @param q optional case-insensitive filter, applied to the already-cached list (no new Cypher
+     *          query) — matches either the company name or any of its tech stack entries.
+     */
     public Flux<CompanyProfile> execute(String q, int page, int size) {
         int effectivePage = Math.max(page, 0);
         int effectiveSize = size <= 0 ? DEFAULT_SIZE : Math.min(size, MAX_SIZE);
         Flux<CompanyProfile> source = (q == null || q.isBlank())
                 ? all()
-                : all().filter(c -> c.name() != null && c.name().toLowerCase(Locale.ROOT).contains(q.toLowerCase(Locale.ROOT)));
+                : all().filter(c -> matches(c, q.toLowerCase(Locale.ROOT)));
         return source
                 .skip((long) effectivePage * effectiveSize)
                 .take(effectiveSize);
+    }
+
+    private static boolean matches(CompanyProfile c, String lowerCaseQuery) {
+        if (c.name() != null && c.name().toLowerCase(Locale.ROOT).contains(lowerCaseQuery)) {
+            return true;
+        }
+        return c.techStack() != null
+                && c.techStack().stream().anyMatch(t -> t != null && t.toLowerCase(Locale.ROOT).contains(lowerCaseQuery));
     }
 
     private static CompanyProfile toProfile(CompanyRepository.CompanyRaw raw) {

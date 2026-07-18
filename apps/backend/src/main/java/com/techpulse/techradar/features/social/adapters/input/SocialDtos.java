@@ -4,6 +4,7 @@ import com.techpulse.techradar.features.social.domain.FeedPost;
 import com.techpulse.techradar.features.social.domain.PostComment;
 import com.techpulse.techradar.features.social.domain.ProfileSummary;
 import com.techpulse.techradar.features.social.domain.UserSummary;
+import com.techpulse.techradar.features.social.realtime.FeedEvent;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -97,6 +98,26 @@ public class SocialDtos {
                     .content(c.content())
                     .parentId(c.parentId())
                     .createdAt(c.createdAt())
+                    .build();
+        }
+    }
+
+    @Value
+    @Builder
+    public static class FeedEventResponse {
+        String type;
+        String postId;
+        FeedPostResponse post;
+        Long likeCount;
+        Long commentCount;
+
+        public static FeedEventResponse from(FeedEvent e) {
+            return FeedEventResponse.builder()
+                    .type(e.type().name())
+                    .postId(e.postId())
+                    .post(e.post() == null ? null : FeedPostResponse.from(e.post()))
+                    .likeCount(e.likeCount())
+                    .commentCount(e.commentCount())
                     .build();
         }
     }

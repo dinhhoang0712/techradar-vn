@@ -6,6 +6,7 @@ import {
     fetchJobMarketDashboard,
     fetchPipelineDashboard,
     fetchMessagingDashboard,
+    fetchClusteringPipelineRuns,
 } from '../../api/adminService';
 import {
     LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
@@ -21,15 +22,32 @@ const TABS = [
     { key: 'jobs', label: 'Việc làm & Công nghệ' },
     { key: 'pipeline', label: 'Kafka Pipeline' },
     { key: 'messaging', label: 'Tin nhắn & Thông báo' },
+    { key: 'modelQuality', label: 'Chất lượng Model (AI)' },
 ];
 
 const PIE_COLORS = ['var(--primary)', 'var(--green)', 'var(--yellow)', 'var(--danger-light)', 'var(--accent)'];
+
+// Chỉ 4 chỉ số đánh giá clustering thật sự (bỏ n_clusters/noise_ratio/wall_seconds —
+// mang tính vận hành hơn là chất lượng). higherIsBetter quyết định chiều mũi tên delta.
+const QUALITY_METRICS = [
+    { key: 'dbcv', label: 'DBCV', higherIsBetter: true },
+    { key: 'silhouette', label: 'Silhouette', higherIsBetter: true },
+    { key: 'davies_bouldin', label: 'Davies-Bouldin', higherIsBetter: false },
+    { key: 'calinski_harabasz', label: 'Calinski-Harabasz', higherIsBetter: true },
+];
 
 function formatDateTime(iso) {
     if (!iso) return 'Chưa có dữ liệu';
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return 'Chưa có dữ liệu';
     return d.toLocaleString('vi-VN');
+}
+
+function formatShortDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
 }
 
 // Tỷ lệ xử lý thành công = (article + job đã xử lý) / (article + job đã xử lý + lỗi)
@@ -68,6 +86,10 @@ export default function AdminDashboard() {
     const [messaging, setMessaging] = useState(null);
     const [messagingLoading, setMessagingLoading] = useState(false);
 
+    // --- Chất lượng Model (AI clustering) ---
+    const [modelRuns, setModelRuns] = useState(null);
+    const [modelRunsLoading, setModelRunsLoading] = useState(false);
+
     useEffect(() => {
         loadOverview();
         // Mount-only: loadOverview is recreated every render, adding it here would refetch on every render.
@@ -79,6 +101,7 @@ export default function AdminDashboard() {
         if (activeTab === 'jobs' && !jobs) loadJobs();
         if (activeTab === 'pipeline' && !pipeline) loadPipeline();
         if (activeTab === 'messaging' && !messaging) loadMessaging();
+        if (activeTab === 'modelQuality' && !modelRuns) loadModelRuns();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeTab]);
 
@@ -164,6 +187,19 @@ export default function AdminDashboard() {
             notify({ title: 'Không tải được dữ liệu Tin nhắn & Thông báo', body: 'Vui lòng thử lại.', variant: 'error' });
         } finally {
             setMessagingLoading(false);
+        }
+    }, [notify]);
+
+    const loadModelRuns = useCallback(async () => {
+        try {
+            setModelRunsLoading(true);
+            const res = await fetchClusteringPipelineRuns();
+            setModelRuns(Array.isArray(res?.data) ? res.data : []);
+        } catch (err) {
+            console.error('Failed to load clustering pipeline runs:', err);
+            notify({ title: 'Không tải được lịch sử huấn luyện model', body: 'Vui lòng thử lại.', variant: 'error' });
+        } finally {
+            setModelRunsLoading(false);
         }
     }, [notify]);
 
@@ -467,7 +503,112 @@ export default function AdminDashboard() {
                     )}
                 </TabLoading>
             )}
+
+            {activeTab === 'modelQuality' && (
+                <TabLoading loading={modelRunsLoading} data={modelRuns}>
+                    {modelRuns && <ModelQualityTrend runs={modelRuns} />}
+                </TabLoading>
+            )}
         </div>
+    );
+}
+
+function ModelQualityTrend({ runs }) {
+    const availableMetrics = QUALITY_METRICS.filter(m => runs.some(r => r.metrics?.[m.key] != null));
+    const [selectedKey, setSelectedKey] = useState(availableMetrics[0]?.key);
+    const metric = availableMetrics.find(m => m.key === selectedKey) || availableMetrics[0];
+
+    if (runs.length === 0) {
+        return <div className="flex-center chart-empty" style={{ height: 200 }}>Chưa có lần huấn luyện nào được ghi lại.</div>;
+    }
+    if (!metric) {
+        return <div className="flex-center chart-empty" style={{ height: 200 }}>Các lần chạy chưa có chỉ số chất lượng nào được ghi lại.</div>;
+    }
+
+    // API trả về newest-first; biểu đồ đọc trái→phải nên đảo lại thành cũ→mới.
+    const chronological = [...runs].reverse();
+    const chartData = chronological.map(r => ({
+        started_at: r.started_at,
+        snapshot_tag: r.snapshot_tag,
+        algorithm: r.algorithm,
+        value: r.metrics?.[metric.key] ?? null,
+    }));
+
+    const withValue = chartData.filter(d => d.value != null);
+    const latest = withValue[withValue.length - 1];
+    const previous = withValue[withValue.length - 2];
+    const delta = latest && previous ? latest.value - previous.value : null;
+    const improved = delta != null && (metric.higherIsBetter ? delta > 0 : delta < 0);
+    const worsened = delta != null && (metric.higherIsBetter ? delta < 0 : delta > 0);
+
+    const latestRun = chronological[chronological.length - 1];
+
+    return (
+        <>
+            <div className="stat-cards">
+                <div className="stat-card">
+                    <h3>Số lần huấn luyện</h3>
+                    <p className="stat-value">{runs.length}</p>
+                </div>
+                <div className="stat-card">
+                    <h3>{metric.label} (mới nhất)</h3>
+                    <p className="stat-value">{latest ? latest.value.toFixed(3) : '—'}</p>
+                    {delta != null && (
+                        <span className={`model-quality-delta${improved ? ' good' : worsened ? ' bad' : ''}`}>
+                            {delta > 0 ? '▲' : delta < 0 ? '▼' : '–'} {Math.abs(delta).toFixed(3)} so với lần trước
+                        </span>
+                    )}
+                </div>
+                <div className="stat-card">
+                    <h3>Thuật toán hiện tại</h3>
+                    <p className="stat-value stat-value-text">{latestRun?.algorithm || '—'}</p>
+                </div>
+            </div>
+
+            <div className="chart-card">
+                <div className="model-quality-header">
+                    <h3>Chất lượng model qua các lần huấn luyện</h3>
+                    <div className="pill-group">
+                        {availableMetrics.map(m => (
+                            <button
+                                key={m.key}
+                                className={`pill${m.key === metric.key ? ' active' : ''}`}
+                                onClick={() => setSelectedKey(m.key)}
+                            >
+                                {m.label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+                <div style={{ width: '100%', height: 340 }}>
+                    <ResponsiveContainer>
+                        <LineChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                            <XAxis dataKey="started_at" tickFormatter={formatShortDate} stroke="var(--text-3)" />
+                            <YAxis stroke="var(--text-3)" domain={['auto', 'auto']} />
+                            <Tooltip
+                                contentStyle={{ backgroundColor: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)' }}
+                                labelFormatter={formatDateTime}
+                                formatter={(value, _name, props) => [
+                                    Number(value).toFixed(3),
+                                    `${metric.label} · ${props.payload.algorithm || ''}`,
+                                ]}
+                            />
+                            <Line
+                                type="monotone"
+                                dataKey="value"
+                                name={metric.label}
+                                stroke="var(--primary)"
+                                strokeWidth={3}
+                                connectNulls
+                                dot={{ r: 5, strokeWidth: 2 }}
+                                activeDot={{ r: 8 }}
+                            />
+                        </LineChart>
+                    </ResponsiveContainer>
+                </div>
+            </div>
+        </>
     );
 }
 

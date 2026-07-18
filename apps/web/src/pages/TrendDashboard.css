@@ -498,6 +498,22 @@
     border-left: 3px solid var(--primary);
 }
 
+.forecast-subsection-title {
+    color: var(--text-2);
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin: 0 0 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.forecast-trend-history {
+    padding: 12px 14px 4px;
+    background: var(--surface);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+
 .forecast-signals {
     display: flex;
     flex-direction: column;
@@ -506,8 +522,8 @@
 
 .forecast-signal {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    gap: 6px;
     padding: 8px 12px;
     background: var(--surface);
     border-radius: 6px;
@@ -515,5 +531,37 @@
     font-size: 0.82rem;
 }
 
+.forecast-signal-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
 .signal-label { color: var(--text-2); flex: 1; }
 .signal-value { color: var(--primary); font-weight: 600; margin-left: 12px; }
+
+.signal-weight-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.signal-weight-track {
+    flex: 1;
+    height: 5px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.signal-weight-fill {
+    height: 100%;
+    background: var(--primary);
+    border-radius: 3px;
+}
+
+.signal-weight-label {
+    color: var(--text-3);
+    font-size: 0.72rem;
+    white-space: nowrap;
+}

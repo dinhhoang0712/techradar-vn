@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getFeed, createPost, getSuggestedUsers, followUser, getTrendingHashtags } from '../api/socialService';
+import { getFeed, createPost, getSuggestedUsers, followUser, getTrendingHashtags, streamFeed } from '../api/socialService';
 import { getUserProfile } from '../api/userService';
 import { useToast } from '../components/common/toastContext';
 import Avatar from '../components/common/Avatar';
@@ -104,6 +104,39 @@ export default function FeedPage() {
     useEffect(() => {
         loadFeed();
     }, [loadFeed]);
+
+    const currentUserIdRef = useRef(null);
+    useEffect(() => {
+        currentUserIdRef.current = currentUserId;
+    }, [currentUserId]);
+
+    const hashtagFilterRef = useRef(null);
+    useEffect(() => {
+        hashtagFilterRef.current = hashtagFilter;
+    }, [hashtagFilter]);
+
+    // Realtime: new posts, and live like/comment count updates for posts already in view.
+    // Reconnects whenever scope changes since the live stream is scoped server-side just like GET /feed.
+    useEffect(() => {
+        const handleLiveEvent = (event) => {
+            if (event.type === 'POST_CREATED') {
+                if (!event.post || event.post.author?.id === currentUserIdRef.current) return; // already added optimistically
+                const activeHashtag = hashtagFilterRef.current;
+                if (activeHashtag && !event.post.hashtags?.includes(activeHashtag)) return;
+                setPosts((prev) => (prev.some((p) => p.id === event.post.id) ? prev : [event.post, ...prev]));
+                return;
+            }
+            if (event.type === 'POST_LIKED') {
+                setPosts((prev) => prev.map((p) => (p.id === event.post_id ? { ...p, like_count: event.like_count } : p)));
+                return;
+            }
+            if (event.type === 'COMMENT_ADDED') {
+                setPosts((prev) => prev.map((p) => (p.id === event.post_id ? { ...p, comment_count: event.comment_count } : p)));
+            }
+        };
+        const controller = streamFeed(scope, handleLiveEvent);
+        return () => controller.abort();
+    }, [scope]);
 
     useEffect(() => {
         getSuggestedUsers(8)

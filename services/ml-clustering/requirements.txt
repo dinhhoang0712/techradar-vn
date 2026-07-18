@@ -8,9 +8,17 @@ pandas==2.2.2
 scipy==1.13.1
 PyYAML>=6.0.0
 
+# Graph embedding (client-side node2vec — thay thế Neo4j GDS trên AuraDB free tier)
+networkx>=2.5,<3.0        # node2vec==0.4.6 requires networkx<3.0
+node2vec==0.4.6
+
 # Neo4j + GDS
 neo4j==5.19.0
 graphdatascience==1.12
+
+# Postgres — chỉ dùng bởi scripts/export_tech_alias_seed.py (tool offline, không
+# phải runtime pipeline), để export dp_tech_alias_map ra conf/seed_data/*.json
+psycopg2-binary==2.9.9
 
 # Versioning + tracking
 dvc==3.55.2

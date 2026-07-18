@@ -6,6 +6,7 @@ import com.techpulse.techradar.features.notification.application.NotificationSer
 import com.techpulse.techradar.features.notification.domain.Notification;
 import com.techpulse.techradar.features.social.ports.CommentRepository;
 import com.techpulse.techradar.features.social.ports.PostRepository;
+import com.techpulse.techradar.features.social.realtime.FeedBroadcaster;
 import com.techpulse.techradar.shared.exception.AppException;
 import com.techpulse.techradar.shared.exception.NotFoundException;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,12 +18,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -42,6 +45,8 @@ class AddCommentUseCaseTest {
     private UserRepository userRepository;
     @Mock
     private MentionNotifier mentionNotifier;
+    @Mock
+    private FeedBroadcaster feedBroadcaster;
 
     private AddCommentUseCase useCase;
 
@@ -51,12 +56,19 @@ class AddCommentUseCaseTest {
     private final UUID parentCommentId = UUID.randomUUID();
     private final UUID parentAuthorId = UUID.randomUUID();
 
+    private PostRepository.FeedRow feedRow(long commentCount) {
+        return new PostRepository.FeedRow(
+                postId, authorId, "Author", null, "content", LocalDateTime.now(),
+                0, commentCount, false, List.of(), List.of(), null, null, null);
+    }
+
     @BeforeEach
     void setUp() {
-        useCase = new AddCommentUseCase(commentRepository, postRepository, notificationService, userRepository, mentionNotifier);
+        useCase = new AddCommentUseCase(commentRepository, postRepository, notificationService, userRepository, mentionNotifier, feedBroadcaster);
         lenient().when(commentRepository.insert(any(), any(), any(), any(), any(), any())).thenReturn(Mono.empty());
         lenient().when(mentionNotifier.notify(any(), any(), any(), any())).thenReturn(Mono.empty());
         lenient().when(notificationService.save(any())).thenReturn(Mono.just(Notification.builder().build()));
+        lenient().when(postRepository.findById(any(), any())).thenReturn(Mono.just(feedRow(1)));
     }
 
     @Test
@@ -223,5 +235,27 @@ class AddCommentUseCaseTest {
 
         verify(commentRepository, never()).insert(any(), any(), any(), any(), any(), any());
         verify(mentionNotifier, never()).notify(any(), any(), any(), any());
+    }
+
+    @Test
+    void execute_broadcastsUpdatedCommentCountAfterInserting() {
+        when(postRepository.findAuthorId(postId)).thenReturn(Mono.just(commenterId));
+        when(postRepository.findById(postId, commenterId)).thenReturn(Mono.just(feedRow(4)));
+
+        useCase.execute(postId.toString(), commenterId.toString(), "Nice post!", null, null).block();
+
+        verify(feedBroadcaster).publishComment(postId.toString(), authorId, 4);
+    }
+
+    @Test
+    void execute_stillSucceedsWhenBroadcastLookupFails() {
+        when(postRepository.findAuthorId(postId)).thenReturn(Mono.just(commenterId));
+        when(postRepository.findById(postId, commenterId)).thenReturn(Mono.error(new RuntimeException("boom")));
+
+        StepVerifier.create(useCase.execute(postId.toString(), commenterId.toString(), "Resilient comment", null, null))
+                .expectNextCount(1)
+                .verifyComplete();
+
+        verify(feedBroadcaster, never()).publishComment(any(), any(), anyLong());
     }
 }

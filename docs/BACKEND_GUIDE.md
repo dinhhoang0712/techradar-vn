@@ -409,6 +409,9 @@ apps/backend/src/main/java/com/techpulse/
 - `KafkaEventPublisher`: Publish events to Kafka
 - `KafkaEventListener`: Consume events from Kafka
 - `TrendAlertDispatcher`: Dispatch trend alerts to users
+- `KafkaExtractorService` — consumes `raw_articles`/`raw_jobs`, runs entity extraction (`EntityExtractionService`, keyword/regex-based NER — không phải LLM dù tên biến `entities` gợi ý vậy), publishes `extracted_articles`/`extracted_jobs`.
+- `EntityExtractionService` — `extractTech()`/`extractEntities()` resolve mỗi tên công nghệ tách được qua `TechAliasCache` **trước khi** trả về (vd "Golang" → "Go", "ML" → "Machine Learning") để `KafkaNeo4jWriterService` phía dưới không bao giờ ghi 2 node `:Technology` khác nhau cho cùng 1 công nghệ. Xem [`docs/DATABASE.md`](./DATABASE.md) §4.3 cho bức tranh full (cả phía Python `data-platform`).
+- `TechAliasCache` — cache in-memory bảng Postgres `dp_tech_alias_map` (`@Scheduled` refresh mỗi `app.tech-alias.refresh-ms`, mặc định 5 phút; `@PostConstruct` load lần đầu). `resolve(rawName)` casefold+trim rồi tra cache, fallback về tên gốc (trimmed) nếu không có alias — không bao giờ throw hay trả null. Đây là bảng Postgres **duy nhất** mà `apps/backend` và `data-platform` cùng ghi/đọc chung (ngoại lệ có chủ đích, vì 2 service có Docker build-context tách biệt nên không share được 1 file cấu hình).
 - `KafkaNeo4jWriterService` — consumes `extracted_articles`/`extracted_jobs`, writes to Neo4j; **NEW**: also publishes `job.match.alerts` the first time a job is genuinely new (checked via a `MATCH` before the `MERGE`, so re-crawled/updated listings don't re-fire), and tracks in-process throughput/error counters exposed via `syncStatus()` (`KafkaSyncStatus` record — see `GET /admin/dashboard/pipeline`, §4.7). Counters reset on restart, not persisted.
 - `JobMatchDispatcher` (NEW) — consumes `job.match.alerts`, fans out to users whose profile technologies overlap the job's, mirroring `TrendAlertDispatcher`. See §4.10.
 

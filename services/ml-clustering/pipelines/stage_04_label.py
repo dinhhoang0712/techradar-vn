@@ -52,6 +52,7 @@ def main(
         features_dir,
         labels_dir,
         load_params,
+        metrics_dir,
         models_dir,
         snapshot_dir,
     )
@@ -61,7 +62,7 @@ def main(
         map_cluster_to_members,
         save_cluster_labels,
     )
-    from src.tracking.mlflow_logger import init_mlflow
+    from src.tracking.mlflow_logger import init_mlflow, write_metrics_file
 
     # 1. Load params
     params_obj = load_params(params)
@@ -123,6 +124,25 @@ def main(
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "cluster_labels.json"
     save_cluster_labels(cluster_labels, out_path)
+
+    # 7b. Metrics chất lượng gán nhãn — theo dõi qua các lần retrain (DVC metric).
+    # Trước đây is_coherent=false (cụm "rác" theo đánh giá LLM) không được ghi
+    # lại ở đâu cả, nên không thể biết feature/hyperparameter mới có làm giảm
+    # tỉ lệ cụm rác hay không.
+    n_clusters_total = len(cluster_labels)
+    n_coherent = sum(1 for lb in cluster_labels.values() if lb.is_coherent)
+    n_unlabeled = sum(1 for lb in cluster_labels.values() if lb.label == "UNLABELED")
+    confidences = [lb.confidence for lb in cluster_labels.values() if lb.label != "UNLABELED"]
+    label_metrics = {
+        "n_clusters_total": n_clusters_total,
+        "n_coherent": n_coherent,
+        "n_incoherent": n_clusters_total - n_coherent,
+        "coherence_ratio": round(n_coherent / n_clusters_total, 4) if n_clusters_total else float("nan"),
+        "n_unlabeled": n_unlabeled,
+        "avg_confidence": round(sum(confidences) / len(confidences), 4) if confidences else float("nan"),
+    }
+    write_metrics_file(label_metrics, metrics_dir(tag) / "label_metrics.json")
+    logger.info("label_metrics.json: {}", label_metrics)
 
     # 8. Log artifact vào MLflow nếu có run_id
     if run_id:

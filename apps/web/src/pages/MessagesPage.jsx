@@ -3,18 +3,8 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useMessagingContext } from '../contexts/messagingStore';
 import { useToast } from '../components/common/toastContext';
 import Avatar from '../components/common/Avatar';
+import { timeAgo } from '../utils/timeAgo';
 import './MessagesPage.css';
-
-function timeAgo(iso) {
-    if (!iso) return '';
-    const then = new Date(iso).getTime();
-    if (Number.isNaN(then)) return '';
-    const diff = Math.max(0, Date.now() - then) / 1000;
-    if (diff < 60) return 'vừa xong';
-    if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
-    return `${Math.floor(diff / 86400)} ngày trước`;
-}
 
 function ConversationRow({ conversation, active, onSelect }) {
     return (
@@ -78,6 +68,7 @@ export default function MessagesPage() {
 
     const activeConversation = conversations.find((c) => c.id === activeConversationId);
     const activeMessages = messagesByConversation[activeConversationId] || [];
+    const lastOwnMessageId = [...activeMessages].reverse().find((m) => m.sender_id === currentUserId)?.id;
 
     const handleSend = async (e) => {
         e.preventDefault();
@@ -170,6 +161,9 @@ export default function MessagesPage() {
                                             <span className="msg-text">{m.content}</span>
                                             <span className="msg-time">{timeAgo(m.created_at)}</span>
                                         </div>
+                                        {m.sender_id === currentUserId && m.read && m.id === lastOwnMessageId && (
+                                            <span className="msg-seen">Đã xem</span>
+                                        )}
                                     </div>
                                 ))
                             )}

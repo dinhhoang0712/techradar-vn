@@ -2,7 +2,18 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import pytest
+
 import silver.processor as processor
+from common import tech_alias_cache
+
+
+@pytest.fixture(autouse=True)
+def _reset_tech_alias_cache():
+    """Cô lập state module-level của tech_alias_cache giữa các test."""
+    saved = dict(tech_alias_cache._alias_by_normalized)
+    yield
+    tech_alias_cache._alias_by_normalized = saved
 
 
 class FakeCursor:
@@ -150,7 +161,8 @@ def test_process_job_extracts_company_from_nested_object():
     query, params = conn.cursors[-1].executed[-1]
     assert "INSERT INTO dp_processed_jobs" in query
     (job_id, source_url, source_platform, title, company_name, company_location,
-     salary, desc, req, benefit, skills, techs, chash, is_dup, quality) = params
+     salary, desc, req, benefit, skills, techs, chash, is_dup, quality,
+     company_industry, company_size) = params
     assert company_name == "FPT"
     assert company_location == "Hanoi"
     assert skills == ["Python"]
@@ -178,3 +190,55 @@ def test_process_job_skips_when_source_url_missing():
     processor._process_job(conn, {"data": {"job": {"title": "No URL"}}})
     assert conn.cursors == []
     assert conn.commit_count == 0
+
+
+def test_process_article_canonicalizes_entity_techs_via_alias_cache():
+    tech_alias_cache._alias_by_normalized = {"golang": "Go"}
+    conn = FakeConn(fetchone_result=None)
+    msg = {
+        "data": {
+            "source_url": "https://example.com/a4",
+            "title": "Bai viet ve Golang",
+            "content": "x" * 250,
+            "entities": {"tech": ["Golang", "Docker"]},
+        }
+    }
+
+    processor._process_article(conn, msg)
+
+    techs = conn.cursors[-1].executed[-1][1][6]
+    assert techs == ["Go", "Docker"]
+
+
+def test_process_article_dedups_when_alias_and_raw_name_both_present():
+    tech_alias_cache._alias_by_normalized = {"golang": "Go"}
+    conn = FakeConn(fetchone_result=None)
+    msg = {
+        "data": {
+            "source_url": "https://example.com/a5",
+            "title": "T",
+            "content": "C",
+            "entity_techs": ["Golang", "Go"],
+        }
+    }
+
+    processor._process_article(conn, msg)
+
+    techs = conn.cursors[-1].executed[-1][1][6]
+    assert techs == ["Go"]
+
+
+def test_process_job_canonicalizes_technologies_via_alias_cache():
+    tech_alias_cache._alias_by_normalized = {"ml": "Machine Learning"}
+    conn = FakeConn(fetchone_result=None)
+    msg = {
+        "data": {
+            "job": {"source_url": "https://example.com/job-3", "title": "ML Engineer"},
+            "technologies": ["ML", "Python"],
+        }
+    }
+
+    processor._process_job(conn, msg)
+
+    techs = conn.cursors[-1].executed[-1][1][11]
+    assert techs == ["Machine Learning", "Python"]

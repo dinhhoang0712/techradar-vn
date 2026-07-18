@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     getCompanies, getSimilarCompanies, getCompanyMentions, getCompanyInsight,
@@ -196,31 +196,61 @@ function SimilarPanel({ company, onClose, onCompare }) {
     );
 }
 
+const PAGE_SIZE = 24;
+
 export default function CompanyExplorer() {
     const [companies, setCompanies] = useState([]);
+    const [initialLoading, setInitialLoading] = useState(true);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [page, setPage] = useState(0);
+    const [hasMore, setHasMore] = useState(true);
     const [selected, setSelected] = useState(null);
     const [compareSeed, setCompareSeed] = useState(null);
+    const [compareOptions, setCompareOptions] = useState(null);
 
+    // Debounce the search box so every keystroke doesn't fire a request; a settled search
+    // term always starts back at page 0.
     useEffect(() => {
-        getCompanies()
-            .then(res => setCompanies(res?.data ?? []))
-            .catch(() => setError('Không thể tải danh sách công ty. Vui lòng thử lại.'))
-            .finally(() => setLoading(false));
+        const t = setTimeout(() => {
+            setDebouncedSearch(search.trim());
+            setPage(0);
+        }, 300);
+        return () => clearTimeout(t);
+    }, [search]);
+
+    const loadCompanies = useCallback(async (targetPage, targetQuery) => {
+        setLoading(true);
+        try {
+            const res = await getCompanies({ q: targetQuery || undefined, page: targetPage, size: PAGE_SIZE });
+            const data = res?.data ?? [];
+            setCompanies(data);
+            setHasMore(data.length === PAGE_SIZE);
+            setError('');
+        } catch {
+            setError('Không thể tải danh sách công ty. Vui lòng thử lại.');
+        } finally {
+            setLoading(false);
+            setInitialLoading(false);
+        }
     }, []);
 
-    const filtered = useMemo(() => {
-        if (!search.trim()) return companies;
-        const q = search.trim().toLowerCase();
-        return companies.filter(c =>
-            c.name.toLowerCase().includes(q) ||
-            c.tech_stack.some(t => t.toLowerCase().includes(q))
-        );
-    }, [companies, search]);
+    useEffect(() => {
+        loadCompanies(page, debouncedSearch);
+    }, [page, debouncedSearch, loadCompanies]);
 
-    if (loading) return (
+    // The compare picker needs a broader pool of companies than one page of the grid, so it's
+    // loaded lazily (only once, the first time the panel opens) instead of upfront.
+    useEffect(() => {
+        if (compareSeed === null || compareOptions !== null) return;
+        getCompanies({ size: 100 })
+            .then(res => setCompareOptions(res?.data ?? []))
+            .catch(() => setCompareOptions([]));
+    }, [compareSeed, compareOptions]);
+
+    if (initialLoading) return (
         <div className="company-explorer">
             <div className="company-hero">
                 <h1 className="company-title">Công ty & Tech Stack</h1>
@@ -250,7 +280,7 @@ export default function CompanyExplorer() {
         </div>
     );
 
-    if (error) return (
+    if (error && companies.length === 0) return (
         <div className="company-explorer company-error">
             <div className="error-box">
                 <div style={{ fontSize: '3rem' }}>🏢</div>
@@ -282,9 +312,13 @@ export default function CompanyExplorer() {
                 </button>
             </div>
 
+            {error && companies.length > 0 && (
+                <p className="company-empty-hint">{error}</p>
+            )}
+
             <div className={`company-layout${selected ? ' has-detail' : ''}`}>
                 <div className="company-grid">
-                    {filtered.map(c => (
+                    {companies.map(c => (
                         <button
                             type="button"
                             key={c.id}
@@ -312,7 +346,7 @@ export default function CompanyExplorer() {
                             </div>
                         </button>
                     ))}
-                    {filtered.length === 0 && (
+                    {companies.length === 0 && (
                         <p className="company-empty-hint">Không tìm thấy công ty nào phù hợp.</p>
                     )}
                 </div>
@@ -327,9 +361,29 @@ export default function CompanyExplorer() {
                 )}
             </div>
 
+            <div className="company-pagination">
+                <button
+                    type="button"
+                    className="btn btn-ghost"
+                    disabled={page === 0 || loading}
+                    onClick={() => setPage(p => Math.max(0, p - 1))}
+                >
+                    ‹ Trang trước
+                </button>
+                <span className="pagination-page">Trang {page + 1}</span>
+                <button
+                    type="button"
+                    className="btn btn-ghost"
+                    disabled={!hasMore || loading}
+                    onClick={() => setPage(p => p + 1)}
+                >
+                    Trang sau ›
+                </button>
+            </div>
+
             {compareSeed !== null && (
                 <CompareCompaniesPanel
-                    companies={companies}
+                    companies={compareOptions ?? []}
                     initialSelected={compareSeed}
                     onClose={() => setCompareSeed(null)}
                 />

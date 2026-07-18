@@ -5,9 +5,11 @@ data/models/
 data/labels/
 data/metrics/
 
-# MLflow local
+# MLflow local — file-store bake absolute path của máy hiện tại vào DB
+# (artifact_location, runs.artifact_uri, model_versions.source...) nên KHÔNG
+# portable giữa các máy — coi là state cục bộ theo máy, giống data/*.
 mlruns/
-# mlruns.db tracked in git for reproducibility
+mlruns.db
 
 # Python
 __pycache__/

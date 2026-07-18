@@ -242,3 +242,28 @@
     display: flex;
     gap: 12px;
 }
+
+.stat-value-text {
+    font-size: 1.5rem;
+    text-transform: capitalize;
+}
+
+.model-quality-delta {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-2);
+}
+.model-quality-delta.good { color: var(--green); }
+.model-quality-delta.bad { color: var(--danger-light); }
+
+.model-quality-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+.model-quality-header h3 { margin: 0; }

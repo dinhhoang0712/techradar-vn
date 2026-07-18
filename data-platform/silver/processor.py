@@ -15,6 +15,7 @@ from kafka import KafkaConsumer
 from kafka.errors import NoBrokersAvailable
 from loguru import logger
 
+from common import tech_alias_cache
 from common.db import get_pg_conn
 from config import Settings
 from silver.deduplicator import (
@@ -66,7 +67,11 @@ def _process_article(conn, msg: dict) -> None:
 
     # Support both flat entity_techs/entity_orgs/entity_locs and nested entities.tech/org/loc
     entities = data.get("entities", {}) or {}
-    techs = data.get("entity_techs") or entities.get("tech") or entities.get("TECH") or []
+    techs_raw = data.get("entity_techs") or entities.get("tech") or entities.get("TECH") or []
+    # Chuẩn hoá tên tech (Go/Golang, ML/Machine Learning...) qua dp_tech_alias_map —
+    # cùng nguồn với TechAliasCache.java, để dp_processed_articles.entity_techs
+    # đã sạch trước khi bất kỳ ai (kể cả Gold gap-filler) đọc lại để ghi Neo4j.
+    techs = tech_alias_cache.canonicalize_techs(techs_raw)
     orgs = data.get("entity_orgs") or entities.get("org") or entities.get("ORG") or []
     locs = data.get("entity_locs") or entities.get("loc") or entities.get("LOC") or []
 
@@ -123,7 +128,9 @@ def _process_job(conn, msg: dict) -> None:
     company_industry = job.get("field") or company_obj.get("field") or None
     company_size = job.get("size") or company_obj.get("size") or None
     skills = job.get("skills") or data.get("skills") or []
-    techs = job.get("technologies") or data.get("technologies") or data.get("entity_techs") or []
+    techs_raw = job.get("technologies") or data.get("technologies") or data.get("entity_techs") or []
+    # Chuẩn hoá tên tech — xem comment tương ứng trong _process_article().
+    techs = tech_alias_cache.canonicalize_techs(techs_raw)
 
     chash = content_hash(title, f"{desc} {req}")
     quality = _quality_score(title, f"{desc} {req}")
@@ -181,11 +188,13 @@ def run(settings: Settings) -> None:
 
     pg_conn = get_pg_conn(settings)
     consumer = _wait_for_kafka(settings.kafka_bootstrap_servers)
+    tech_alias_cache.refresh_if_stale(pg_conn)  # nạp cache lần đầu trước khi xử lý message
 
     logger.info("Silver Processor: listening on {}", TOPICS)
 
     while True:
         try:
+            tech_alias_cache.refresh_if_stale(pg_conn)  # rẻ — chỉ query khi đã hết hạn ~5 phút
             records = consumer.poll(timeout_ms=2000)
             for tp, messages in records.items():
                 for record in messages:

@@ -12,6 +12,7 @@ Toàn bộ tính trên các DataFrame snapshot, không cần Neo4j.
 from __future__ import annotations
 
 import logging
+import time
 
 import numpy as np
 import pandas as pd
@@ -261,3 +262,105 @@ def compute_article_temporal_stats(
     df = pd.DataFrame(rows)
     logger.info("compute_article_temporal_stats: %d rows", len(df))
     return df
+
+
+# ---------------------------------------------------------------------------
+# Client-side Node2Vec (không cần Neo4j GDS)
+# ---------------------------------------------------------------------------
+
+def build_client_node2vec_embedding(
+    df_technologies: pd.DataFrame,
+    df_edges_article_mentions_tech: pd.DataFrame,
+    df_edges_company_uses_tech: pd.DataFrame,
+    df_edges_job_requires_tech: pd.DataFrame,
+    df_edges_tech_related_tech: pd.DataFrame,
+    embedding_dim: int = 64,
+    walk_length: int = 10,
+    walks_per_node: int = 10,
+    window: int = 5,
+    seed: int = 42,
+) -> pd.DataFrame:
+    """
+    Structural graph embedding tính THẲNG trên máy client bằng `node2vec` +
+    `networkx` — KHÔNG cần Neo4j GDS. AuraDB free tier không hỗ trợ
+    `gds.graph.project` trực tiếp (cần session-based GDS API riêng), nên toàn
+    bộ hàm trong `gds_features.py` hiện không dùng được trong production; đây
+    là thay thế tương đương cho node2vec, chạy trên chính parquet đã pull ở
+    Stage 1 (không cần kết nối Neo4j).
+
+    Đồ thị heterogeneous Technology-Article-Company-Job: node id được prefix
+    theo loại ("tech:", "article:", "company:", "job:") để tránh đụng độ giữa
+    các không gian elementId() khác nhau giữa các label.
+
+    Trả về DataFrame: tech_id | node2vec_0..{D-1}. Tech không có cạnh nào
+    (cô lập) hoặc không xuất hiện trong random walk → zero-vector.
+    """
+    import networkx as nx
+    from node2vec import Node2Vec
+
+    tech_ids = df_technologies["tech_id"].astype(str).tolist()
+    cols = [f"node2vec_{i}" for i in range(embedding_dim)]
+
+    def _prefixed(prefix: str, series: pd.Series) -> pd.Series:
+        return prefix + series.astype(str)
+
+    graph = nx.Graph()
+    graph.add_nodes_from(_prefixed("tech:", pd.Series(tech_ids)))
+
+    edge_specs = [
+        (df_edges_article_mentions_tech, "article_id", "tech_id", "article:"),
+        (df_edges_company_uses_tech, "company_id", "tech_id", "company:"),
+        (df_edges_job_requires_tech, "job_id", "tech_id", "job:"),
+    ]
+    for df, col_other, col_tech, prefix_other in edge_specs:
+        if df.empty or col_other not in df.columns or col_tech not in df.columns:
+            continue
+        us = _prefixed(prefix_other, df[col_other])
+        vs = _prefixed("tech:", df[col_tech])
+        graph.add_edges_from(zip(us, vs))
+
+    if not df_edges_tech_related_tech.empty and {"tech_id_a", "tech_id_b"}.issubset(
+        df_edges_tech_related_tech.columns
+    ):
+        us = _prefixed("tech:", df_edges_tech_related_tech["tech_id_a"])
+        vs = _prefixed("tech:", df_edges_tech_related_tech["tech_id_b"])
+        graph.add_edges_from(zip(us, vs))
+
+    connected_tech_nodes = [
+        n for n in graph.nodes if n.startswith("tech:") and graph.degree(n) > 0
+    ]
+    if not connected_tech_nodes:
+        logger.warning(
+            "build_client_node2vec_embedding: không có tech nào có cạnh — trả toàn zero-vector."
+        )
+        df_zero = pd.DataFrame(0.0, index=tech_ids, columns=cols)
+        df_zero.insert(0, "tech_id", tech_ids)
+        return df_zero.reset_index(drop=True)
+
+    t0 = time.time()
+    n2v = Node2Vec(
+        graph,
+        dimensions=embedding_dim,
+        walk_length=walk_length,
+        num_walks=walks_per_node,
+        workers=1,
+        seed=seed,
+        quiet=True,
+    )
+    model = n2v.fit(window=window, min_count=1, batch_words=64, seed=seed, workers=1)
+
+    rows = []
+    for tech_id in tech_ids:
+        node_key = f"tech:{tech_id}"
+        if node_key in model.wv:
+            vec = np.asarray(model.wv[node_key], dtype=np.float32)
+        else:
+            vec = np.zeros(embedding_dim, dtype=np.float32)
+        rows.append({"tech_id": tech_id, **dict(zip(cols, vec))})
+
+    df_emb = pd.DataFrame(rows).set_index("tech_id").loc[tech_ids].reset_index()
+    logger.info(
+        "build_client_node2vec_embedding: %d tech, %d/%d node có vector thực, %.1fs",
+        len(df_emb), len(connected_tech_nodes), len(tech_ids), time.time() - t0,
+    )
+    return df_emb

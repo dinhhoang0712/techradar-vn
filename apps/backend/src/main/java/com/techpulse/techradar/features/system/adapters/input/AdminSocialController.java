@@ -95,6 +95,18 @@ public class AdminSocialController {
                 .thenReturn(ResponseEntity.ok(ApiResponse.<Void>success(null, "Report dismissed")));
     }
 
+    @Operation(summary = "Get (or, with force=true, regenerate) the AI moderation suggestion for a report")
+    @PostMapping("/reports/{id}/ai-suggestion")
+    @PreAuthorize("hasRole('ADMIN')")
+    public Mono<ResponseEntity<ApiResponse<ReportView>>> getAiSuggestion(
+            @PathVariable String id,
+            @RequestParam(defaultValue = "false") boolean force
+    ) {
+        return moderationService.getAiSuggestion(id, force)
+                .map(ReportView::from)
+                .map(view -> ResponseEntity.ok(ApiResponse.success(view, "AI suggestion")));
+    }
+
     @Value
     @Builder
     public static class PostView {
@@ -157,6 +169,10 @@ public class AdminSocialController {
         String reason;
         String status;
         LocalDateTime createdAt;
+        String aiSuggestedAction;
+        String aiSuggestedReason;
+        Double aiConfidence;
+        LocalDateTime aiSuggestedAt;
 
         static ReportView from(ReportRepository.ReportRow r) {
             return ReportView.builder()
@@ -171,6 +187,10 @@ public class AdminSocialController {
                     .reason(r.reason())
                     .status(r.status())
                     .createdAt(r.createdAt())
+                    .aiSuggestedAction(r.aiSuggestedAction())
+                    .aiSuggestedReason(r.aiSuggestedReason())
+                    .aiConfidence(r.aiConfidence())
+                    .aiSuggestedAt(r.aiSuggestedAt())
                     .build();
         }
     }

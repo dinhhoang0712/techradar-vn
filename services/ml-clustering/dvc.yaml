@@ -49,6 +49,9 @@ stages:
     params:
       - snapshot
       - labeling
+    metrics:
+      - data/metrics/${snapshot.tag}/label_metrics.json:
+          cache: false
     outs:
       - data/labels/${snapshot.tag}
 

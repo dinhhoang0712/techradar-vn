@@ -246,6 +246,19 @@
     font-size: 0.95rem;
 }
 
+.cluster-confidence-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.cluster-card-badges {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding-top: 10px;
+}
+
 /* --- MÀN HÌNH CHI TIẾT (DETAIL VIEW) --- */
 .cluster-detail-container {
     display: flex;
@@ -314,6 +327,13 @@
     font-style: italic;
 }
 
+.cluster-detail-flags {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
+
 /* Stats Row (3 columns) */
 .cluster-stats-row {
     display: grid;
@@ -334,6 +354,14 @@
     border-right: none;
 }
 
+.cluster-stat-box-gauge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+
 .stat-val {
     font-size: 1.4rem;
     font-weight: 800;
@@ -348,11 +376,25 @@
     margin-top: 4px;
 }
 
+.cluster-coherence-reason {
+    color: var(--danger-light);
+    font-style: italic;
+    font-size: 0.9rem;
+    background: var(--danger-glow);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    margin: 0 0 20px;
+}
+
 .cluster-description-text {
     color: var(--text-2);
     line-height: 1.6;
     margin-bottom: 24px;
     font-size: 0.95rem;
+}
+
+.cluster-outliers {
+    margin-bottom: 24px;
 }
 
 /* Tech Tags */

@@ -17,12 +17,28 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 import numpy as np
+import pandas as pd
 
 from conf.config import ClusteringParams
-from src.clustering.evaluator import evaluate_clustering
+from src.clustering.evaluator import compute_related_split_ratio, evaluate_clustering
 from src.clustering.trainer import train_by_algorithm
 
 logger = logging.getLogger(__name__)
+_NAN = float("nan")
+
+PrimaryMetric = Literal["silhouette", "davies_bouldin", "calinski_harabasz", "dbcv"]
+
+
+def normalize_metric_for_comparison(value: float | None, primary_metric: PrimaryMetric) -> float | None:
+    """
+    Chuẩn hoá 1 giá trị metric về "cao hơn = tốt hơn" — davies_bouldin (thấp hơn =
+    tốt hơn) bị negate. Dùng chung bởi `select_best_trial` (so trial trong 1 lần
+    grid search) VÀ `mlflow_logger.register_best_model` (so model mới vs champion
+    đang serve, đọc từ MLflow) để 2 nơi không lệch quy ước "chiều tốt hơn".
+    """
+    if value is None:
+        return None
+    return -value if primary_metric == "davies_bouldin" else value
 
 
 @dataclass
@@ -40,9 +56,13 @@ class TrialResult:
         silhouette:        điểm silhouette (chỉ tính trên non-noise).
         davies_bouldin:    DB index (thấp = tốt).
         calinski_harabasz: CH index (cao = tốt).
+        dbcv:              xấp xỉ DBCV (chỉ có với hdbscan, NaN với thuật toán khác).
         passed_constraints: bool — đạt require_min_clusters & max_noise_ratio chưa.
         failure_reason:    nếu fit/scoring fail → string giải thích, ngược lại None.
         wall_seconds:      thời gian fit + score.
+        related_split_ratio: tỉ lệ cặp RELATED_TO (ground-truth thủ công) bị xếp
+                           khác cụm — NaN nếu không truyền df_related/tech_ids
+                           vào grid_search. Xem evaluator.compute_related_split_ratio.
     """
     algorithm: str
     params: dict[str, Any]
@@ -53,9 +73,11 @@ class TrialResult:
     silhouette: float | None
     davies_bouldin: float | None
     calinski_harabasz: float | None
+    dbcv: float | None
     passed_constraints: bool
     failure_reason: str | None
     wall_seconds: float
+    related_split_ratio: float | None = None
 
 
 def _build_param_grid(params: ClusteringParams) -> list[dict]:
@@ -90,10 +112,19 @@ def _build_param_grid(params: ClusteringParams) -> list[dict]:
 def grid_search(
     X: np.ndarray,
     params: ClusteringParams,
+    tech_ids: list[str] | None = None,
+    df_related: pd.DataFrame | None = None,
 ) -> list[TrialResult]:
     """
     Chạy grid search → list TrialResult (kể cả trial thất bại).
     Không raise khi 1 trial fail — ghi failure_reason và tiếp tục.
+
+    Nếu truyền cả `tech_ids` và `df_related`: tính thêm `related_split_ratio`
+    cho MỖI trial (không chỉ trial thắng cuối) bằng
+    `evaluator.compute_related_split_ratio` — cho phép
+    `selection.require_max_related_split_ratio` áp dụng như một ràng buộc
+    ngay tại vòng grid search, và cho `select_best_trial` dùng làm tie-break.
+    Thiếu 1 trong 2 tham số → related_split_ratio = NaN, hành vi y hệt trước đây.
     """
     param_grid = _build_param_grid(params)
     logger.info(
@@ -103,20 +134,29 @@ def grid_search(
     print(f"[grid_search] {params.algorithm} — {len(param_grid)} trials")
 
     sel = params.selection
+    can_score_related = tech_ids is not None and df_related is not None
     results: list[TrialResult] = []
 
     for i, trial_params in enumerate(param_grid, 1):
         t0 = time.time()
         try:
-            _, labels = train_by_algorithm(params.algorithm, X, **trial_params)
-            metrics   = evaluate_clustering(X, labels)
+            model, labels = train_by_algorithm(params.algorithm, X, **trial_params)
+            metrics   = evaluate_clustering(X, labels, model=model)
             wall      = time.time() - t0
+
+            related_ratio = _NAN
+            if can_score_related:
+                related_ratio = compute_related_split_ratio(
+                    df_related, tech_ids, labels
+                )["related_pairs_split_ratio"]
 
             passed = (
                 metrics["n_clusters"] >= sel.require_min_clusters
                 and metrics["n_clusters"] <= sel.require_max_clusters
                 and metrics["noise_ratio"] <= sel.require_max_noise_ratio
             )
+            if sel.require_max_related_split_ratio is not None and not np.isnan(related_ratio):
+                passed = passed and related_ratio <= sel.require_max_related_split_ratio
 
             result = TrialResult(
                 algorithm          = params.algorithm,
@@ -128,9 +168,11 @@ def grid_search(
                 silhouette         = metrics["silhouette"],
                 davies_bouldin     = metrics["davies_bouldin"],
                 calinski_harabasz  = metrics["calinski_harabasz"],
+                dbcv               = metrics["dbcv"],
                 passed_constraints = passed,
                 failure_reason     = None,
                 wall_seconds       = wall,
+                related_split_ratio = related_ratio,
             )
         except Exception as exc:
             wall = time.time() - t0
@@ -145,9 +187,11 @@ def grid_search(
                 silhouette         = None,
                 davies_bouldin     = None,
                 calinski_harabasz  = None,
+                dbcv               = None,
                 passed_constraints = False,
                 failure_reason     = str(exc),
                 wall_seconds       = wall,
+                related_split_ratio = _NAN,
             )
 
         results.append(result)
@@ -206,11 +250,17 @@ def find_eps_via_kdistance(X: np.ndarray, k: int = 5) -> dict:
 
 def select_best_trial(
     trials: list[TrialResult],
-    primary_metric: Literal["silhouette", "davies_bouldin", "calinski_harabasz"],
+    primary_metric: PrimaryMetric,
 ) -> TrialResult:
     """
     Chọn trial tốt nhất trong số passed_constraints == True.
     Raise RuntimeError nếu không có trial nào pass.
+
+    `primary_metric="dbcv"` dùng Density-Based Clustering Validation (xấp xỉ
+    qua `relative_validity_` của hdbscan) — chỉ có ý nghĩa khi
+    `clustering.algorithm="hdbscan"`; với dbscan/kmeans giá trị này luôn NaN
+    nên sẽ rơi về tie-break (không raise, nhưng nên tránh chọn "dbcv" làm
+    primary_metric nếu không dùng hdbscan).
     """
     passed = [t for t in trials if t.passed_constraints]
     if not passed:
@@ -220,23 +270,40 @@ def select_best_trial(
             "hoặc đổi algorithm trong params.yaml."
         )
 
-    # Hướng tốt của từng metric
-    reverse = primary_metric in ("silhouette", "calinski_harabasz")
+    def _primary_value(t: TrialResult) -> float | None:
+        # Chuẩn hoá về "càng cao càng tốt" cho mọi metric — xem normalize_metric_for_comparison.
+        raw = getattr(t, primary_metric)
+        return normalize_metric_for_comparison(raw, primary_metric)
+
+    def _related_tiebreak_value(t: TrialResult) -> float:
+        # related_split_ratio: thấp hơn = tốt hơn (ít cặp biết-liên-quan bị
+        # xếp khác cụm) → negate để cùng chiều "cao hơn = tốt hơn" như trên.
+        # Thiếu dữ liệu (None/NaN) → 0.0 (trung lập, không đẩy thứ tự).
+        r = t.related_split_ratio
+        if r is None or (isinstance(r, float) and np.isnan(r)):
+            return 0.0
+        return -r
 
     def sort_key(t: TrialResult):
-        primary = t.silhouette if primary_metric == "silhouette" else (
-            t.calinski_harabasz if primary_metric == "calinski_harabasz"
-            else -(t.davies_bouldin or float("inf"))
-        )
-        # Tie-break: ít noise → nhiều cụm → nhanh hơn
+        primary = _primary_value(t)
+        # Tie-break theo thứ tự ưu tiên: khớp RELATED_TO đã curate → ít noise
+        # → nhiều cụm → nhanh hơn. Mọi giá trị đã chuẩn hoá "cao hơn = tốt
+        # hơn" nên LUÔN sort reverse=True (xem _primary_value/_related_tiebreak_value).
         return (
             primary if primary is not None else float("-inf"),
+            _related_tiebreak_value(t),
             -t.noise_ratio,
             t.n_clusters,
             -t.wall_seconds,
         )
 
-    best = sorted(passed, key=sort_key, reverse=reverse)[0]
+    # reverse=True luôn đúng vì mọi thành phần của sort_key đã được chuẩn hoá
+    # "giá trị cao hơn = tốt hơn" (xem _primary_value/_related_tiebreak_value).
+    # Trước đây `reverse` được tính theo primary_metric (loại trừ
+    # "davies_bouldin") — khiến trial CÓ Davies-Bouldin CAO NHẤT (tệ nhất) bị
+    # chọn khi primary_metric="davies_bouldin", ngược hẳn ý nghĩa "thấp hơn =
+    # tốt hơn" của chính metric này.
+    best = sorted(passed, key=sort_key, reverse=True)[0]
     logger.info(
         "Best trial: params=%s n_clusters=%d silhouette=%.4f noise_ratio=%.3f",
         best.params, best.n_clusters, best.silhouette or 0, best.noise_ratio,

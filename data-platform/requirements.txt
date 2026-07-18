@@ -6,6 +6,7 @@ apscheduler==3.10.4
 pydantic-settings==2.2.1
 requests==2.32.3
 loguru==0.7.2
+redis==5.0.8
 
 # Testing
 pytest==8.4.2

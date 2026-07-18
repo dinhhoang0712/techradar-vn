@@ -118,7 +118,12 @@ services:
       LLM_PROVIDER: ${LLM_PROVIDER:-openai}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
       MODEL_WARMUP: ${MODEL_WARMUP:-background}
+      # Must match data-platform's EMBED_SECRET (POST /embed/trigger)
+      EMBED_SECRET: ${EMBED_SECRET:-changeme}
+      # ml-clustering (cluster_label lookup cho /report)
+      ML_CLUSTERING_BASE_URL: http://ml-clustering:8001
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/metrics', timeout=3)\" || exit 1"]
       interval: 10s
@@ -155,13 +160,18 @@ services:
       USE_LOCAL_NEO4J: "false"
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      MLCLUSTER_S3_CACHE_DIR: /tmp/ml-clustering-cache
-      # Optional S3 artifacts (snapshot parquet + cluster_labels.json) — leave blank to skip.
-      MLCLUSTER_S3_BUCKET: ${MLCLUSTER_S3_BUCKET:-}
-      MLCLUSTER_S3_PREFIX: ${MLCLUSTER_S3_PREFIX:-ml-clustering}
-      MLCLUSTER_S3_REGION: ${MLCLUSTER_S3_REGION:-ap-southeast-1}
-      MLCLUSTER_S3_ACCESS_KEY_ID: ${MLCLUSTER_S3_ACCESS_KEY_ID:-}
-      MLCLUSTER_S3_SECRET_ACCESS_KEY: ${MLCLUSTER_S3_SECRET_ACCESS_KEY:-}
+      MLCLUSTER_MINIO_CACHE_DIR: /tmp/ml-clustering-cache
+      # Pre-trained artifacts (snapshot parquet + cluster_labels.json) cached on the bundled
+      # MinIO — leave MLCLUSTER_MINIO_BUCKET blank to skip and always cluster from Neo4j directly.
+      MLCLUSTER_MINIO_BUCKET: ${MLCLUSTER_MINIO_BUCKET:-}
+      MLCLUSTER_MINIO_PREFIX: ${MLCLUSTER_MINIO_PREFIX:-ml-clustering}
+      MLCLUSTER_MINIO_ENDPOINT: ${MLCLUSTER_MINIO_ENDPOINT:-http://minio:9000}
+      MLCLUSTER_MINIO_ACCESS_KEY: ${MLCLUSTER_MINIO_ACCESS_KEY:-minioadmin}
+      MLCLUSTER_MINIO_SECRET_KEY: ${MLCLUSTER_MINIO_SECRET_KEY:-minioadmin123}
+      # Must match spring-api's PYTHON_INTERNAL_TOKEN (gateway -> POST /pipeline/trigger,
+      # PUT /clusters/{id}/label) — same default as spring-api so both resolve to the same
+      # secret without extra setup. Empty = disabled (dev).
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-techradar-internal-secret}
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=3)\" || exit 1"]
       interval: 10s
@@ -177,6 +187,8 @@ services:
     depends_on:
       neo4j:
         condition: service_started
+      minio:
+        condition: service_healthy
     restart: unless-stopped
 
   # ----------------------------- Datastores ----------------------------------------------
@@ -282,6 +294,12 @@ services:
       EMBED_SECRET: ${EMBED_SECRET:-changeme}
       INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-techradar-internal-secret}
       RUN_JOBS_ON_START: ${RUN_JOBS_ON_START:-false}
+      # gold/tech_dedup.py — Giai đoạn B (LLM discovery), thiếu key thì tự skip, không lỗi.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      TECH_DEDUP_LLM_PROVIDER: ${TECH_DEDUP_LLM_PROVIDER:-gemini}
+      # common/job_trigger_listener.py — nhận lệnh "chạy ngay" từ admin (Java) qua Pub/Sub.
+      REDIS_URL: redis://redis:6379
     depends_on:
       kafka:
         condition: service_started
@@ -291,6 +309,8 @@ services:
         condition: service_healthy
       neo4j:
         condition: service_started
+      redis:
+        condition: service_healthy
     restart: unless-stopped
 
   # ----------------------------- Crawler (opt-in: --profile crawl) ----------------------

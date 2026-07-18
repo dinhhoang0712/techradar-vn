@@ -129,13 +129,35 @@ def main(
         df_tech = filter_noise(df_tech, df_edges_job_requires_tech, fp.noise_filter)
         logger.info("Sau noise filter: {} techs còn lại", len(df_tech))
 
-    # 3-6. GDS features — bỏ qua vì AuraDB yêu cầu session-based GDS API riêng
-    # Chỉ dùng content embedding + graph stats + TF-IDF
+    # 3-6. Graph embedding.
+    # fastrp/pagerank/louvain vẫn cần Neo4j GDS session-based API mà AuraDB
+    # free tier không hỗ trợ trực tiếp → chưa có triển khai, bỏ qua nếu bật.
+    # node2vec được tính lại HOÀN TOÀN client-side (networkx + gensim) ngay
+    # trên parquet đã pull ở Stage 1, không cần GDS/Neo4j nữa — xem
+    # `graph_features.build_client_node2vec_embedding`.
     gds_features: dict = {}
-    any_gds = fp.fastrp.enabled or fp.node2vec.enabled or fp.pagerank.enabled or fp.louvain.enabled
-    if any_gds:
-        logger.warning("GDS flags enabled nhưng AuraDB không hỗ trợ gds.graph.project trực tiếp — bỏ qua GDS.")
-    logger.info("GDS features: bỏ qua (tất cả disabled hoặc không khả dụng)")
+    dead_gds = fp.fastrp.enabled or fp.pagerank.enabled or fp.louvain.enabled
+    if dead_gds:
+        logger.warning(
+            "fastrp/pagerank/louvain enabled trong params.yaml nhưng chưa có triển khai "
+            "client-side — bỏ qua. Dùng node2vec (client-side) làm graph embedding chính."
+        )
+
+    if fp.node2vec.enabled:
+        logger.info("Computing client-side node2vec embedding (networkx + gensim)...")
+        from src.features.graph_features import build_client_node2vec_embedding
+        gds_features["node2vec"] = build_client_node2vec_embedding(
+            df_technologies=df_tech,
+            df_edges_article_mentions_tech=df_edges_mentions,
+            df_edges_company_uses_tech=df_edges_company_uses_tech,
+            df_edges_job_requires_tech=df_edges_job_requires_tech,
+            df_edges_tech_related_tech=df_edges_tech_related,
+            embedding_dim=fp.node2vec.embedding_dim,
+            walk_length=fp.node2vec.walk_length,
+            walks_per_node=fp.node2vec.walks_per_node,
+        )
+    else:
+        logger.info("node2vec: disabled trong params.yaml — bỏ qua graph embedding.")
 
     # 7. Content feature
     if fp.use_name_embedding:
@@ -210,7 +232,53 @@ def main(
             max_features=fp.tfidf_max_features,
         )
 
-    # 10. Build feature matrix
+    # 10. Skill jaccard — bag-of-skills qua job bridge (tech -> job -> skill).
+    # Tận dụng edges_job_requires_skill vốn đã load cho validation nhưng chưa
+    # từng dùng làm feature.
+    skill_jaccard = None
+    if fp.use_skill_jaccard:
+        logger.info("Building skill jaccard features...")
+        from src.features.graph_features import build_skill_tech_jaccard
+        skill_jaccard = build_skill_tech_jaccard(
+            df_edges_requires_skill=df_edges_job_requires_skill,
+            df_edges_requires_tech=df_edges_job_requires_tech,
+            df_technologies=df_tech,
+        )
+
+    # 11. Article temporal stats — recency + sentiment từ Article mentions.
+    # Độc lập với use_name_embedding: dù content_emb lấy từ tên tech, tín hiệu
+    # "tech này đang hot/nguội" vẫn hữu ích và trước đây bị bỏ phí hoàn toàn.
+    article_temporal = None
+    if fp.use_article_temporal_stats:
+        logger.info("Computing article temporal stats (recency + sentiment)...")
+        from src.features.graph_features import compute_article_temporal_stats
+        article_temporal_raw = compute_article_temporal_stats(
+            df_edges_mentions=df_edges_mentions,
+            df_articles=df_article,
+        )
+        temporal_cols = ["first_mention_days_ago", "last_mention_days_ago", "mention_recency_skew", "mean_sentiment"]
+        temporal_defaults = {"first_mention_days_ago": -1, "last_mention_days_ago": -1,
+                              "mention_recency_skew": 0.0, "mean_sentiment": 0.0}
+        if article_temporal_raw.empty:
+            # Không có mention nào trong snapshot → compute_article_temporal_stats
+            # trả DataFrame rỗng KHÔNG có cột "tech_id" (pd.DataFrame([])) → không
+            # thể set_index/reindex; build thẳng DataFrame toàn giá trị mặc định.
+            logger.warning("article_temporal: không có mention nào trong snapshot — dùng toàn giá trị mặc định.")
+            article_temporal = pd.DataFrame({
+                "tech_id": df_tech["tech_id"].tolist(),
+                **{c: temporal_defaults[c] for c in temporal_cols},
+            })
+        else:
+            # Tech chưa từng được mention → không xuất hiện trong kết quả trên;
+            # reindex về đủ tech_ids với giá trị mặc định (giống noise_filter/graph_stats).
+            article_temporal = (
+                article_temporal_raw.set_index("tech_id")
+                .reindex(df_tech["tech_id"].tolist())
+                .fillna(temporal_defaults)
+                .reset_index()
+            )
+
+    # 12. Build feature matrix
     logger.info("Building final feature matrix...")
     X, meta = build_feature_matrix(
         df_technologies=df_tech,
@@ -220,14 +288,16 @@ def main(
         company_tfidf=company_tfidf,
         job_tfidf=job_tfidf,
         params=fp,
+        skill_jaccard=skill_jaccard,
+        article_temporal=article_temporal,
     )
 
-    # 11. Save
+    # 13. Save
     out_dir = features_dir(tag)
     logger.info("Saving features → {}", out_dir)
     save_features(X, meta, out_dir)
 
-    # 12. Summary
+    # 14. Summary
     n_zero_content = (content_emb["content_n_articles"] == 0).sum()
     pct_zero = 100 * n_zero_content / len(content_emb)
     print(f"\n{'='*50}")

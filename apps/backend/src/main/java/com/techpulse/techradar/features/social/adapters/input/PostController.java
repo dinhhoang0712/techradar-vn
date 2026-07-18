@@ -8,6 +8,7 @@ import com.techpulse.techradar.features.social.application.GetFeedUseCase;
 import com.techpulse.techradar.features.social.application.PostImageService;
 import com.techpulse.techradar.features.social.application.ReportContentUseCase;
 import com.techpulse.techradar.features.social.application.ToggleLikeUseCase;
+import com.techpulse.techradar.features.social.realtime.FeedBroadcaster;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import com.techpulse.techradar.shared.security.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
@@ -15,6 +16,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -22,8 +24,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -44,6 +48,7 @@ public class PostController {
     private final AddCommentUseCase addCommentUseCase;
     private final ReportContentUseCase reportContentUseCase;
     private final PostImageService postImageService;
+    private final FeedBroadcaster feedBroadcaster;
 
     @Operation(summary = "Feed: 'following' (self + followees, default) or 'explore' (every public post)")
     @GetMapping("/feed")
@@ -58,6 +63,22 @@ public class PostController {
                 .map(SocialDtos.FeedPostResponse::from)
                 .collectList()
                 .map(list -> ResponseEntity.ok(ApiResponse.success(list, "Feed")));
+    }
+
+    @Operation(summary = "Realtime feed stream (SSE) — new posts, likes and comment counts")
+    @GetMapping(value = "/feed/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<ServerSentEvent<SocialDtos.FeedEventResponse>> stream(
+            @RequestParam(defaultValue = "following") String scope
+    ) {
+        Flux<ServerSentEvent<SocialDtos.FeedEventResponse>> events = SecurityUtils.currentUserId()
+                .flatMapMany(userId -> feedBroadcaster.streamFor(userId, scope))
+                .map(event -> ServerSentEvent.builder(SocialDtos.FeedEventResponse.from(event))
+                        .event(event.type().name())
+                        .build());
+        // Heartbeat keeps the connection alive through proxies that time out idle streams.
+        Flux<ServerSentEvent<SocialDtos.FeedEventResponse>> heartbeat = Flux.interval(Duration.ofSeconds(25))
+                .map(i -> ServerSentEvent.<SocialDtos.FeedEventResponse>builder().comment("ping").build());
+        return Flux.merge(events, heartbeat);
     }
 
     @Operation(summary = "Create a post")

@@ -1,9 +1,10 @@
 """
 Data Platform — entry point.
-Chạy 3 thành phần song song:
-  Thread 1 — Bronze Writer   (Kafka raw_* → MinIO)
-  Thread 2 — Silver Processor (Kafka extracted_* → PostgreSQL)
-  Main     — APScheduler      (Gold ETL + Enricher + Embed trigger)
+Chạy 4 thành phần song song:
+  Thread 1 — Bronze Writer       (Kafka raw_* → MinIO)
+  Thread 2 — Silver Processor    (Kafka extracted_* → PostgreSQL)
+  Thread 3 — Job Trigger Listener (Redis Pub/Sub → chạy ngay 1 job APScheduler)
+  Main     — APScheduler          (Gold ETL + Enricher + Embed trigger)
 """
 import signal
 import sys
@@ -59,6 +60,18 @@ def main() -> None:
     for job in scheduler.get_jobs():
         logger.info("  {} — next: {}", job.name, job.next_run_time)
 
+    # ── Job Trigger Listener thread (needs `scheduler`, start after it exists) ─
+    from common.job_trigger_listener import run as run_trigger_listener
+
+    t_trigger = threading.Thread(
+        target=_safe_run,
+        args=("Job Trigger Listener", run_trigger_listener, settings, scheduler),
+        daemon=True,
+        name="job-trigger-listener",
+    )
+    t_trigger.start()
+    logger.info("Job Trigger Listener thread started.")
+
     if settings.run_jobs_on_start:
         logger.info("RUN_JOBS_ON_START=true — triggering all jobs immediately for initial seed...")
         for job in scheduler.get_jobs():
@@ -97,6 +110,15 @@ def main() -> None:
                     name="silver-processor",
                 )
                 t_silver.start()
+            if not t_trigger.is_alive():
+                logger.warning("Job Trigger Listener thread died, restarting...")
+                t_trigger = threading.Thread(
+                    target=_safe_run,
+                    args=("Job Trigger Listener", run_trigger_listener, settings, scheduler),
+                    daemon=True,
+                    name="job-trigger-listener",
+                )
+                t_trigger.start()
     except KeyboardInterrupt:
         _shutdown(None, None)
 

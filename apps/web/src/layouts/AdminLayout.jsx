@@ -1,10 +1,31 @@
-import { Outlet } from 'react-router-dom';
-import { useState } from 'react';
+import { Outlet, Navigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import AdminSidebar from '../components/layout/AdminSidebar';
+import { getCurrentUser } from '../api/authService';
 import './AdminLayout.css';
 
 export default function AdminLayout() {
     const [collapsed, setCollapsed] = useState(false);
+    // 'checking' | 'allowed' | 'unauthenticated' | 'forbidden'
+    const [authStatus, setAuthStatus] = useState(() =>
+        localStorage.getItem('access_token') ? 'checking' : 'unauthenticated');
+
+    useEffect(() => {
+        if (authStatus !== 'checking') return;
+        getCurrentUser()
+            .then((user) => setAuthStatus(user?.role === 'admin' ? 'allowed' : 'forbidden'))
+            .catch(() => setAuthStatus('forbidden'));
+    }, [authStatus]);
+
+    if (authStatus === 'checking') {
+        return (
+            <div className="flex-center" style={{ minHeight: '100vh' }}>
+                <div className="loading-spinner" />
+            </div>
+        );
+    }
+    if (authStatus === 'unauthenticated') return <Navigate to="/login" replace />;
+    if (authStatus === 'forbidden') return <Navigate to="/403" replace />;
 
     return (
         <div className="admin-layout">

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-    Tooltip, Legend, ResponsiveContainer, ReferenceLine
+    Tooltip, Legend, ResponsiveContainer, ReferenceLine, ComposedChart
 } from 'recharts';
 import Select from 'react-select';
 import { getRadarSearch, getRadarTop4, getRadarTop10 } from '../api/trendService';
@@ -119,6 +119,33 @@ function CustomTooltip({ active, payload, label }) {
                     <span className="tooltip-jobs">{p.value?.toLocaleString()} jobs</span>
                 </div>
             ))}
+        </div>
+    );
+}
+
+function TrendHistoryTooltip({ active, payload, label }) {
+    if (!active || !payload?.length) return null;
+    const jobPoint = payload.find(p => p.dataKey === 'job_count');
+    const growthPoint = payload.find(p => p.dataKey === 'growth_rate');
+    return (
+        <div className="chart-tooltip">
+            <p className="tooltip-month">{label}</p>
+            {jobPoint && (
+                <div className="tooltip-row">
+                    <span className="tooltip-dot" style={{ background: jobPoint.color }} />
+                    <span className="tooltip-tech">Số việc làm</span>
+                    <span className="tooltip-jobs">{jobPoint.value?.toLocaleString() ?? '—'}</span>
+                </div>
+            )}
+            {growthPoint && growthPoint.value != null && (
+                <div className="tooltip-row">
+                    <span className="tooltip-dot" style={{ background: growthPoint.color }} />
+                    <span className="tooltip-tech">Tăng trưởng</span>
+                    <span className={`tooltip-jobs ${growthPoint.value >= 0 ? 'up' : 'down'}`}>
+                        {growthPoint.value >= 0 ? '+' : ''}{Number(growthPoint.value).toFixed(1)}%
+                    </span>
+                </div>
+            )}
         </div>
     );
 }
@@ -550,14 +577,44 @@ export default function TrendDashboard() {
                             {forecast.reasoning && (
                                 <p className="forecast-reasoning">{forecast.reasoning}</p>
                             )}
+                            {forecast.trend_data?.length > 0 && (
+                                <div className="forecast-trend-history">
+                                    <p className="forecast-subsection-title">Lịch sử xu hướng (căn cứ dự báo)</p>
+                                    <ResponsiveContainer width="100%" height={200}>
+                                        <ComposedChart data={forecast.trend_data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                                            <XAxis dataKey="month" tick={{ fill: 'var(--text-3)', fontSize: 11 }} />
+                                            <YAxis yAxisId="jobs" tick={{ fill: 'var(--text-3)', fontSize: 11 }} width={44} />
+                                            <YAxis yAxisId="growth" orientation="right" tick={{ fill: 'var(--text-3)', fontSize: 11 }} unit="%" width={44} />
+                                            <Tooltip content={<TrendHistoryTooltip />} />
+                                            <Legend wrapperStyle={{ paddingTop: 8, fontSize: '0.78rem', color: 'var(--text-2)' }} />
+                                            <Bar yAxisId="jobs" dataKey="job_count" name="Số việc làm" fill="var(--primary-glow)" radius={[3, 3, 0, 0]} />
+                                            <Line yAxisId="growth" type="monotone" dataKey="growth_rate" name="Tăng trưởng %" stroke="var(--primary)" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                                        </ComposedChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            )}
                             {forecast.signals?.length > 0 && (
                                 <div className="forecast-signals">
-                                    {forecast.signals.map((s, i) => (
-                                        <div key={i} className="forecast-signal">
-                                            <span className="signal-label">{s.signal}</span>
-                                            <span className="signal-value">{typeof s.value === 'number' ? s.value.toFixed(2) : s.value}</span>
-                                        </div>
-                                    ))}
+                                    <p className="forecast-subsection-title">Tín hiệu &amp; trọng số đóng góp vào dự báo</p>
+                                    {[...forecast.signals]
+                                        .sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0))
+                                        .map((s, i) => (
+                                            <div key={i} className="forecast-signal">
+                                                <div className="forecast-signal-main">
+                                                    <span className="signal-label">{s.signal}</span>
+                                                    <span className="signal-value">{typeof s.value === 'number' ? s.value.toFixed(2) : s.value}</span>
+                                                </div>
+                                                {typeof s.weight === 'number' && (
+                                                    <div className="signal-weight-row">
+                                                        <div className="signal-weight-track">
+                                                            <div className="signal-weight-fill" style={{ width: `${Math.round(s.weight * 100)}%` }} />
+                                                        </div>
+                                                        <span className="signal-weight-label">Trọng số {Math.round(s.weight * 100)}%</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
                                 </div>
                             )}
                         </div>

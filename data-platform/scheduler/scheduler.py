@@ -6,6 +6,7 @@ Schedule mặc định (Asia/Ho_Chi_Minh):
   03:00 daily   — Gold PG ETL (rebuild tech_analytics)
   04:00 daily   — Embed Trigger (gọi ai-rag-core /embed/trigger)
   05:00 daily   — Neo4j Enricher (derived relationships + stats)
+  05:30 daily   — Tech Dedup (gộp Technology node trùng lặp: Go/Golang...)
   06:00 weekly  — Clustering Retrain (trigger ml-clustering pipeline, Chủ nhật)
 """
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -20,6 +21,7 @@ from scheduler.jobs import (
     job_neo4j_enricher,
     job_neo4j_job_sync,
     job_retrain_clustering,
+    job_tech_dedup,
 )
 
 TZ = "Asia/Ho_Chi_Minh"
@@ -83,6 +85,21 @@ def create_scheduler(settings: Settings) -> BackgroundScheduler:
         args=[settings],
         id="neo4j_enricher",
         name="Neo4j Enricher",
+        max_instances=1,
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+
+    scheduler.add_job(
+        func=job_tech_dedup,
+        trigger=CronTrigger(
+            hour=settings.tech_dedup_hour,
+            minute=settings.tech_dedup_minute,
+            timezone=TZ,
+        ),
+        args=[settings],
+        id="tech_dedup",
+        name="Tech Dedup",
         max_instances=1,
         replace_existing=True,
         misfire_grace_time=3600,

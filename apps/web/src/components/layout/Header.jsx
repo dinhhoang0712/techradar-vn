@@ -48,6 +48,7 @@ export default function Header() {
                 const flatData = {
                     full_name: data.user?.full_name || data.full_name || '',
                     email: data.user?.email || data.email || '',
+                    role: data.user?.role || data.role || 'user',
                 };
                 setProfile(flatData);
             })
@@ -203,6 +204,14 @@ export default function Header() {
                                     </div>
                                 </div>
                                 <div className="dropdown-divider" />
+                                {profile?.role === 'admin' && (
+                                    <button
+                                        className="dropdown-item"
+                                        onClick={() => { setMenuOpen(false); navigate('/admin'); }}
+                                    >
+                                        <span>Trang quản trị</span>
+                                    </button>
+                                )}
                                 <button
                                     className="dropdown-item"
                                     onClick={() => { setMenuOpen(false); navigate('/profile'); }}

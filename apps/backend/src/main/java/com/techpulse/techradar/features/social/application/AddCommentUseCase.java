@@ -5,6 +5,7 @@ import com.techpulse.techradar.features.notification.application.NotificationSer
 import com.techpulse.techradar.features.notification.domain.Notification;
 import com.techpulse.techradar.features.social.ports.CommentRepository;
 import com.techpulse.techradar.features.social.ports.PostRepository;
+import com.techpulse.techradar.features.social.realtime.FeedBroadcaster;
 import com.techpulse.techradar.shared.exception.AppException;
 import com.techpulse.techradar.shared.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,7 @@ public class AddCommentUseCase {
     private final NotificationService notificationService;
     private final UserRepository userRepository;
     private final MentionNotifier mentionNotifier;
+    private final FeedBroadcaster feedBroadcaster;
 
     public Mono<String> execute(String postId, String userId, String content, String parentId, List<String> mentionedUserIds) {
         String trimmed = content == null ? "" : content.trim();
@@ -51,12 +53,14 @@ public class AddCommentUseCase {
         UUID postUuid = UUID.fromString(postId);
         UUID userUuid = UUID.fromString(userId);
         UUID parentCommentId = normalizedParentId == null ? null : UUID.fromString(normalizedParentId);
+        LocalDateTime now = LocalDateTime.now();
 
         return validateParent(postUuid, normalizedParentId)
                 .map(Optional::of)
                 .defaultIfEmpty(Optional.empty())
                 .flatMap(parentInfoOpt -> commentRepository
-                        .insert(commentId, postUuid, userUuid, trimmed, parentCommentId, LocalDateTime.now())
+                        .insert(commentId, postUuid, userUuid, trimmed, parentCommentId, now)
+                        .then(broadcastComment(postUuid, userUuid))
                         .then(notifyAll(postUuid, userUuid, trimmed, parentInfoOpt.orElse(null))
                                 .onErrorResume(e -> {
                                     log.warn("Could not create comment notifications for post {}", postId, e);
@@ -64,6 +68,17 @@ public class AddCommentUseCase {
                                 }))
                         .then(mentionNotifier.notify(userUuid, mentionedUserIds, "bình luận", "/feed")))
                 .thenReturn(commentId.toString());
+    }
+
+    /** Broadcasts the updated comment count to the live feed (Redis Pub/Sub -> SSE). Best-effort. */
+    private Mono<Void> broadcastComment(UUID postId, UUID commenterId) {
+        return postRepository.findById(postId, commenterId)
+                .doOnNext(row -> feedBroadcaster.publishComment(postId.toString(), row.authorId(), row.commentCount()))
+                .onErrorResume(e -> {
+                    log.warn("Could not broadcast new comment on post {}", postId, e);
+                    return Mono.empty();
+                })
+                .then();
     }
 
     /** Empty if top-level (no parent). Errors (404/400) if the reply target is invalid. */

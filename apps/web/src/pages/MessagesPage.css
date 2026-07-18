@@ -239,6 +239,13 @@
     font-size: 0.68rem;
 }
 
+.msg-seen {
+    align-self: flex-end;
+    color: var(--text-3);
+    font-size: 0.68rem;
+    margin-top: -4px;
+}
+
 .thread-input-bar {
     display: flex;
     gap: 8px;

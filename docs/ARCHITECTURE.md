@@ -220,6 +220,15 @@ bronze/             dp_processed_jobs)              │
 (từ `KafkaExtractorService`, khi Spring Boot chạy) — tránh bỏ sót dữ liệu, xem chi tiết ở
 [DATA_PLATFORM.md §5](./DATA_PLATFORM.md).
 
+\*\* **Tech name canonicalization (write-time)**: cả `EntityExtractionService.java` (bên trong
+`KafkaExtractorService`, dùng `TechAliasCache`) lẫn Silver Processor (`_process_article`/`_process_job`,
+dùng `common/tech_alias_cache.py`) đều resolve tên công nghệ qua cùng bảng `dp_tech_alias_map`
+("Golang" → "Go", "ML" → "Machine Learning"...) **trước khi** ghi/publish — để `KafkaNeo4jWriterService`
+và các Gold gap-filler (`neo4j_article_sync.py`/`neo4j_job_sync.py`) không bao giờ tạo 2 node
+`:Technology` khác nhau cho cùng 1 công nghệ. Phần còn sót lại (node trùng tạo từ trước khi có
+cơ chế này, hoặc case LLM mới phát hiện) được dọn định kỳ bởi `data-platform/gold/tech_dedup.py`
+(5:30 AM daily) — xem [DATA_PLATFORM.md §5e](./DATA_PLATFORM.md).
+
 ### 4.2 RAG Query Pipeline
 
 ```
@@ -633,9 +642,10 @@ Không còn thư mục `knowledge-graph/` riêng (đã xoá — đó là bản �
 của pipeline này). Việc ghi vào graph hiện nằm ở:
 
 - `services/crawler/` — crawl 8 nguồn (VNExpress, GenK, DanTri, ICTNews, TopCV, ITviec, Viblo, GitHub), publish Kafka.
-- `apps/backend` (`features/kafka/KafkaNeo4jWriterService.java`) — consume Kafka real-time, MERGE node gốc + cạnh trực tiếp.
-- `data-platform/gold/{neo4j_article_sync,neo4j_job_sync}.py` — batch/nightly, MERGE lại cùng loại node/cạnh.
+- `apps/backend` (`features/kafka/KafkaNeo4jWriterService.java`) — consume Kafka real-time, MERGE node gốc + cạnh trực tiếp. Tên công nghệ đã được `EntityExtractionService`/`TechAliasCache` canonical hoá trước đó (xem §4.1 footnote **).
+- `data-platform/gold/{neo4j_article_sync,neo4j_job_sync}.py` — batch/nightly, MERGE lại cùng loại node/cạnh. Đọc từ Silver Postgres nên cũng đã nhận tech name đã canonical hoá.
 - `data-platform/gold/neo4j_enricher.py` — cạnh derived (`USES`, `RELATED_TO`) + stats.
+- `data-platform/gold/tech_dedup.py` — dọn node `:Technology` trùng lặp còn sót lại trong graph (alias map đã biết + LLM discovery cho case chưa biết), 5:30 AM daily.
 
 Chi tiết "ai ghi gì" ở [`docs/DATABASE.md`](./DATABASE.md) §4.2.
 
@@ -655,15 +665,15 @@ Bronze Layer (Immutable Raw)
 Silver Layer (Processed)
 ├── Input: Kafka raw_*, extracted_*
 ├── Storage: PostgreSQL
-├── Tables: dp_processed_articles, dp_processed_jobs
-├── Processing: Dedup, quality scoring
+├── Tables: dp_processed_articles, dp_processed_jobs, dp_tech_alias_map
+├── Processing: Dedup, quality scoring, tech name canonicalization
 └── Purpose: Clean, queryable data
 
 Gold Layer (Analytics)
 ├── Input: Neo4j Knowledge Graph
-├── Storage: PostgreSQL tech_analytics
-├── Schedule: 3:00 AM daily
-└── Purpose: Aggregated analytics for radar
+├── Storage: PostgreSQL tech_analytics, dp_tech_alias_map, dp_tech_alias_review_queue
+├── Schedule: pg_etl 3:00 AM, neo4j_enricher 5:00 AM, tech_dedup 5:30 AM daily
+└── Purpose: Aggregated analytics + Technology node dedup cho radar
 ```
 
 ### 9.2 Modules
@@ -675,16 +685,20 @@ data-platform/
 ├── bronze/
 │   └── writer.py                # Kafka → MinIO
 ├── silver/
-│   ├── processor.py             # Kafka → PostgreSQL
+│   ├── processor.py             # Kafka → PostgreSQL (+ tech name canonicalization)
 │   └── deduplicator.py          # Dedup logic
 ├── gold/
 │   ├── pg_etl.py                # Neo4j → tech_analytics
-│   └── neo4j_enricher.py        # Derived relationships
+│   ├── neo4j_article_sync.py    # Backfill Article/Technology (2:00 AM)
+│   ├── neo4j_job_sync.py        # Backfill Job/Company (2:30 AM)
+│   ├── neo4j_enricher.py        # Derived relationships
+│   └── tech_dedup.py            # Gộp Technology node trùng lặp (5:30 AM)
 ├── scheduler/
 │   ├── scheduler.py             # APScheduler
 │   └── jobs.py                  # Job functions
 └── common/
     ├── db.py                    # DB connections
+    ├── tech_alias_cache.py      # dp_tech_alias_map cache — canonicalize_techs()
     └── logger.py                # Loguru setup
 ```
 
@@ -741,7 +755,7 @@ Spring Boot → Python services communication:
 | React Web (Nginx) | ✅ | Stateless, can scale horizontally |
 | Spring Boot API | ✅ | Stateless, R2DBC connection pooling |
 | ai-rag-core | ✅ | Stateless, model warmup on startup |
-| ml-clustering | ✅ | Stateless, cache in S3/volume |
+| ml-clustering | ✅ | Stateless, cache in MinIO/volume |
 | PostgreSQL | ⚠️ | Read replicas for scaling reads |
 | Neo4j | ⚠️ | Causal clustering for HA |
 | Redis | ✅ | Cluster mode |

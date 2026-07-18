@@ -3,6 +3,7 @@ package com.techpulse.techradar.features.system.application;
 import com.techpulse.techradar.features.social.ports.CommentRepository;
 import com.techpulse.techradar.features.social.ports.PostRepository;
 import com.techpulse.techradar.features.social.ports.ReportRepository;
+import com.techpulse.techradar.features.system.ports.ModerationSuggestionPort;
 import com.techpulse.techradar.shared.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +24,7 @@ public class SocialModerationService {
     private final PostRepository postRepository;
     private final CommentRepository commentRepository;
     private final ReportRepository reportRepository;
+    private final ModerationSuggestionPort moderationSuggestionPort;
 
     public Flux<PostRepository.FeedRow> listPosts(int limit, int offset) {
         return postRepository.findAllForModeration(limit, offset);
@@ -55,5 +57,27 @@ public class SocialModerationService {
                 .flatMap(dismissed -> dismissed
                         ? Mono.<Void>empty().doOnSubscribe(s -> log.info("Admin {} dismissed report id={}", adminId, reportId))
                         : Mono.error(new NotFoundException("Pending report not found: " + reportId)));
+    }
+
+    /**
+     * Returns the cached AI moderation suggestion for a report, generating (and persisting) one
+     * first if none exists yet or {@code force} is set. Never auto-applies the suggestion — it's
+     * advisory only, the admin still picks dismiss/delete explicitly.
+     */
+    public Mono<ReportRepository.ReportRow> getAiSuggestion(String reportId, boolean force) {
+        UUID id = UUID.fromString(reportId);
+        return reportRepository.findById(id)
+                .switchIfEmpty(Mono.error(new NotFoundException("Report not found: " + reportId)))
+                .flatMap(row -> {
+                    if (!force && row.aiSuggestedAction() != null) {
+                        return Mono.just(row);
+                    }
+                    String targetType = row.postId() != null ? "POST" : "COMMENT";
+                    return moderationSuggestionPort.suggest(targetType, row.targetContent(), row.reason())
+                            .flatMap(s -> reportRepository.saveAiSuggestion(id, s.action(), s.reason(), s.confidence())
+                                    .then(reportRepository.findById(id)))
+                            .doOnSuccess(r -> log.info("Generated AI moderation suggestion for report id={}: {}",
+                                    reportId, r.aiSuggestedAction()));
+                });
     }
 }

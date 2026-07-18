@@ -471,6 +471,19 @@
     font-size: 0.78rem;
 }
 
+.company-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-top: 24px;
+}
+
+.pagination-page {
+    color: var(--text-2);
+    font-weight: 600;
+}
+
 @media (max-width: 900px) {
     .company-layout {
         flex-direction: column;

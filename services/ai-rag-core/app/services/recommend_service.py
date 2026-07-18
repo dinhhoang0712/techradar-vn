@@ -151,26 +151,26 @@ async def _llm_explain(user_techs: list[str], top_items: list[dict]) -> list[str
             f"- {name} (ring: {ring}, co-occurrence: {co}, tăng trưởng: {growth_str})"
         )
 
-    template = _load_template("recommend_template.txt")
-    prompt = template.format(
-        user_techs=", ".join(user_techs),
-        recommendations="\n".join(lines),
-    )
-
-    messages = [
-        {
-            "role": "system",
-            "content": (
-                "Bạn là chuyên gia tư vấn công nghệ. "
-                "Với mỗi công nghệ được đề xuất, hãy viết 1 câu lý giải ngắn gọn bằng tiếng Việt "
-                "tại sao nên học/dùng nó dựa trên context. "
-                "Chỉ trả về danh sách JSON: [{\"tech\": \"...\", \"reason\": \"...\"}]"
-            ),
-        },
-        {"role": "user", "content": prompt},
-    ]
-
     try:
+        template = _load_template("recommend_template.txt")
+        prompt = template.format(
+            user_techs=", ".join(user_techs),
+            recommendations="\n".join(lines),
+        )
+
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "Bạn là chuyên gia tư vấn công nghệ. "
+                    "Với mỗi công nghệ được đề xuất, hãy viết 1 câu lý giải ngắn gọn bằng tiếng Việt "
+                    "tại sao nên học/dùng nó dựa trên context. "
+                    "Chỉ trả về danh sách JSON: [{\"tech\": \"...\", \"reason\": \"...\"}]"
+                ),
+            },
+            {"role": "user", "content": prompt},
+        ]
+
         raw = await generate(messages)
         import json, re
         match = re.search(r"\[.*\]", raw, re.DOTALL)

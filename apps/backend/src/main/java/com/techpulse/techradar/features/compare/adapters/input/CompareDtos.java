@@ -26,7 +26,7 @@ public final class CompareDtos {
         private List<MonthlyPoint> monthly;
     }
 
-    /** One month: month, year, job_count. */
+    /** One month: month, year, job_count, article_count. */
     @Data
     @AllArgsConstructor
     @NoArgsConstructor
@@ -34,5 +34,6 @@ public final class CompareDtos {
         private int month;
         private int year;
         private int jobCount;
+        private int articleCount;
     }
 }

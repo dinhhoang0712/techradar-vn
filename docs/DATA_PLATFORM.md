@@ -271,6 +271,20 @@ company_location = job.get("location") or company_obj.get("location")
   - normalize = lowercase + collapse whitespace
   - Nếu hash đã tồn tại → `is_duplicate=True`, `duplicate_of={id gốc}`
 
+### Entity Canonicalization (tech name)
+
+Trước khi lưu `entity_techs`/`technologies`, Silver tra `common/tech_alias_cache.py`
+(cache RAM của bảng `dp_tech_alias_map`, refresh mỗi ~5 phút) để gộp các tên
+khác nhau cho CÙNG 1 công nghệ (vd `Golang` → `Go`, `ML` → `Machine Learning`).
+Đây là lý do Silver được coi là tầng "conform" theo đúng tinh thần Medallion —
+dữ liệu vào Gold/Neo4j đã sạch tên thực thể, không cần vá lại sau.
+
+Đường ghi Neo4j realtime (`EntityExtractionService.java` trong Spring Boot,
+xem [Backend Guide](BACKEND_GUIDE.md)) **bỏ qua Silver hoàn toàn** nên tự tra
+CÙNG bảng `dp_tech_alias_map` qua `TechAliasCache.java` (cache Java riêng,
+cùng nguồn dữ liệu) — không có 2 đường tạo Technology node nào bỏ sót bước
+chuẩn hoá này.
+
 ---
 
 ## 6. Gold Layer
@@ -319,6 +333,31 @@ Tạo **derived relationships** và cập nhật statistics trong Knowledge Grap
 | `t.mention_count = article_count + job_count` | Cập nhật mention count trên mỗi Technology node |
 | `t.trend_score` | `(mention_count * 2 + job_count) / max * 100` |
 
+### Tech Dedup
+
+**Chạy**: 5:30 AM daily (ngay sau Neo4j Enricher)
+
+Gộp các `:Technology` node trùng lặp do khác cách viết (`Go`/`Golang`,
+`ML`/`Machine Learning`, `K8s`/`Kubernetes`...) — dù Silver + đường ghi
+realtime đã chặn phần lớn duplicate NGAY LÚC GHI (xem Entity
+Canonicalization ở mục 5), vẫn cần job này vì:
+- Case CHƯA từng biết trước (không có trong `dp_tech_alias_map`) — cần LLM
+  phán đoán, việc mà 2 đường ghi realtime không làm (tốn phí/độ trễ nếu gọi
+  LLM trên từng message).
+- Node ĐÃ TỒN TẠI SẴN trong Neo4j từ TRƯỚC KHI 1 alias được biết đến — Cypher
+  `MERGE` không tự tìm và xoá node cũ.
+
+**2 giai đoạn, chạy nối tiếp trong 1 lần** (`gold/tech_dedup.py`):
+1. Áp `dp_tech_alias_map` đã biết trực tiếp vào Neo4j hiện có (rẻ, không cần LLM)
+2. Tên còn lại chưa có trong alias map → gửi LLM 1 lần → nhóm tự tin cao thì
+   merge thẳng + ghi vào `dp_tech_alias_map` (lần sau rẻ hơn); nhóm không
+   chắc thì đưa vào `dp_tech_alias_review_queue` cho người duyệt
+
+Merge = chuyển hướng toàn bộ cạnh (`MENTIONS`/`REQUIRES`/`USES`/`IS_TECHNOLOGY`/`RELATED_TO`)
+từ node phụ sang node đại diện rồi xoá node phụ — viết bằng Cypher thuần
+(không dùng APOC, vì plugin APOC không có sẵn trên Neo4j Docker local, chỉ
+AuraDB cloud mới có).
+
 ### Embed Trigger
 
 **Chạy**: 4:00 AM daily
@@ -329,7 +368,9 @@ Gọi `POST {RAG_BASE_URL}/embed/trigger` với header `X-Embed-Secret`. `ai-rag
 
 **Chạy**: 6:00 AM, mỗi Chủ nhật
 
-Gọi `POST {ML_CLUSTERING_BASE_URL}/pipeline/trigger`. `ml-clustering` service chạy DVC pipeline (5 stages: snapshot → embed → cluster → evaluate → promote). Job chạy async, status track qua API của service.
+Gọi `POST {ML_CLUSTERING_BASE_URL}/pipeline/trigger`. `ml-clustering` service chạy DVC pipeline (5 stages: snapshot → embed → cluster → evaluate → promote). Sau khi trigger thành công, job block lại và **poll `GET /pipeline/status`** định kỳ (`CLUSTERING_RETRAIN_POLL_INTERVAL_S`, mặc định 30s) cho tới khi pipeline xong hoặc hết `CLUSTERING_RETRAIN_MAX_WAIT_S` (mặc định 7200s), rồi ghi kết quả thật vào `dp_pipeline_runs` — trước đây chỉ log việc trigger HTTP thành công, không biết pipeline có thật sự chạy xong hay lỗi (vd hết quota LLM ở Stage 4).
+
+Trong `ml-clustering`, model mới chỉ được gán alias `champion` trong MLflow Model Registry nếu tốt hơn (hoặc bằng) champion hiện tại theo cùng `primary_metric` dùng để chọn best trial — model cũ vẫn được đăng ký (giữ lịch sử) nhưng không ghi đè champion nếu kém hơn. Xem [`AI_PLATFORM.md` §3.2](./AI_PLATFORM.md#32-pipeline-5-stages).
 
 ---
 
@@ -344,6 +385,7 @@ Dùng **APScheduler** với `BackgroundScheduler` (chạy trong main thread củ
 | `gold_pg_etl` | `0 3 * * *` | Rebuild tech_analytics từ Neo4j |
 | `embed_trigger` | `0 4 * * *` | Trigger vector embedding mới |
 | `neo4j_enricher` | `0 5 * * *` | Cập nhật derived relationships |
+| `tech_dedup` | `30 5 * * *` | Gộp Technology node trùng lặp (alias map + LLM) |
 | `retrain_clustering` | `0 6 * * 0` | Retrain ML clustering (Chủ nhật) |
 
 ### Dev Mode — Chạy jobs ngay khi start
@@ -361,8 +403,16 @@ Khi `run_jobs_on_start=true`, tất cả jobs được trigger ngay lập tức 
 GOLD_ETL_HOUR=3        GOLD_ETL_MINUTE=0
 EMBED_TRIGGER_HOUR=4   EMBED_TRIGGER_MINUTE=0
 NEO4J_ENRICHER_HOUR=5  NEO4J_ENRICHER_MINUTE=0
+TECH_DEDUP_HOUR=5      TECH_DEDUP_MINUTE=30
 CLUSTERING_RETRAIN_HOUR=6  CLUSTERING_RETRAIN_MINUTE=0
 CLUSTERING_RETRAIN_DAY_OF_WEEK=sun
+```
+
+**LLM cho Tech Dedup** (Giai đoạn B — case chưa có trong alias map):
+```bash
+TECH_DEDUP_LLM_PROVIDER=gemini   # "gemini" | "openai"
+GEMINI_API_KEY=...
+OPENAI_API_KEY=...
 ```
 
 ---
@@ -443,6 +493,39 @@ CREATE TABLE dp_processed_jobs (
 );
 ```
 
+### dp_tech_alias_map
+
+Nguồn chuẩn hoá tên Technology duy nhất — dùng chung giữa
+`EntityExtractionService.java` (Java Kafka realtime), `silver/processor.py`
+(Python Silver), và `gold/tech_dedup.py` (Gold):
+
+```sql
+CREATE TABLE dp_tech_alias_map (
+    alias_normalized TEXT PRIMARY KEY,          -- casefold + trim, vd "golang"
+    canonical_name   TEXT NOT NULL,              -- vd "Go"
+    source           TEXT NOT NULL DEFAULT 'seed', -- seed | llm_auto | human_review
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+### dp_tech_alias_review_queue
+
+Case LLM (Tech Dedup Giai đoạn B) không tự tin — chờ người duyệt qua
+`AdminClusteringController` hoặc tương tự; quyết định được ghi nhớ, không hỏi
+lại cặp đã duyệt:
+
+```sql
+CREATE TABLE dp_tech_alias_review_queue (
+    id            BIGSERIAL PRIMARY KEY,
+    name_a        TEXT NOT NULL,
+    name_b        TEXT NOT NULL,
+    llm_reasoning TEXT,
+    status        TEXT NOT NULL DEFAULT 'pending', -- pending | approved | rejected
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    decided_at    TIMESTAMPTZ
+);
+```
+
 ### dp_pipeline_runs
 
 Job execution log:
@@ -450,7 +533,7 @@ Job execution log:
 ```sql
 CREATE TABLE dp_pipeline_runs (
     id          BIGSERIAL PRIMARY KEY,
-    job_name    TEXT NOT NULL,   -- gold_pg_etl | neo4j_enricher | embed_trigger
+    job_name    TEXT NOT NULL,   -- gold_pg_etl | neo4j_enricher | tech_dedup | embed_trigger
     status      TEXT NOT NULL,   -- running | success | failed
     rows_affected INT,
     error_msg   TEXT,
@@ -714,14 +797,18 @@ data-platform/
 │
 ├── gold/
 │   ├── pg_etl.py            # Neo4j → tech_analytics (3:00 AM)
-│   └── neo4j_enricher.py    # Derived relationships + trend score (5:00 AM)
+│   ├── neo4j_article_sync.py # dp_processed_articles → Neo4j (bù khi Kafka rớt, 2:00 AM)
+│   ├── neo4j_job_sync.py    # dp_processed_jobs → Neo4j (bù khi Kafka rớt, 2:30 AM)
+│   ├── neo4j_enricher.py    # Derived relationships + trend score (5:00 AM)
+│   └── tech_dedup.py        # Gộp Technology node trùng lặp (alias map + LLM, 5:30 AM)
 │
 ├── scheduler/
 │   ├── scheduler.py         # APScheduler setup
-│   └── jobs.py              # Job functions (pg_etl, enricher, embed, cluster)
+│   └── jobs.py              # Job functions (pg_etl, enricher, tech_dedup, embed, cluster)
 │
 └── common/
     ├── db.py                # get_pg_conn, get_neo4j_driver, get_minio_client
+    ├── tech_alias_cache.py  # Cache RAM dp_tech_alias_map — dùng chung Silver + Tech Dedup
     └── logger.py            # Loguru setup
 
 services/crawler/

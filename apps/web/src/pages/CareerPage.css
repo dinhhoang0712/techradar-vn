@@ -295,8 +295,7 @@
     opacity: 0.35;
 }
 
-.career-roadmap-content h2,
-.career-roadmap-content h3 {
+.career-roadmap-content .md-heading {
     position: relative;
     color: var(--text);
     font-size: 1rem;
@@ -305,8 +304,7 @@
     counter-increment: milestone;
 }
 
-.career-roadmap-content h2::before,
-.career-roadmap-content h3::before {
+.career-roadmap-content .md-heading::before {
     content: counter(milestone);
     position: absolute;
     left: -36px;

@@ -17,6 +17,7 @@ export default function UserProfile() {
     const [editMode, setEditMode] = useState(false);
     const [form, setForm] = useState({ full_name: '', email: '', avatar_url: '', bio: '', job_role: '', location: '', password: '', technologies: '', notify_inapp: true, notify_email: true });
     const [recommendations, setRecommendations] = useState([]);
+    const [recsBasedOn, setRecsBasedOn] = useState([]);
     const [loadingRecs, setLoadingRecs] = useState(false);
     const notify = useToast();
 
@@ -30,9 +31,12 @@ export default function UserProfile() {
         setLoadingRecs(true);
         try {
             const res = await getRecommendations(techs, 8);
-            setRecommendations(res?.data?.recommendations ?? res?.recommendations ?? []);
+            const data = res?.data ?? res ?? {};
+            setRecommendations(data.recommendations ?? []);
+            setRecsBasedOn(data.based_on ?? []);
         } catch {
             setRecommendations([]);
+            setRecsBasedOn([]);
         } finally {
             setLoadingRecs(false);
         }
@@ -389,6 +393,9 @@ export default function UserProfile() {
             {(loadingRecs || recommendations.length > 0) && (
                 <div className="profile-recommendations">
                     <h2 className="profile-recs-title">Công nghệ được gợi ý cho bạn</h2>
+                    {!loadingRecs && recsBasedOn.length > 0 && (
+                        <p className="profile-recs-based-on">Dựa trên: {recsBasedOn.join(', ')}</p>
+                    )}
                     {loadingRecs ? (
                         <div className="recs-loading">Đang tải gợi ý...</div>
                     ) : (
@@ -416,6 +423,17 @@ export default function UserProfile() {
                                             <span className="rec-cooc">Co-use: {rec.co_occurrence}</span>
                                         )}
                                     </div>
+                                    {rec.confidence != null && (
+                                        <div className="rec-confidence">
+                                            <div className="rec-confidence-track">
+                                                <div
+                                                    className="rec-confidence-fill"
+                                                    style={{ width: `${Math.round(rec.confidence * 100)}%` }}
+                                                />
+                                            </div>
+                                            <span className="rec-confidence-label">{Math.round(rec.confidence * 100)}% phù hợp</span>
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>

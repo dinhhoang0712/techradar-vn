@@ -5,6 +5,7 @@ Endpoints:
   GET  /health                   → health check + snapshot info
   GET  /clusters                 → danh sách tất cả cluster + label
   GET  /clusters/{cluster_id}    → chi tiết 1 cluster + members
+  PUT  /clusters/{cluster_id}/label → admin ghi đè nhãn AI-generated (internal-auth)
   GET  /tech/{tech_name}/cluster → tech này thuộc cluster nào
   POST /predict/batch            → batch lookup nhiều tech names
 
@@ -15,9 +16,11 @@ Chạy:
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi.responses import JSONResponse
 
 from app.observability import RequestContextMiddleware, configure_logging
 from app.routes_pipeline import router as pipeline_router
@@ -25,6 +28,7 @@ from app.schemas import (
     BatchPredictRequest,
     BatchPredictResponse,
     ClusterDetail,
+    ClusterLabelOverrideRequest,
     ClusterSummary,
     TechClusterResult,
 )
@@ -87,6 +91,9 @@ def _build_tech_result(name: str, store) -> TechClusterResult:
         label_en=label_info.get("label_en") if label_info else None,
         domain=label_info.get("domain") if label_info else None,
         found=True,
+        membership_probability=store.tech_membership_probability.get(tech_id),
+        outlier_score=store.tech_outlier_score.get(tech_id),
+        near_clusters=store.get_near_clusters(tech_id),
     )
 
 
@@ -96,11 +103,17 @@ def _build_tech_result(name: str, store) -> TechClusterResult:
 
 @app.get("/health")
 def health():
+    """
+    Trả 503 khi artifact chưa load được (`store.data_available=False`) — trước đây luôn
+    trả 200 kể cả khi store rỗng (vd artifact chưa từng được sinh, hoặc load lỗi), khiến
+    Docker healthcheck báo "healthy" cho 1 service thực chất không phục vụ được gì.
+    """
     store = get_store()
     n_clustered = sum(1 for cid in store.tech_to_cluster.values() if cid != -1)
     n_noise = sum(1 for cid in store.tech_to_cluster.values() if cid == -1)
-    return {
-        "status": "ok",
+    payload = {
+        "status": "ok" if store.data_available else "degraded",
+        "data_available": store.data_available,
         "snapshot_tag": store.tag,
         "requested_snapshot_tag": store.requested_tag,
         "artifact_source": store.source,
@@ -109,6 +122,9 @@ def health():
         "n_noise": n_noise,
         "n_clusters": len(store.cluster_labels),
     }
+    if not store.data_available:
+        return JSONResponse(status_code=503, content=payload)
+    return payload
 
 
 @app.get("/clusters", response_model=list[ClusterSummary])
@@ -130,6 +146,7 @@ def list_clusters(is_coherent: bool | None = Query(default=None)):
             confidence=info.get("confidence", 0.0),
             is_coherent=info.get("is_coherent", True),
             n_members=len(members),
+            overridden=info.get("overridden", False),
         ))
     return result
 
@@ -155,6 +172,59 @@ def get_cluster(cluster_id: int):
         outliers=info.get("outliers", []),
         n_members=len(members),
         members=sorted(members),
+        overridden=info.get("overridden", False),
+        overridden_by=info.get("overridden_by"),
+        overridden_at=info.get("overridden_at"),
+    )
+
+
+@app.put("/clusters/{cluster_id}/label", response_model=ClusterDetail)
+def update_cluster_label(
+    cluster_id: int,
+    body: ClusterLabelOverrideRequest,
+    x_internal_auth: str | None = Header(default=None, alias="X-Internal-Auth"),
+    x_actor: str | None = Header(default=None, alias="X-Actor"),
+):
+    """
+    Admin ghi đè nhãn AI-generated (label/label_en/description/domain) cho 1 cluster —
+    dùng khi LLM labeler gán sai/mơ hồ. `X-Actor` (tuỳ chọn) là id người thực hiện, phục
+    vụ hiển thị "đã sửa bởi ai" — không dùng để xác thực.
+    """
+    expected = os.getenv("INTERNAL_API_TOKEN", "")
+    if expected and x_internal_auth != expected:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    store = get_store()
+    try:
+        info = store.save_cluster_override(
+            cluster_id,
+            label=body.label,
+            label_en=body.label_en,
+            description=body.description,
+            domain=body.domain,
+            actor=x_actor,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    members = store.cluster_to_techs.get(cluster_id, [])
+    return ClusterDetail(
+        cluster_id=cluster_id,
+        label=info.get("label", ""),
+        label_en=info.get("label_en", ""),
+        domain=info.get("domain", "Other"),
+        confidence=info.get("confidence", 0.0),
+        is_coherent=info.get("is_coherent", True),
+        description=info.get("description", ""),
+        coherence_reason=info.get("coherence_reason"),
+        outliers=info.get("outliers", []),
+        n_members=len(members),
+        members=sorted(members),
+        overridden=info.get("overridden", False),
+        overridden_by=info.get("overridden_by"),
+        overridden_at=info.get("overridden_at"),
     )
 
 

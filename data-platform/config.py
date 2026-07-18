@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     # ml-clustering (retrain trigger)
     ml_clustering_base_url: str = "http://localhost:8001"
 
+    # Tech Dedup (LLM judge cho case chưa có trong dp_tech_alias_map)
+    openai_api_key: str = ""
+    gemini_api_key: str = ""
+    tech_dedup_llm_provider: str = "gemini"  # "gemini" | "openai"
+    tech_dedup_openai_model: str = "gpt-4o-mini"
+    tech_dedup_gemini_model: str = "gemini-2.5-flash"
+
     # Scheduler cron (hour, minute in Asia/Ho_Chi_Minh)
     article_sync_hour: int = 2
     article_sync_minute: int = 0
@@ -47,13 +54,23 @@ class Settings(BaseSettings):
     embed_trigger_minute: int = 0
     neo4j_enricher_hour: int = 5
     neo4j_enricher_minute: int = 0
+    tech_dedup_hour: int = 5
+    tech_dedup_minute: int = 30
     # Clustering retrain: chạy sau neo4j_enricher (6 AM), mỗi tuần Chủ nhật
     clustering_retrain_hour: int = 6
     clustering_retrain_minute: int = 0
     clustering_retrain_day_of_week: str = "sun"
+    # job_retrain_clustering poll GET /pipeline/status mỗi khoảng này (giây) cho tới khi
+    # pipeline xong hoặc hết clustering_retrain_max_wait_s, để biết kết quả THẬT (không
+    # chỉ "đã trigger thành công") trước khi ghi dp_pipeline_runs.
+    clustering_retrain_poll_interval_s: int = 30
+    clustering_retrain_max_wait_s: int = 7200
 
     # Dev: chạy tất cả jobs ngay khi start (seed initial data)
     run_jobs_on_start: bool = False
+
+    # Redis (kênh admin trigger job thủ công — xem common/job_trigger_listener.py)
+    redis_url: str = "redis://localhost:6379"
 
 
 @lru_cache(maxsize=1)

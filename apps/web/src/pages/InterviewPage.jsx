@@ -2,7 +2,11 @@ import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { runInterviewTurn } from '../api/interviewService';
 import RingGauge from '../components/common/RingGauge';
+import { renderMarkdown } from '../utils/markdown';
 import './InterviewPage.css';
+
+// Backend luôn cố định số lượt phỏng vấn (xem MAX_TURNS trong interview_service.py).
+const MAX_TURNS = 5;
 
 const COMMON_ROLES = [
     'Senior Backend Developer',
@@ -11,53 +15,6 @@ const COMMON_ROLES = [
     'DevOps Engineer',
     'Data Engineer',
 ];
-
-// Markdown đơn giản: bold, heading, bullet — sao chép từ ChatbotPage.jsx (pure function,
-// không phụ thuộc state của trang đó).
-function renderMarkdown(text) {
-    const lines = text.split('\n');
-    const elements = [];
-    let i = 0;
-    while (i < lines.length) {
-        const line = lines[i];
-        if (/^#{1,3} /.test(line)) {
-            const level = line.match(/^#+/)[0].length;
-            const content = line.replace(/^#+\s/, '');
-            const Tag = `h${Math.min(level + 2, 6)}`;
-            elements.push(<Tag key={i} className="md-heading">{inlineMarkdown(content)}</Tag>);
-            i++;
-        } else if (/^[*-] /.test(line)) {
-            const items = [];
-            while (i < lines.length && /^[*-] /.test(lines[i])) {
-                items.push(<li key={i}>{inlineMarkdown(lines[i].replace(/^[*-] /, ''))}</li>);
-                i++;
-            }
-            elements.push(<ul key={`ul-${i}`} className="md-list">{items}</ul>);
-        } else if (line.trim() === '') {
-            elements.push(<br key={`br-${i}`} />);
-            i++;
-        } else {
-            elements.push(<p key={i} className="md-p">{inlineMarkdown(line)}</p>);
-            i++;
-        }
-    }
-    return elements;
-}
-
-function inlineMarkdown(text) {
-    const parts = [];
-    let rest = text;
-    let key = 0;
-    while (rest.length > 0) {
-        const m = rest.match(/\*\*(.+?)\*\*/);
-        if (!m) { parts.push(rest); break; }
-        const idx = rest.indexOf(m[0]);
-        if (idx > 0) parts.push(rest.slice(0, idx));
-        parts.push(<strong key={key++}>{m[1]}</strong>);
-        rest = rest.slice(idx + m[0].length);
-    }
-    return parts;
-}
 
 export default function InterviewPage() {
     // Cho phép điều hướng từ trang Công ty với công ty mục tiêu điền sẵn
@@ -72,6 +29,7 @@ export default function InterviewPage() {
     const [history, setHistory] = useState([]);
     const [currentQuestion, setCurrentQuestion] = useState(null);
     const [currentAnswer, setCurrentAnswer] = useState('');
+    const [turn, setTurn] = useState(1);
     const [isFinal, setIsFinal] = useState(false);
     const [finalSummary, setFinalSummary] = useState(null);
 
@@ -83,6 +41,7 @@ export default function InterviewPage() {
             const res = await runInterviewTurn({ targetRole: targetRole.trim(), targetCompany: targetCompany.trim() });
             const data = res?.data ?? res;
             setCurrentQuestion(data.next_question);
+            setTurn(data.turn ?? 1);
             setStarted(true);
         } catch (err) {
             setError(err.message || 'Không thể bắt đầu buổi phỏng vấn. Vui lòng thử lại.');
@@ -110,6 +69,7 @@ export default function InterviewPage() {
                 setCurrentQuestion(null);
             } else {
                 setCurrentQuestion(data.next_question);
+                setTurn(data.turn ?? turn + 1);
             }
         } catch (err) {
             setError(err.message || 'Không thể tiếp tục buổi phỏng vấn. Vui lòng thử lại.');
@@ -123,6 +83,7 @@ export default function InterviewPage() {
         setHistory([]);
         setCurrentQuestion(null);
         setCurrentAnswer('');
+        setTurn(1);
         setIsFinal(false);
         setFinalSummary(null);
         setError('');
@@ -184,6 +145,11 @@ export default function InterviewPage() {
                 </div>
             ) : (
                 <div className="card interview-chat-card">
+                    {!isFinal && (
+                        <div className="interview-progress">
+                            <span>Câu {turn}/{MAX_TURNS}</span>
+                        </div>
+                    )}
                     <div className="chat-window">
                         {history.map((h, i) => (
                             <div key={i} className="interview-turn">

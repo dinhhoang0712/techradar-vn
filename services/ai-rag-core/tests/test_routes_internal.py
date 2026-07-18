@@ -73,3 +73,90 @@ def test_llm_error_returns_503(client, monkeypatch):
     monkeypatch.setattr(routes_internal, "generate", boom)
     res = c.post("/internal/ai/llm-summary", json={"tech1": "A", "tech2": "B"})
     assert res.status_code == 503
+
+
+# ── POST /internal/ai/moderation-suggestion ────────────────────────────────────
+
+MODERATION_PAYLOAD = {
+    "target_type": "POST",
+    "target_content": "Nội dung spam quảng cáo vay tiền lãi suất thấp",
+    "report_reason": "Đây là spam quảng cáo",
+}
+
+
+def test_moderation_suggestion_shape(client, monkeypatch):
+    c, _ = client
+
+    async def fake_generate(messages):
+        return '{"action": "REMOVE", "reason": "Đây là spam quảng cáo rõ ràng.", "confidence": 0.92}'
+
+    monkeypatch.setattr(routes_internal, "generate", fake_generate)
+
+    res = c.post("/internal/ai/moderation-suggestion", json=MODERATION_PAYLOAD)
+    assert res.status_code == 200
+    body = res.json()
+    assert set(body.keys()) == {"action", "reason", "confidence"}
+    assert body["action"] == "REMOVE"
+    assert body["confidence"] == 0.92
+
+
+def test_moderation_suggestion_dismiss(client, monkeypatch):
+    c, _ = client
+
+    async def fake_generate(messages):
+        return '{"action": "DISMISS", "reason": "Không vi phạm chính sách.", "confidence": 0.7}'
+
+    monkeypatch.setattr(routes_internal, "generate", fake_generate)
+
+    res = c.post("/internal/ai/moderation-suggestion", json=MODERATION_PAYLOAD)
+    assert res.status_code == 200
+    assert res.json()["action"] == "DISMISS"
+
+
+def test_moderation_suggestion_invalid_target_type_422(client):
+    c, _ = client
+    bad = {**MODERATION_PAYLOAD, "target_type": "USER"}
+    res = c.post("/internal/ai/moderation-suggestion", json=bad)
+    assert res.status_code == 422
+
+
+def test_moderation_suggestion_llm_error_returns_503(client, monkeypatch):
+    c, _ = client
+
+    async def boom(messages):
+        raise RuntimeError("LLM down")
+
+    monkeypatch.setattr(routes_internal, "generate", boom)
+
+    res = c.post("/internal/ai/moderation-suggestion", json=MODERATION_PAYLOAD)
+    assert res.status_code == 503
+
+
+def test_moderation_suggestion_falls_back_on_unparseable_response(client, monkeypatch):
+    c, _ = client
+
+    async def fake_generate(messages):
+        return "Xin lỗi, tôi không thể xử lý yêu cầu này."  # không phải JSON
+
+    monkeypatch.setattr(routes_internal, "generate", fake_generate)
+
+    res = c.post("/internal/ai/moderation-suggestion", json=MODERATION_PAYLOAD)
+    assert res.status_code == 200
+    body = res.json()
+    assert body["action"] == "DISMISS"
+    assert body["confidence"] == 0.0
+
+
+def test_moderation_suggestion_falls_back_on_invalid_action_value(client, monkeypatch):
+    c, _ = client
+
+    async def fake_generate(messages):
+        return '{"action": "BAN", "reason": "...", "confidence": 0.5}'  # action ngoài enum
+
+    monkeypatch.setattr(routes_internal, "generate", fake_generate)
+
+    res = c.post("/internal/ai/moderation-suggestion", json=MODERATION_PAYLOAD)
+    assert res.status_code == 200
+    body = res.json()
+    assert body["action"] == "DISMISS"
+    assert body["confidence"] == 0.0

@@ -70,6 +70,9 @@ class Settings(BaseSettings):
     # Forecast
     forecast_min_data_points: int = 3
 
+    # ML clustering microservice (tra cứu cluster_label cho từng tech trong report)
+    ml_clustering_base_url: str = "http://localhost:8001"
+
     model_config = SettingsConfigDict(
         env_file=str(_ENV_FILE),
         env_file_encoding="utf-8",

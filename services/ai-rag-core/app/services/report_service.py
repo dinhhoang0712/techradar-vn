@@ -2,15 +2,19 @@
 Report Generator Service — tạo báo cáo xu hướng tổng hợp theo period.
   1. PostgreSQL: top tech tăng trưởng nhất trong period
   2. Neo4j: top tech được mention nhiều nhất
-  3. LLM: tổng hợp thành báo cáo markdown
+  3. ml-clustering: nhãn cụm (cluster_label) cho từng tech
+  4. LLM: tổng hợp thành báo cáo markdown
 """
+import calendar
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
+import httpx
 from sqlalchemy import text
 
 from app.api.schemas import ReportRequest, ReportResponse
+from app.config import get_settings
 from app.core.generator import generate
 from app.db.neo4j_client import run_query
 from app.db.postgres_client import get_session_factory
@@ -24,13 +28,16 @@ def _parse_period_dates(period: str) -> tuple[str, str]:
     """Giống summarize_service._parse_period nhưng dành cho report."""
     if "Q" in period:
         year, q = period.split("-Q")
+        year = int(year)
         q = int(q)
         month_start = (q - 1) * 3 + 1
         month_end = q * 3
-        return f"{year}-{month_start:02d}-01", f"{year}-{month_end:02d}-31"
+        last_day = calendar.monthrange(year, month_end)[1]
+        return f"{year}-{month_start:02d}-01", f"{year}-{month_end:02d}-{last_day:02d}"
     if len(period) == 7:
         year, month = period.split("-")
-        return f"{year}-{month}-01", f"{year}-{month}-31"
+        last_day = calendar.monthrange(int(year), int(month))[1]
+        return f"{year}-{month}-01", f"{year}-{month}-{last_day:02d}"
     return f"{period}-01-01", f"{period}-12-31"
 
 
@@ -54,7 +61,7 @@ async def _top_growing_techs(start_date: str, end_date: str, top_n: int) -> list
                     ORDER BY AVG(growth_rate) DESC NULLS LAST
                     LIMIT :top_n
                 """),
-                {"start": start_date, "end": end_date, "top_n": top_n},
+                {"start": date.fromisoformat(start_date), "end": date.fromisoformat(end_date), "top_n": top_n},
             )
             return [dict(r._mapping) for r in result]
         except Exception as e:
@@ -80,6 +87,26 @@ async def _top_mentioned_techs(start_date: str, end_date: str, limit: int = 10) 
     except Exception as e:
         logger.warning("top_mentioned_techs query failed: %s", e)
         return []
+
+
+async def _fetch_cluster_labels(tech_names: list[str]) -> dict[str, str]:
+    """ml-clustering: nhãn cụm cho danh sách tech, keyed theo tech_name (bỏ qua tech noise/không tìm thấy)."""
+    if not tech_names:
+        return {}
+    base_url = get_settings().ml_clustering_base_url
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(f"{base_url}/predict/batch", json={"tech_names": tech_names})
+            resp.raise_for_status()
+            data = resp.json()
+        return {
+            r["tech_name"]: r["label"]
+            for r in data.get("results", [])
+            if r.get("found") and r.get("label")
+        }
+    except Exception as e:
+        logger.warning("ml-clustering /predict/batch failed: %s", e)
+        return {}
 
 
 async def handle(req: ReportRequest) -> ReportResponse:
@@ -116,9 +143,16 @@ async def handle(req: ReportRequest) -> ReportResponse:
                 "source":        "articles",
             })
 
-    # 4. LLM generate report
+    # 4. ml-clustering: gắn cluster_label cho từng tech
+    cluster_labels = await _fetch_cluster_labels([t["name"] for t in top_techs])
+    for t in top_techs:
+        label = cluster_labels.get(t["name"])
+        if label:
+            t["cluster_label"] = label
+
+    # 5. LLM generate report
     growing_lines = "\n".join(
-        f"- {t['name']}: tăng trưởng {t.get('growth_rate') or 0:+.1f}%, {t.get('job_count', 0)} việc làm"
+        f"- {t['technology_name']}: tăng trưởng {t.get('avg_growth') or 0:+.1f}%, {t.get('total_jobs', 0)} việc làm"
         for t in top_growing[:10]
     )
     mentioned_lines = "\n".join(

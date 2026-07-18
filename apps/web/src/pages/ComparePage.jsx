@@ -144,6 +144,7 @@ export default function ComparePage() {
         }
         const [a, b] = compareData;
         const sumJobs = (item) => (item.monthly || []).reduce((s, p) => s + (p.job_count || 0), 0);
+        const sumArticles = (item) => (item.monthly || []).reduce((s, p) => s + (p.article_count || 0), 0);
 
         let cancelled = false;
         const fetchSummary = async () => {
@@ -157,7 +158,8 @@ export default function ComparePage() {
                     growthRate2: b.growth_rate || 0,
                     jobCount1: sumJobs(a),
                     jobCount2: sumJobs(b),
-                    // Không có nguồn article_count theo từng công nghệ ở /compare/search nên gửi 0.
+                    articleCount1: sumArticles(a),
+                    articleCount2: sumArticles(b),
                 });
                 if (!cancelled) setSummary(res?.data?.summary || '');
             } catch (err) {

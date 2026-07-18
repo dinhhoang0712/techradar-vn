@@ -4,6 +4,7 @@ import com.techpulse.techradar.features.auth.ports.UserRepository;
 import com.techpulse.techradar.features.notification.application.NotificationService;
 import com.techpulse.techradar.features.notification.domain.Notification;
 import com.techpulse.techradar.features.social.ports.PostRepository;
+import com.techpulse.techradar.features.social.realtime.FeedBroadcaster;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -19,6 +20,7 @@ public class ToggleLikeUseCase {
     private final PostRepository postRepository;
     private final NotificationService notificationService;
     private final UserRepository userRepository;
+    private final FeedBroadcaster feedBroadcaster;
 
     public Mono<Void> like(String postId, String userId) {
         UUID postUuid = UUID.fromString(postId);
@@ -32,7 +34,19 @@ public class ToggleLikeUseCase {
                             .onErrorResume(e -> {
                                 log.warn("Could not create POST_LIKE notification for post {}", postId, e);
                                 return Mono.empty();
-                            });
+                            })
+                            .then(broadcastLike(postUuid, userUuid));
+                })
+                .then();
+    }
+
+    /** Broadcasts the updated like count to the live feed (Redis Pub/Sub -> SSE). Best-effort. */
+    private Mono<Void> broadcastLike(UUID postId, UUID likerId) {
+        return postRepository.findById(postId, likerId)
+                .doOnNext(row -> feedBroadcaster.publishLike(postId.toString(), row.authorId(), row.likeCount()))
+                .onErrorResume(e -> {
+                    log.warn("Could not broadcast like for post {}", postId, e);
+                    return Mono.empty();
                 })
                 .then();
     }

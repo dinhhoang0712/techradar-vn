@@ -816,3 +816,8 @@ button.breadcrumb-item:hover {
     font-weight: 700;
     font-size: 0.85rem;
 }
+
+.ep-value {
+    color: var(--text);
+    font-weight: 600;
+}

@@ -41,6 +41,27 @@ const LINK_TYPE_LABELS = {
 };
 const linkTypeLabel = (link) => LINK_TYPE_LABELS[link?.type] || link?.label || link?.type || '';
 
+// Nhãn tiếng Việt cho các property backend gắn trực tiếp lên quan hệ (rel.asMap() ở
+// Neo4jGraphRepository trả nguyên map, không cố định danh sách key) — khoá lạ chưa có nhãn thì
+// hiện tên gốc đã tách dấu gạch dưới, không ẩn đi, để không mất thông tin khi có property mới.
+const EDGE_PROPERTY_LABELS = {
+    evidence_count: 'Số lần ghi nhận',
+    co_mention_count: 'Số lần cùng xuất hiện',
+    first_seen: 'Lần đầu ghi nhận',
+    last_updated: 'Cập nhật gần nhất',
+    sentiment_score: 'Điểm cảm xúc',
+    salary: 'Mức lương',
+    location: 'Địa điểm',
+};
+
+const edgePropertyLabel = (key) => EDGE_PROPERTY_LABELS[key]
+    || key.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
+
+const formatEdgePropertyValue = (value) => {
+    if (typeof value === 'number') return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(2);
+    return String(value);
+};
+
 const NODE_TYPES = {
     technology: { color: '#6C63FF', size: 10 },
     company: { color: '#FF6584', size: 14 },
@@ -1064,6 +1085,14 @@ export default function GraphExplorer() {
                                         <span className="ep-label">Loại quan hệ</span>
                                         <span className="ep-type" style={{ color: LINK_TYPE_COLORS[selectedEdge.type] }}>{LINK_TYPE_LABELS[selectedEdge.type] || selectedEdge.type}</span>
                                     </div>
+                                    {Object.entries(selectedEdge.properties || {}).map(([key, value]) => (
+                                        value != null && (
+                                            <div className="ep-row" key={key}>
+                                                <span className="ep-label">{edgePropertyLabel(key)}</span>
+                                                <span className="ep-value">{formatEdgePropertyValue(value)}</span>
+                                            </div>
+                                        )
+                                    ))}
                                 </div>
                             </div>
                         )}

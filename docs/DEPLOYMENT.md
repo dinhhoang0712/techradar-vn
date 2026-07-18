@@ -67,7 +67,7 @@ bundled), nên một `.env` kiểu cloud không thể làm hỏng kết nối. C
 | `MAIL_USER` / `MAIL_PASSWORD` | rỗng | Tài khoản/API key đăng nhập SMTP thật (secret — không commit) |
 | `MAIL_SMTP_AUTH` / `MAIL_SMTP_STARTTLS` | `false` / `false` | Prod với SMTP thật **luôn set `true`** |
 | `MAIL_FROM` | `no-reply@techradar.vn` | Địa chỉ "From" — nên dùng domain đã xác thực SPF/DKIM |
-| `MLCLUSTER_S3_*` | rỗng | (Tuỳ chọn) artifact clustering trên S3 |
+| `MLCLUSTER_MINIO_*` | rỗng | (Tuỳ chọn) artifact clustering trên MinIO |
 
 ## 5. Thứ tự khởi động & health
 

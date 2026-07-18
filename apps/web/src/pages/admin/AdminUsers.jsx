@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { fetchAdminUsers, createAdminUser, updateAdminUser, deleteAdminUser } from '../../api/adminService';
+import { fetchAdminUsers, createAdminUser, updateAdminUser, deleteAdminUser, sendAdminNotification } from '../../api/adminService';
 import Modal from '../../components/common/Modal';
 import Avatar from '../../components/common/Avatar';
 import { useToast } from '../../components/common/toastContext';
@@ -13,6 +13,13 @@ export default function AdminUsers() {
     const [deleteTarget, setDeleteTarget] = useState(null);
     const [saving, setSaving] = useState(false);
     const notify = useToast();
+
+    // Gửi thông báo: notifyTarget === 'broadcast' | { id, full_name, ... } (1 user) | null (đóng)
+    const [notifyTarget, setNotifyTarget] = useState(null);
+    const [notifyTitle, setNotifyTitle] = useState('');
+    const [notifyBody, setNotifyBody] = useState('');
+    const [notifyLink, setNotifyLink] = useState('');
+    const [sendingNotify, setSendingNotify] = useState(false);
 
     // Form states
     const [name, setName] = useState('');
@@ -106,6 +113,42 @@ export default function AdminUsers() {
         }
     };
 
+    const openBroadcast = () => {
+        setNotifyTitle(''); setNotifyBody(''); setNotifyLink('');
+        setNotifyTarget('broadcast');
+    };
+
+    const openNotifyUser = (user) => {
+        setNotifyTitle(''); setNotifyBody(''); setNotifyLink('');
+        setNotifyTarget(user);
+    };
+
+    const handleSendNotification = async (e) => {
+        e.preventDefault();
+        setSendingNotify(true);
+        try {
+            const res = await sendAdminNotification({
+                title: notifyTitle,
+                body: notifyBody,
+                link: notifyLink || undefined,
+                userId: notifyTarget === 'broadcast' ? undefined : notifyTarget.id,
+            });
+            const recipients = res?.data?.recipients ?? 0;
+            notify({
+                title: notifyTarget === 'broadcast'
+                    ? `Đã gửi thông báo tới ${recipients} người dùng`
+                    : 'Đã gửi thông báo',
+                variant: 'success',
+            });
+            setNotifyTarget(null);
+        } catch (error) {
+            console.error('Failed to send admin notification:', error);
+            notify({ title: 'Gửi thông báo thất bại', body: error.message, variant: 'error' });
+        } finally {
+            setSendingNotify(false);
+        }
+    };
+
     return (
         <div className="admin-users">
             <div className="users-header">
@@ -114,6 +157,7 @@ export default function AdminUsers() {
                     <p>Hỗ trợ thao tác tạo, khoá, chỉnh sửa và phân quyền tài khoản hệ thống qua API.</p>
                 </div>
                 <div className="users-actions">
+                    <button className="btn btn-secondary" onClick={openBroadcast}>📢 Gửi thông báo</button>
                     <button className="btn btn-primary" onClick={handleOpenAdd}>Thêm tài khoản</button>
                 </div>
             </div>
@@ -156,6 +200,7 @@ export default function AdminUsers() {
                                     </span>
                                 </td>
                                 <td className="u-actions">
+                                    <button className="u-btn notify" onClick={() => openNotifyUser(u)}>Thông báo</button>
                                     <button className="u-btn edit" onClick={() => handleOpenEdit(u)}>Sửa</button>
                                     <button className="u-btn del" onClick={() => setDeleteTarget(u)}>Xoá</button>
                                 </td>
@@ -215,6 +260,39 @@ export default function AdminUsers() {
                         <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)}>Hủy bỏ</button>
                         <button className="btn btn-danger" onClick={handleDelete}>Xoá</button>
                     </div>
+                </Modal>
+            )}
+
+            {notifyTarget && (
+                <Modal
+                    title={notifyTarget === 'broadcast' ? 'Gửi thông báo tới tất cả người dùng' : `Gửi thông báo tới ${notifyTarget.full_name || notifyTarget.name}`}
+                    onClose={() => setNotifyTarget(null)}
+                >
+                    <form onSubmit={handleSendNotification} className="modal-form">
+                        <p className="notify-target-hint">
+                            {notifyTarget === 'broadcast'
+                                ? 'Thông báo sẽ được gửi tới mọi tài khoản đang ở trạng thái Active.'
+                                : `Chỉ gửi riêng cho ${notifyTarget.email}.`}
+                        </p>
+                        <div className="form-group">
+                            <label>Tiêu đề</label>
+                            <input required type="text" value={notifyTitle} onChange={e => setNotifyTitle(e.target.value)} placeholder="Ví dụ: Bảo trì hệ thống" />
+                        </div>
+                        <div className="form-group">
+                            <label>Nội dung</label>
+                            <textarea required rows={4} value={notifyBody} onChange={e => setNotifyBody(e.target.value)} placeholder="Nội dung thông báo…" />
+                        </div>
+                        <div className="form-group">
+                            <label>Đường dẫn (tuỳ chọn)</label>
+                            <input type="text" value={notifyLink} onChange={e => setNotifyLink(e.target.value)} placeholder="/dashboard" />
+                        </div>
+                        <div className="modal-actions">
+                            <button type="button" className="btn btn-ghost" onClick={() => setNotifyTarget(null)} disabled={sendingNotify}>Hủy bỏ</button>
+                            <button type="submit" className="btn btn-primary" disabled={sendingNotify}>
+                                {sendingNotify ? 'Đang gửi…' : 'Gửi thông báo'}
+                            </button>
+                        </div>
+                    </form>
                 </Modal>
             )}
         </div>

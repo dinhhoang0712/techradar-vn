@@ -1,0 +1,86 @@
+{
+  "0": {
+    "cluster_id": 0,
+    "label": "UNLABELED",
+    "label_en": "UNLABELED",
+    "description": "gemini thất bại sau 4 lần thử: No module named 'google.generativeai'",
+    "domain": "Other",
+    "confidence": 0.0,
+    "is_coherent": false,
+    "coherence_reason": "Labeling failed",
+    "outliers": [],
+    "member_count": 10,
+    "sample_techs": [
+      "RabbitMQ",
+      "PyTorch",
+      "TensorFlow",
+      "ML",
+      "Redis",
+      "Spring Boot",
+      "ChatGPT",
+      "React",
+      "GCP",
+      "Vue"
+    ]
+  },
+  "1": {
+    "cluster_id": 1,
+    "label": "UNLABELED",
+    "label_en": "UNLABELED",
+    "description": "gemini thất bại sau 4 lần thử: No module named 'google.generativeai'",
+    "domain": "Other",
+    "confidence": 0.0,
+    "is_coherent": false,
+    "coherence_reason": "Labeling failed",
+    "outliers": [],
+    "member_count": 7,
+    "sample_techs": [
+      "Java",
+      "PostgreSQL",
+      "MySQL",
+      ".NET",
+      "C#",
+      "Oracle",
+      "JavaScript"
+    ]
+  },
+  "2": {
+    "cluster_id": 2,
+    "label": "UNLABELED",
+    "label_en": "UNLABELED",
+    "description": "gemini thất bại sau 4 lần thử: No module named 'google.generativeai'",
+    "domain": "Other",
+    "confidence": 0.0,
+    "is_coherent": false,
+    "coherence_reason": "Labeling failed",
+    "outliers": [],
+    "member_count": 5,
+    "sample_techs": [
+      "SQL",
+      "HTML",
+      "LLM",
+      "NLP",
+      "CSS"
+    ]
+  },
+  "3": {
+    "cluster_id": 3,
+    "label": "UNLABELED",
+    "label_en": "UNLABELED",
+    "description": "gemini thất bại sau 4 lần thử: No module named 'google.generativeai'",
+    "domain": "Other",
+    "confidence": 0.0,
+    "is_coherent": false,
+    "coherence_reason": "Labeling failed",
+    "outliers": [],
+    "member_count": 6,
+    "sample_techs": [
+      "Digital Transformation",
+      "Big Data",
+      "Cybersecurity",
+      "Machine Learning",
+      "IoT",
+      "Deep Learning"
+    ]
+  }
+}

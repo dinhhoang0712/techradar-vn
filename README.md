@@ -317,7 +317,7 @@ Backend được xây dựng với **Spring Boot 3.4** theo mô hình **Hexagona
 
 </div>
 
-> **Ghi chú triển khai:** Bronze lưu raw trên **MinIO**; Silver ghi **PostgreSQL** (`dp_processed_*` — dedup, quality); KG import vào **Neo4j**; Gold ETL tổng hợp **`tech_analytics`** trên PostgreSQL. Chi tiết: [Data Platform](docs/DATA_PLATFORM.md).
+> **Ghi chú triển khai:** Bronze lưu raw trên **MinIO**; Silver ghi **PostgreSQL** (`dp_processed_*` — dedup, quality, canonical hoá tên công nghệ qua `dp_tech_alias_map`); KG import vào **Neo4j**; Gold ETL tổng hợp **`tech_analytics`** trên PostgreSQL và gộp Technology node trùng lặp (`tech_dedup`). Chi tiết: [Data Platform](docs/DATA_PLATFORM.md).
 
 ### NLP Processing
 
@@ -350,7 +350,7 @@ Luồng chatbot: entity extraction → hybrid retrieval (graph + vector + SQL) �
 
 ### Node Types
 
-- **Technology**: Tên công nghệ, category, trend score, demand score
+- **Technology**: Tên công nghệ, category, trend score, demand score — tên được canonical hoá trước khi ghi (vd "Golang" → "Go") để tránh trùng lặp node, chi tiết ở [Database Architecture](docs/DATABASE.md#43-tech-name-canonicalization--dedup-dp_tech_alias_map)
 - **Company**: Tên công ty, field, size, location, rating
 - **Job**: Title, description, requirement, benefit, salary
 - **Skill**: Tên skill, category, demand score
@@ -581,7 +581,7 @@ docker logs techradar-crawler -f
 # MailHog: http://localhost:8025
 ```
 
-> 💡 **Vì sao có `RUN_JOBS_ON_START` và `COMPOSE_PROFILES`?** Mặc định (`docker compose up --build` trơn) hệ thống chạy nhưng **không có dữ liệu thật** — crawler và các job đồng bộ/ETL đều opt-in hoặc theo lịch cron ban đêm. `COMPOSE_PROFILES=crawl,vector` bật crawler (Neo4j/Postgres có dữ liệu thật gần như ngay lập tức qua đường Kafka realtime) và Qdrant vector store cho RAG; `RUN_JOBS_ON_START=true` khiến `data-platform` chạy ngay 5 job đồng bộ/rebuild (kể cả `tech_analytics` nuôi Trend Radar) thay vì đợi tới 02:00–06:00 sáng. Chi tiết: [Data Platform Guide](docs/DATA_PLATFORM.md).
+> 💡 **Vì sao có `RUN_JOBS_ON_START` và `COMPOSE_PROFILES`?** Mặc định (`docker compose up --build` trơn) hệ thống chạy nhưng **không có dữ liệu thật** — crawler và các job đồng bộ/ETL đều opt-in hoặc theo lịch cron ban đêm. `COMPOSE_PROFILES=crawl,vector` bật crawler (Neo4j/Postgres có dữ liệu thật gần như ngay lập tức qua đường Kafka realtime) và Qdrant vector store cho RAG; `RUN_JOBS_ON_START=true` khiến `data-platform` chạy ngay 6 job đồng bộ/rebuild (kể cả `tech_analytics` nuôi Trend Radar và `tech_dedup` gộp Technology node trùng lặp) thay vì đợi tới 02:00–05:30 sáng. Chi tiết: [Data Platform Guide](docs/DATA_PLATFORM.md).
 
 **Docker Compose Profiles (opt-in):**
 

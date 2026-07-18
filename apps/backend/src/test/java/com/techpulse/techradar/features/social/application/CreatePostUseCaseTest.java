@@ -4,6 +4,7 @@ import com.techpulse.techradar.features.company.application.GetCompaniesUseCase;
 import com.techpulse.techradar.features.company.domain.CompanyProfile;
 import com.techpulse.techradar.features.social.adapters.input.SocialDtos;
 import com.techpulse.techradar.features.social.ports.PostRepository;
+import com.techpulse.techradar.features.social.realtime.FeedBroadcaster;
 import com.techpulse.techradar.shared.exception.AppException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,12 +16,14 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -38,15 +41,24 @@ class CreatePostUseCaseTest {
     private GetCompaniesUseCase getCompaniesUseCase;
     @Mock
     private MentionNotifier mentionNotifier;
+    @Mock
+    private FeedBroadcaster feedBroadcaster;
 
     private CreatePostUseCase useCase;
 
     private final String userId = UUID.randomUUID().toString();
 
+    private PostRepository.FeedRow sampleFeedRow(UUID postId) {
+        return new PostRepository.FeedRow(
+                postId, UUID.fromString(userId), "Test User", null, "content", LocalDateTime.now(),
+                0, 0, false, List.of(), List.of(), null, null, null);
+    }
+
     @BeforeEach
     void setUp() {
-        useCase = new CreatePostUseCase(postRepository, postImageService, getCompaniesUseCase, mentionNotifier);
+        useCase = new CreatePostUseCase(postRepository, postImageService, getCompaniesUseCase, mentionNotifier, feedBroadcaster);
         lenient().when(postRepository.insert(any())).thenReturn(Mono.empty());
+        lenient().when(postRepository.findById(any(), any())).thenAnswer(inv -> Mono.just(sampleFeedRow(inv.getArgument(0))));
         lenient().when(postImageService.validate(any())).thenReturn(List.of());
         lenient().when(postImageService.persist(any(), any())).thenReturn(Mono.empty());
         lenient().when(mentionNotifier.notify(any(), any(), any(), any())).thenReturn(Mono.empty());
@@ -146,5 +158,23 @@ class CreatePostUseCaseTest {
         useCase.execute(userId, "Hi @someone", null, null, mentioned).block();
 
         verify(mentionNotifier).notify(UUID.fromString(userId), mentioned, "bài viết", "/feed");
+    }
+
+    @Test
+    void execute_broadcastsTheNewPostToTheLiveFeed() {
+        String postId = useCase.execute(userId, "Broadcast me", null, null, null).block();
+
+        verify(feedBroadcaster).publishPostCreated(argThat(post -> post.id().equals(postId)));
+    }
+
+    @Test
+    void execute_stillSucceedsWhenBroadcastLookupFails() {
+        when(postRepository.findById(any(), any())).thenReturn(Mono.error(new RuntimeException("boom")));
+
+        StepVerifier.create(useCase.execute(userId, "Resilient post", null, null, null))
+                .expectNextCount(1)
+                .verifyComplete();
+
+        verify(feedBroadcaster, never()).publishPostCreated(any());
     }
 }

@@ -73,6 +73,8 @@ def build_feature_matrix(
     company_tfidf: tuple[sp.csr_matrix, list[str]] | None,
     job_tfidf: tuple[sp.csr_matrix, list[str]] | None,
     params: FeatureParams,
+    skill_jaccard: pd.DataFrame | None = None,
+    article_temporal: pd.DataFrame | None = None,
 ) -> tuple[np.ndarray, FeatureMeta]:
     """
     Gộp tất cả feature sources → X dense float32 + FeatureMeta.
@@ -145,6 +147,16 @@ def build_feature_matrix(
     # 9. Job TF-IDF
     if job_tfidf is not None and params.use_job_tfidf:
         add_block("job_tfidf", job_tfidf[0])
+
+    # 10. Skill jaccard (bag-of-skills qua job bridge: tech -> job -> skill)
+    if skill_jaccard is not None and params.use_skill_jaccard:
+        cols = [c for c in skill_jaccard.columns if c != "tech_id"]
+        add_block("skill_jaccard", _reindex(skill_jaccard, tech_ids)[cols].values)
+
+    # 11. Article temporal stats (recency + sentiment từ Article mentions)
+    if article_temporal is not None and params.use_article_temporal_stats:
+        cols = [c for c in article_temporal.columns if c != "tech_id"]
+        add_block("article_temporal", _reindex(article_temporal, tech_ids)[cols].values)
 
     # Ghép tất cả thành ma trận dense
     X = np.hstack(blocks).astype(np.float32)

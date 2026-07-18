@@ -91,6 +91,34 @@ def _compute_near_clusters(
 
 
 # ---------------------------------------------------------------------------
+# RELATED_TO validation — dùng quan hệ tech-tech đã curate thủ công để "chấm
+# điểm" kết quả cụm: nếu 2 tech được người curate xác nhận liên quan mà lại bị
+# xếp khác cụm, đó là tín hiệu cụm có thể chưa tốt (không nhiều — chỉ ~70
+# cạnh — nhưng có sẵn miễn phí và mang chất lượng "ground truth" cao).
+#
+# Hàm tính toán thuần (compute_related_split_ratio) đã chuyển sang
+# src/clustering/evaluator.py để grid_search có thể gọi cho MỌI trial, không
+# chỉ trial thắng cuối — xem tuner.grid_search(..., tech_ids, df_related).
+# Ở đây chỉ còn phần load file (I/O), tách riêng để evaluator không phụ thuộc
+# đường dẫn snapshot.
+# ---------------------------------------------------------------------------
+
+def _load_related_edges(tag: str) -> pd.DataFrame:
+    """
+    Đọc `edges_tech_related_tech.parquet` của snapshot. Không raise nếu thiếu
+    file — trả DataFrame rỗng kèm log warning (evaluator.compute_related_split_ratio
+    tự xử lý DataFrame rỗng, trả về NaN).
+    """
+    from conf.config import snapshot_dir
+
+    edges_path = snapshot_dir(tag) / "edges_tech_related_tech.parquet"
+    if not edges_path.exists():
+        logger.warning("_load_related_edges: thiếu {} — related_split_ratio sẽ là NaN.", edges_path)
+        return pd.DataFrame(columns=["tech_id_a", "tech_id_b"])
+    return pd.read_parquet(edges_path)
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -124,6 +152,7 @@ def main(
       5. Return 0 nếu OK; 1 nếu không trial nào pass.
     """
     from conf.config import features_dir, load_params, metrics_dir, models_dir
+    from src.clustering.evaluator import compute_related_split_ratio
     from src.clustering.trainer import train_by_algorithm
     from src.clustering.tuner import (
         find_eps_via_kdistance,
@@ -187,9 +216,11 @@ def main(
             except Exception as exc:
                 logger.warning("k-distance thất bại (bỏ qua): {}", exc)
 
-        # 3d. Grid search
+        # 3d. Grid search — nạp RELATED_TO 1 lần, dùng cho MỌI trial (constraint
+        # + tie-break trong select_best_trial), không chỉ báo cáo sau cùng.
         logger.info("Bắt đầu grid search...")
-        trials = grid_search(X, params_obj.clustering)
+        df_related = _load_related_edges(tag)
+        trials = grid_search(X, params_obj.clustering, tech_ids=tech_ids, df_related=df_related)
 
         # 3e. Log từng trial
         for trial in trials:
@@ -226,8 +257,23 @@ def main(
             mlflow.log_dict(near_clusters_map, "near_clusters.json")
         logger.info("near_clusters.json logged vào best run {}", best_run_id)
 
-        # 3j. Register model
-        register_best_model(best_run_id, params_obj.mlflow.registry_model_name)
+        # 3j. Register model — chỉ promote alias "champion" nếu tốt hơn/bằng champion
+        # hiện tại theo cùng primary_metric đã dùng để chọn best trial (xem select_best_trial).
+        primary_metric = params_obj.clustering.selection.primary_metric
+        registration = register_best_model(
+            best_run_id,
+            params_obj.mlflow.registry_model_name,
+            primary_metric=primary_metric,
+            primary_metric_value=getattr(best, primary_metric),
+        )
+        mlflow.set_tag("promoted_to_champion", str(registration["promoted"]))
+
+        # 3k'. RELATED_TO cross-cluster split ratio — validate cụm bằng quan hệ
+        # đã curate thủ công. Đã áp dụng như constraint/tie-break TRONG grid
+        # search (xem best.related_split_ratio); gọi lại đây chỉ để lấy thêm
+        # breakdown (related_pairs_total/evaluated/split) cho báo cáo — tái
+        # dùng df_related đã load, không đọc lại file.
+        related_metric = compute_related_split_ratio(df_related, tech_ids, best_labels)
 
         # 3k. Write metrics file (DVC metric)
         metrics_dict = {
@@ -237,8 +283,10 @@ def main(
             "silhouette":         best.silhouette,
             "davies_bouldin":     best.davies_bouldin,
             "calinski_harabasz":  best.calinski_harabasz,
+            "dbcv":               best.dbcv,
             "wall_seconds":       best.wall_seconds,
             "n_near_edges":       n_near_edges,
+            **related_metric,
         }
         write_metrics_file(metrics_dict, metrics_dir(tag) / "best_metrics.json")
 
@@ -251,13 +299,39 @@ def main(
             pickle.dump(model, f)
         logger.info("Model saved → {}", model_path)
 
+        # Soft-clustering info (chỉ có với hdbscan — gói `hdbscan` gốc):
+        #   - membership_probability: độ tin cậy gán cụm (0..1, 0 với noise)
+        #   - outlier_score:          GLOSH outlier score (cao = "chắc chắn noise")
+        n_rows = len(tech_ids)
+        membership_probability = getattr(model, "probabilities_", None)
+        outlier_score = getattr(model, "outlier_scores_", None)
+
         labels_path = m_dir / "best_labels.parquet"
         df_labels = pd.DataFrame({
             "tech_id":    tech_ids,
             "cluster_id": best_labels.tolist(),
+            "membership_probability": (
+                np.asarray(membership_probability, dtype=float).tolist()
+                if membership_probability is not None and len(membership_probability) == n_rows
+                else [None] * n_rows
+            ),
+            "outlier_score": (
+                np.asarray(outlier_score, dtype=float).tolist()
+                if outlier_score is not None and len(outlier_score) == n_rows
+                else [None] * n_rows
+            ),
         })
         df_labels.to_parquet(labels_path, index=False)
         logger.info("Labels saved → {} ({} rows)", labels_path, len(df_labels))
+
+        # near_clusters.json cũng lưu ra đĩa (không chỉ MLflow) để app/store.py
+        # đọc lại và expose qua API (trước đây chỉ log MLflow artifact → chết
+        # ở tầng serving, không route nào đọc lại).
+        near_clusters_path = m_dir / "near_clusters.json"
+        near_clusters_path.write_text(
+            json.dumps(near_clusters_map, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        logger.info("near_clusters.json saved → {}", near_clusters_path)
 
     # 4. Summary
     print(f"\n{'='*55}")
@@ -268,8 +342,11 @@ def main(
     print(f"  n_clusters       : {best.n_clusters}")
     print(f"  Silhouette       : {best.silhouette:.4f}" if best.silhouette else "  Silhouette       : N/A")
     print(f"  Davies-Bouldin   : {best.davies_bouldin:.4f}" if best.davies_bouldin else "  Davies-Bouldin   : N/A")
+    print(f"  DBCV             : {best.dbcv:.4f}" if best.dbcv else "  DBCV             : N/A")
     print(f"  Noise ratio      : {best.noise_ratio:.3f}  ({best.n_noise}/{meta.n_techs} noise)")
     print(f"  Near-cluster edges: {n_near_edges}")
+    print(f"  RELATED_TO split : {related_metric['related_pairs_split']}/{related_metric['related_pairs_evaluated']}"
+          f" ({related_metric['related_pairs_split_ratio']})")
     print(f"  MLflow best run  : {best_run_id}")
     print(f"{'='*55}\n")
 

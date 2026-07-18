@@ -44,6 +44,7 @@ và `data-platform` chỉ được cấp quyền ghi đúng phạm vi bảng c�
 | `content_report` | backend | Content moderation (V11/V12) — user report post/comment vi phạm; admin xem/dismiss qua `SocialModerationService`/`AdminSocialController`. |
 | `conversation`, `direct_message` | backend | Direct messaging (V9); realtime là SSE, fan-out qua Redis Pub/Sub (`MessageBroadcaster`, xem §5) nên chạy đúng với nhiều instance backend. |
 | `dp_bronze_catalog`, `dp_processed_articles`, `dp_processed_jobs`, `dp_pipeline_runs` | **data-platform** (Python) | Backend/Flyway chỉ tạo bảng (V7); ghi/đọc thuộc service `data-platform` (bronze/silver medallion catalog). `ai-rag-core` và `apps/backend` không đụng vào các bảng này. |
+| `dp_tech_alias_map`, `dp_tech_alias_review_queue` | **CẢ 2** — `apps/backend` (`TechAliasCache.java`, chỉ đọc) VÀ `data-platform` (`common/tech_alias_cache.py` đọc; `gold/tech_dedup.py` ghi khi phát hiện alias mới qua LLM) | Ngoại lệ có chủ đích duy nhất trong hệ thống nơi backend/data-platform cùng dùng chung 1 bảng — vì Docker build-context của 2 service tách biệt (`./apps/backend` vs `./data-platform`) nên không thể share 1 file cấu hình; Postgres là nơi trung lập cả 2 đều đã kết nối sẵn. Xem §4.3. |
 | Neo4j node/relationship gốc (Article, Technology, Skill, Company, Job, Person) | `apps/backend` (real-time) + `data-platform/gold` (batch) | Xem §4. |
 | Neo4j derived relationships (`USES`, `RELATED_TO`) + stats (`trend_score`, `article_count`, `job_count` trên `Technology`) | `data-platform/gold/neo4j_enricher.py` | Chạy như một Gold-layer job (ghi log vào `dp_pipeline_runs`, `job_name='neo4j_enricher'`). |
 | Redis keys | backend | Không có service nào khác dùng chung Redis instance cho dữ liệu nghiệp vụ. |
@@ -81,6 +82,9 @@ Direct Messaging (V9 — mới)
 
 Data Platform catalog (V7 — sở hữu bởi service `data-platform`, không phải backend/ai-rag-core)
   dp_bronze_catalog, dp_processed_articles, dp_processed_jobs, dp_pipeline_runs
+
+Tech Alias / Canonicalization (V21 — dùng CHUNG bởi apps/backend VÀ data-platform, xem §4.3)
+  dp_tech_alias_map, dp_tech_alias_review_queue
 ```
 
 Quan hệ chính: `users 1—1 user_profile`; `users 1—N chat_session 1—N chat_message`;
@@ -105,6 +109,15 @@ với ràng buộc canonical `user_a_id < user_b_id` (tránh tạo 2 conversatio
 | V10 | GIN index `idx_user_profile_technologies_gin` trên `user_profile.technologies` — tăng tốc `findTrendSubscribers` (chạy trên mỗi Kafka `trend.alerts`); đổi query từ `:tech = ANY(technologies)` sang `technologies @> :tech` để dùng được index |
 | V11 | **Content moderation**: `content_report` (báo cáo post/comment vi phạm, `status IN ('PENDING','DISMISSED')`, unique index chặn 1 user report trùng cùng 1 target) |
 | V12 | Sửa 2 unique index của V11: chỉ tính `status='PENDING'` là "đã report" — nếu report cũ đã bị dismiss, user vẫn report lại được nếu vi phạm tái diễn |
+| V13 | `post_image` (BYTEA, nhiều ảnh/post) |
+| V14 | `post.hashtags` (TEXT[] + GIN index) cho feed hashtag filter |
+| V15 | `post.tagged_company_*` — denormalized snapshot công ty (Company sống ở Neo4j, không FK được) |
+| V16 | `post_comment.parent_comment_id` — comment threading |
+| V17 | `user_profile.preferences_json` (JSONB) — cột `ai-rag-core` cần cho long-term memory/personalization, trước đó thiếu ở phía Java |
+| V18 | `dp_processed_jobs.company_industry/company_size` — thêm nullable, không ảnh hưởng row cũ |
+| V19 | `content_report.ai_suggested_*` — cache gợi ý kiểm duyệt AI, tính on-demand |
+| V20 | `audit_log` — append-only audit trail cho hành động admin, không FK tới `users(id)` |
+| V21 | `dp_tech_alias_map` + `dp_tech_alias_review_queue` — canonical hoá tên công nghệ dùng chung giữa `apps/backend` (`TechAliasCache.java`) và `data-platform` (`common/tech_alias_cache.py`, `gold/tech_dedup.py`); xem §4.3 |
 | V900–V905 (dev only) | Seed: admin/demo user, sample data, jobs/articles, activity_log, tech_analytics mở rộng, thêm users + cms cho môi trường dev |
 
 DDL đầy đủ từng cột/index: [`apps/backend/.../db/README.md`](../apps/backend/src/main/resources/db/README.md) §3.
@@ -123,7 +136,7 @@ DDL đầy đủ từng cột/index: [`apps/backend/.../db/README.md`](../apps/b
 
 **Node types:**
 - `Article`: title, content, source, published_date, sentiment_score, embedding (768d)
-- `Technology`: name, category, subcategory, description, trend_score, demand_score, **article_count, job_count** (derived, ghi bởi `neo4j_enricher.py`)
+- `Technology`: name, category, subcategory, description, trend_score, demand_score, **article_count, job_count** (derived, ghi bởi `neo4j_enricher.py`). `name` được canonical hoá **trước khi ghi** qua `dp_tech_alias_map` ("Golang" → "Go") — xem §4.3.
 - `Skill`: name, category, demand_score
 - `Company`: name, field, size, location, rating
 - `Job`: title, description, requirement, benefit, salary, due_date, source_url
@@ -135,7 +148,7 @@ DDL đầy đủ từng cột/index: [`apps/backend/.../db/README.md`](../apps/b
 - `HIRES_FOR`: Job → Company — **không còn pipeline nào ghi cạnh này**: nó được tạo bởi batch importer của `knowledge-graph/` (đã xoá khỏi repo, xem §4.2). Các cạnh `HIRES_FOR` hiện có trong AuraDB là dữ liệu lịch sử, không tăng thêm nữa. `graph_queries.JOBS_BY_TITLE_AND_COMPANY` và `Neo4jJobRepository`/`Neo4jCompanyRepository` vẫn match cả `POSTED_BY|HIRES_FOR` để không bỏ sót company linkage của các Job cũ.
 - `POSTED_BY`: Job → Company — **cùng ý nghĩa với `HIRES_FOR`**, ghi bởi pipeline real-time của `apps/backend` (`KafkaNeo4jWriterService`, consume topic `extracted.jobs`) và bởi `data-platform/gold/neo4j_job_sync.py` (batch/nightly) — đây là cạnh **duy nhất còn được ghi mới** cho Job → Company kể từ khi `knowledge-graph/` bị xoá.
 - `USES`: Company → Technology — **derived**, ghi bởi `data-platform/gold/neo4j_enricher.py` (MERGE, tăng `evidence_count`/`first_seen`); theo snapshot của `ml-clustering` (06/05/2026) có ~11.3k cạnh này trong AuraDB. `apps/backend` cố tình **không** đọc `USES` trực tiếp cho Company Explorer (xem ghi chú dưới).
-- `RELATED_TO`: Technology → Technology — derived, cũng ghi bởi `neo4j_enricher.py` (co-mention count)
+- `RELATED_TO`: Technology → Technology — derived, cũng ghi bởi `neo4j_enricher.py` (co-mention count); `gold/tech_dedup.py` cũng dùng chính cạnh này (2 chiều) khi merge 2 node trùng, để không mất tín hiệu co-mention đã tích luỹ ở node bị xoá — xem §4.3.
 - `WORKS_AT`: Person → Company (derived)
 - `WROTE`: Person → Article (derived)
 
@@ -157,6 +170,21 @@ DDL đầy đủ từng cột/index: [`apps/backend/.../db/README.md`](../apps/b
 - **`apps/backend`**: cũng đọc nhiều hơn ghi (graph explore/road-analysis, company similarity, job matching, salary/sentiment filter trên `graph`/`company`/`job` features).
 
 > Lưu ý: thư mục `knowledge-graph/` (crawl + entity resolution + import độc lập) từng là bản đầu tiên của pipeline này nhưng đã bị thay thế bởi `services/crawler/` (crawl) + hai nguồn ghi ở trên, và đã được xoá khỏi repo — không dùng làm tài liệu tham khảo runtime nữa.
+
+### 4.3 Tech name canonicalization & dedup (`dp_tech_alias_map`)
+
+Trước khi có cơ chế này, cùng 1 công nghệ có thể bị lưu thành nhiều `:Technology` node khác nhau tuỳ cách viết mà crawler/LLM extract ra (`Go`/`Golang`, `AWS`/`Aws`, `ML`/`Machine Learning`, `JavaScript`/`Javascript`...), làm loãng `mention_count`/`trend_score` và phá vỡ kết quả `RELATED_TO` co-mention. Fix theo 2 cơ chế bổ sung nhau:
+
+**a) Write-time canonicalization (chặn từ gốc, cả 2 đường ghi Neo4j):**
+- `apps/backend` — `TechAliasCache.java` cache `dp_tech_alias_map` in-memory (refresh mỗi 5 phút), `EntityExtractionService.extractTech()/extractEntities()` resolve qua cache này **trước khi** publish Kafka `extracted.articles`/`extracted.jobs` → `KafkaNeo4jWriterService` chỉ nhận tên đã canonical.
+- `data-platform` — `common/tech_alias_cache.py` (cùng bảng, cache riêng phía Python), gọi từ `silver/processor.py` **trước khi** ghi `dp_processed_articles.entity_techs`/`dp_processed_jobs.technologies` → cả `neo4j_article_sync.py`/`neo4j_job_sync.py` (đọc từ Silver) đều nhận tên đã canonical.
+
+**b) Periodic cleanup (dọn phần còn sót — node trùng tạo từ trước khi có (a), hoặc case mới):**
+`data-platform/gold/tech_dedup.py` (5:30 AM daily, xem [`DATA_PLATFORM.md` §5e](./DATA_PLATFORM.md)) chạy 2 giai đoạn: Giai đoạn A áp `dp_tech_alias_map` đã biết trực tiếp lên các node hiện có trong Neo4j; Giai đoạn B gửi các tên chưa khớp alias nào cho LLM (Gemini/OpenAI) để phát hiện case mới (vd "K8s"/"Kubernetes") — case confidence cao thì merge luôn + lưu `dp_tech_alias_map` (`source='llm_auto'`), case không chắc thì ghi vào `dp_tech_alias_review_queue` chờ duyệt thủ công.
+
+`_merge_duplicate_node()` dùng **Cypher thuần** (không phải `apoc.refactor.mergeNodes`) vì APOC plugin không có sẵn trên Neo4j Docker local của project: chuyển hướng các cạnh incoming đã biết loại (`MENTIONS`, `REQUIRES`, `USES`, `IS_TECHNOLOGY`) + `RELATED_TO` 2 chiều từ node trùng sang node canonical, rồi `DETACH DELETE` node trùng.
+
+`dp_tech_alias_map`/`dp_tech_alias_review_queue` là bảng Postgres **duy nhất** trong hệ thống được cả `apps/backend` và `data-platform` cùng dùng chung (xem ngoại lệ ở §2) — lý do là 2 service có Docker build-context tách biệt nên không thể share 1 file cấu hình, Postgres là điểm trung lập cả 2 đã kết nối sẵn.
 
 ---
 
@@ -192,5 +220,5 @@ mọi key khác có thể bị xoá/miss mà không gây sai dữ liệu (chỉ 
 - **`session_id`/`conversation_id` luôn do client (qua path) cung cấp**, không sinh phía nào tự động lệch nhau giữa 2 service ghi khác nhau (áp dụng cho cả `chat_session`↔`chat_message` và `conversation`↔`direct_message`).
 - **R2DBC `.bind(name, null)` luôn throw** — cột string có thể null phải dùng `.bindNull(name, String.class)` (bug đã gặp và sửa ở `PostgresChatRepository`; áp dụng khi viết repository Postgres mới).
 - **Không có Testcontainers** cho integration test (Docker API version mismatch) — dùng `docker run` thủ công + env wiring; test cần cả 3 datastore (Postgres, Neo4j, Redis) chạy thật.
-- **Data Platform (`dp_*`) là vùng cấm với backend/ai-rag-core** — chỉ đọc gián tiếp qua kết quả cuối (Neo4j đã enrich, hoặc `tech_analytics` đã ETL), không bao giờ query thẳng `dp_processed_articles`/`dp_processed_jobs` từ Java hay ai-rag-core.
+- **Data Platform (`dp_*`) là vùng cấm với backend/ai-rag-core** — chỉ đọc gián tiếp qua kết quả cuối (Neo4j đã enrich, hoặc `tech_analytics` đã ETL), không bao giờ query thẳng `dp_processed_articles`/`dp_processed_jobs` từ Java hay ai-rag-core. **Ngoại lệ duy nhất:** `dp_tech_alias_map`/`dp_tech_alias_review_queue` (V21) — backend đọc trực tiếp qua `TechAliasCache.java` vì đây là bảng canonicalization dùng chung có chủ đích giữa 2 service, xem §4.3.
 - **Test coverage cho messaging/social/notification** trong `ApiIntegrationTest` hiện chỉ nhắm vào hiệu ứng phụ "tạo notification" của 4 use case (`message_notifiesRecipient_withConversationLink`, `comment_notifiesPostAuthor_butNotOnSelfComment`, `like_notifiesPostAuthor_onlyOnceAndNotOnSelfLike`, `follow_notifiesFollowee_onlyOnce`) + 1 test cho `findJobMatchSubscribers` (kỹ năng trùng lặp) — đây LÀ integration test thật (WebTestClient trên server thật, không mock). Vẫn CHƯA có integration test cho các luồng CRUD/list cơ bản của `/feed`, `/users/{id}/posts`, `/companies/**`, `/jobs/matches`, `/interview`, hay các endpoint admin moderation/dashboard mới (`/admin/posts/**`, `/admin/reports/**`, `/admin/dashboard/social|jobs|pipeline|messaging`, `/admin/cache/**`) — những chỗ đó mới chỉ có unit test cấp use case (`apps/backend/src/test/java/.../features/**`), ví dụ `MessageBroadcasterRedisCrossInstanceTest`/`NotificationServiceRedisCrossInstanceTest` (verify hành vi pub/sub cross-instance) và `CacheAdminControllerTest`.

@@ -390,14 +390,31 @@ ml-clustering/
 │   └── stage_05_writeback.py
 ├── src/                   # ML code
 │   ├── data/              # Neo4j loader
-│   ├── features/          # Feature extraction
+│   ├── features/          # Feature extraction (tech_aliases.py, noise_filter.py, ...)
 │   ├── clustering/        # HDBSCAN training
 │   ├── labeling/          # LLM labeling
 │   └── tracking/          # MLflow logging
+├── scripts/               # Portability tooling (KHÔNG phải pipeline chính, chạy tay/1 lần)
+│   ├── seed_related_to.py            # Seed RELATED_TO ground truth thủ công vào Neo4j
+│   ├── export_tech_alias_seed.py     # Export dp_tech_alias_map (Postgres) → conf/seed_data/tech_alias_seed.json
+│   ├── publish_git_artifacts.sh       # Publish model artifact qua git (thay MinIO, miễn phí/portable)
+│   └── adopt_git_artifacts.sh         # Adopt lại artifact từ git trên máy khác
+├── conf/seed_data/         # Seed file check-in vào git — nguồn "ground truth"/canonical portable
+│   ├── related_to_seed.json          # Cặp Technology RELATED_TO curate thủ công
+│   └── tech_alias_seed.json          # Export tĩnh của dp_tech_alias_map — merge vào TECH_ALIAS_MAP
 ├── params.yaml            # Hyperparameters (DVC)
 ├── dvc.yaml               # Pipeline definition
 └── data/                  # DVC-tracked artifacts
 ```
+
+> **`tech_aliases.py` dùng 2 nguồn alias:** `TECH_ALIAS_MAP` hardcode trong source (bao gồm cả
+> tên design tool và tiếng Việt như "học máy"/"trí tuệ nhân tạo" mà `dp_tech_alias_map` không
+> có) VÀ `conf/seed_data/tech_alias_seed.json` (export tĩnh từ `dp_tech_alias_map` — xem
+> [`docs/DATABASE.md`](./DATABASE.md) §4.3). 2 map được merge lúc import module, **seed đè lên
+> hardcoded khi trùng key** vì seed phản ánh đúng canonical name đang thực sự được ghi vào Neo4j
+> sống (write-time canonicalization + `tech_dedup`). Seed file là snapshot tĩnh — chạy lại
+> `python -m scripts.export_tech_alias_seed` để cập nhật khi `dp_tech_alias_map` có alias mới
+> đáng kể (không tự động, không có Postgres runtime dependency trong service này).
 
 ### 3.2 Pipeline 5 Stages
 
@@ -423,8 +440,9 @@ Stage 2 — FEATURES
      ▼
 Stage 3 — TRAIN
   Grid search HDBSCAN hyperparameters
-  Chọn best theo Silhouette Score
+  Chọn best theo primary_metric (Silhouette/DBCV/...)
   MLflow log trials
+  Register model — chỉ promote "champion" nếu thắng champion cũ
      │
      ▼
 Stage 4 — LABEL
@@ -439,11 +457,29 @@ Stage 5 — WRITEBACK
   Ghi kết quả về Neo4j (optional)
 ```
 
+> **Alias normalization (Stage 2)** dùng `src/features/tech_aliases.py` §3.1 ở trên — merge trùng
+> lặp ngay trên snapshot Parquet của lần train đó, không đụng Neo4j sống. Tự nó không còn hoàn
+> toàn độc lập với `dp_tech_alias_map` nữa: kể từ khi có `conf/seed_data/tech_alias_seed.json`
+> (export tĩnh từ `dp_tech_alias_map`, seed đè lên hardcoded khi trùng key), 2 nguồn alias đã
+> thống nhất tên canonical (vd không còn lệch `"Vue"` (`dp_tech_alias_map`) vs `"Vue.js"`
+> (`TECH_ALIAS_MAP` cũ)) — nhưng vẫn cần chạy lại `python -m scripts.export_tech_alias_seed`
+> thủ công để cập nhật seed khi có alias mới, không tự động.
+
+> **Champion/Challenger gate (Stage 3 → `register_best_model`, `src/tracking/mlflow_logger.py`)**:
+> model mới **luôn** được đăng ký vào MLflow Model Registry (giữ lịch sử version để xem lại),
+> nhưng chỉ được gán alias `champion` nếu `primary_metric` của nó tốt hơn hoặc bằng champion
+> đang serve — cùng chiều so sánh với `select_best_trial` (`src/clustering/tuner.py`, hàm dùng
+> chung `normalize_metric_for_comparison`: silhouette/calinski_harabasz/dbcv càng cao càng tốt,
+> davies_bouldin càng thấp càng tốt). Chưa có champion (lần train đầu tiên) → promote thẳng.
+> Model mới thua → **giữ nguyên** champion cũ, model mới vẫn nằm trong Registry nhưng không
+> được serve. Trước đây gán `champion` vô điều kiện — 1 lần retrain ra kết quả tệ hơn (data
+> xấu, hyperparameter kém...) sẽ âm thầm ghi đè model tốt hơn đang chạy.
+
 ### 3.3 API Endpoints
 
 | Method | Path | Auth | Mô tả |
 |---|---|---|---|
-| GET | `/health` | Public | Health check + snapshot info |
+| GET | `/health` | Public | Health check + snapshot info — trả **503** (không phải 200 giả) khi artifact chưa load được (`data_available=false`) |
 | POST | `/pipeline/trigger` | X-Internal-Auth | Trigger pipeline retrain |
 | GET | `/pipeline/status` | Public | Pipeline status |
 | GET | `/clusters` | Public | Danh sách clusters |
@@ -508,7 +544,7 @@ curl -X POST http://localhost:8001/pipeline/trigger \
 }
 ```
 
-**Lịch tự động**: Chủ nhật 06:00 Asia/Ho_Chi_Minh (APScheduler trong data-platform)
+**Lịch tự động**: Chủ nhật 06:00 Asia/Ho_Chi_Minh (APScheduler trong data-platform). `job_retrain_clustering` không chỉ fire-and-forget: sau khi trigger, nó **poll `/pipeline/status` định kỳ** cho tới khi pipeline xong (hoặc timeout) rồi ghi kết quả thật vào `dp_pipeline_runs` — xem [`DATA_PLATFORM.md` — Clustering Retrain](./DATA_PLATFORM.md#clustering-retrain).
 
 ### 3.6 Configuration
 
@@ -518,7 +554,7 @@ curl -X POST http://localhost:8001/pipeline/trigger \
 | `NEO4J_PASSWORD` | — | Mật khẩu Neo4j |
 | `OPENAI_API_KEY` | — | API key GPT-4o-mini (stage 4) |
 | `INTERNAL_API_TOKEN` | `""` | Token kiểm tra `/pipeline/trigger` |
-| `MLCLUSTER_S3_BUCKET` | `""` | S3 bucket artifacts (local nếu trống) |
+| `MLCLUSTER_MINIO_BUCKET` | `""` | MinIO bucket artifacts (local nếu trống) |
 | `MLCLUSTER_SNAPSHOT_TAG` | `latest` | Tag snapshot để load |
 
 **Hyperparameters (params.yaml):**

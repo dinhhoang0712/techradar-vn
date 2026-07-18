@@ -75,8 +75,10 @@ public class EntityExtractionService {
     private final Map<Pattern, String> techPatterns;
     private final Pattern datePattern;
     private final Pattern salaryPattern;
+    private final TechAliasCache techAliasCache;
 
-    public EntityExtractionService() {
+    public EntityExtractionService(TechAliasCache techAliasCache) {
+        this.techAliasCache = techAliasCache;
         Map<String, String> canonicalByLower = new LinkedHashMap<>();
         for (String keyword : TECH_KEYWORDS) {
             canonicalByLower.put(keyword.toLowerCase(), keyword);
@@ -107,7 +109,10 @@ public class EntityExtractionService {
         if (jobSkills != null) {
             for (String skill : jobSkills) {
                 if (skill != null && !skill.isBlank()) {
-                    tech.add(skill.trim());
+                    // Skill tag thô từ job posting (chưa qua regex TECH_KEYWORDS) — vẫn
+                    // phải qua tra cứu alias để "Golang"/"ML" không tách khỏi "Go"/
+                    // "Machine Learning" đã được nhận diện ở extractTech().
+                    tech.add(techAliasCache.resolve(skill.trim()));
                 }
             }
         }
@@ -123,7 +128,11 @@ public class EntityExtractionService {
         for (Map.Entry<Pattern, String> entry : techPatterns.entrySet()) {
             Matcher matcher = entry.getKey().matcher(text);
             if (matcher.find()) {
-                result.add(entry.getValue());
+                // entry.getValue() đã canonical theo TECH_KEYWORDS/VN_TECH_ALIASES (vd
+                // "golang" -> "Golang"), nhưng bảng đó không biết "Golang" chính là "Go"
+                // — tra thêm techAliasCache (dp_tech_alias_map, dùng chung với Python)
+                // để gộp đúng nghĩa trước khi thêm vào kết quả.
+                result.add(techAliasCache.resolve(entry.getValue()));
             }
         }
         return result;

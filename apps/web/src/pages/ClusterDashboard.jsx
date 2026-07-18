@@ -3,6 +3,7 @@ import ForceGraph2D from 'react-force-graph-2d';
 import { getClusters, getClusterById, getClusterByTech } from '../api/clusterService';
 import { CHART_PALETTE as COLORS } from '../utils/chartPalette';
 import { useToast } from '../components/common/toastContext';
+import RingGauge from '../components/common/RingGauge';
 import './ClusterDashboard.css';
 
 export default function ClusterDashboard() {
@@ -62,13 +63,14 @@ export default function ClusterDashboard() {
     }, [selectedClusterId, notify]);
 
     // --- Lọc danh sách cụm cho Màn hình Grid (khi chưa chọn cụm nào) ---
+    // Chỉ lọc theo label/domain — danh sách công nghệ thành viên không có trong ClusterSummary
+    // (chỉ ClusterDetail mới có `members`), nên tra cứu theo tên công nghệ dùng handleLookupTech bên dưới.
     const filteredClusters = useMemo(() => {
         const query = searchQuery.toLowerCase();
         return clusterData.filter(cluster => {
             if (!query) return true;
             if (cluster.label?.toLowerCase().includes(query)) return true;
             if (cluster.domain?.toLowerCase().includes(query)) return true;
-            if (cluster.sample_techs?.some(t => t.toLowerCase().includes(query))) return true;
             return false;
         });
     }, [searchQuery, clusterData]);
@@ -114,7 +116,7 @@ export default function ClusterDashboard() {
         });
 
         // Các Node Vệ tinh
-        const techList = cluster.members || cluster.sample_techs || [];
+        const techList = cluster.members || [];
         techList.forEach(tech => {
             const techId = `tech-${tech}`;
             nodes.push({
@@ -317,11 +319,19 @@ export default function ClusterDashboard() {
                                     {cluster.domain}
                                 </span>
                                 <h3>{cluster.label}</h3>
-                                <p className="cluster-desc-short">{cluster.description}</p>
+                                <p className="cluster-desc-short">{cluster.label_en}</p>
                                 <div className="cluster-stats">
-                                    <span><strong>{cluster.n_members || cluster.member_count || 0}</strong> công nghệ</span>
-                                    <span>Tin cậy: <strong>{cluster.confidence ? Math.round(cluster.confidence * 100) : 0}%</strong></span>
+                                    <span><strong>{cluster.n_members || 0}</strong> công nghệ</span>
+                                    <span className="cluster-confidence-inline">
+                                        <RingGauge percent={(cluster.confidence || 0) * 100} size={28} strokeWidth={3} label={Math.round((cluster.confidence || 0) * 100)} />
+                                        Tin cậy
+                                    </span>
                                 </div>
+                                {cluster.overridden && (
+                                    <div className="cluster-card-badges">
+                                        <span className="badge badge-primary">Đã chỉnh sửa</span>
+                                    </div>
+                                )}
                             </button>
                         );
                     })}
@@ -391,16 +401,22 @@ export default function ClusterDashboard() {
                                         {selectedClusterDetail.domain}
                                     </span>
                                     <h2 className="cluster-detail-title">{selectedClusterDetail.label}</h2>
-                                    <p className="cluster-subtitle">{selectedClusterDetail.description_en || 'Cluster Overview'}</p>
+                                    <p className="cluster-subtitle">{selectedClusterDetail.label_en || 'Cluster Overview'}</p>
+                                    {(selectedClusterDetail.overridden || selectedClusterDetail.is_coherent === false) && (
+                                        <div className="cluster-detail-flags">
+                                            {selectedClusterDetail.overridden && <span className="badge badge-primary">Đã chỉnh sửa thủ công</span>}
+                                            {selectedClusterDetail.is_coherent === false && <span className="badge badge-down">AI đánh giá: chưa mạch lạc</span>}
+                                        </div>
+                                    )}
                                 </div>
-                                
+
                                 <div className="cluster-stats-row">
                                     <div className="cluster-stat-box">
-                                        <div className="stat-val">{selectedClusterDetail.n_members || selectedClusterDetail.member_count}</div>
+                                        <div className="stat-val">{selectedClusterDetail.n_members}</div>
                                         <div className="stat-label">Công nghệ</div>
                                     </div>
-                                    <div className="cluster-stat-box">
-                                        <div className="stat-val">{selectedClusterDetail.confidence ? Math.round(selectedClusterDetail.confidence * 100) : 0}%</div>
+                                    <div className="cluster-stat-box cluster-stat-box-gauge">
+                                        <RingGauge percent={(selectedClusterDetail.confidence || 0) * 100} size={44} strokeWidth={5} label={`${Math.round((selectedClusterDetail.confidence || 0) * 100)}%`} />
                                         <div className="stat-label">Tin cậy</div>
                                     </div>
                                     <div className="cluster-stat-box">
@@ -409,12 +425,25 @@ export default function ClusterDashboard() {
                                     </div>
                                 </div>
 
+                                {selectedClusterDetail.is_coherent === false && selectedClusterDetail.coherence_reason && (
+                                    <p className="cluster-coherence-reason">"{selectedClusterDetail.coherence_reason}"</p>
+                                )}
+
                                 <p className="cluster-description-text">{selectedClusterDetail.description}</p>
+
+                                {selectedClusterDetail.outliers?.length > 0 && (
+                                    <div className="cluster-tech-section cluster-outliers">
+                                        <h3 className="section-subtitle">Công nghệ lệch nhóm ({selectedClusterDetail.outliers.length})</h3>
+                                        <div className="pill-group">
+                                            {selectedClusterDetail.outliers.map(name => <span key={name} className="pill">{name}</span>)}
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div className="cluster-tech-section">
                                     <h3 className="section-subtitle">Danh sách Công nghệ ({selectedClusterDetail.members?.length || 0})</h3>
                                     <div className="cluster-tech-list">
-                                        {(selectedClusterDetail.members || selectedClusterDetail.sample_techs || []).map(tech => (
+                                        {(selectedClusterDetail.members || []).map(tech => (
                                             <span key={tech} className="tech-tag" style={{ 
                                                 border: `1px solid ${COLORS[selectedClusterDetail.cluster_id % COLORS.length]}55`, 
                                             }}>

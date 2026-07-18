@@ -102,6 +102,15 @@ public class PostgresPostRepository implements PostRepository {
     }
 
     @Override
+    public Mono<FeedRow> findById(UUID postId, UUID viewerId) {
+        return dbClient.sql(SELECT_FEED_ROW + "WHERE p.id = :post_id")
+                .bind("viewer_id", viewerId)
+                .bind("post_id", postId)
+                .map((row, meta) -> mapRow(row))
+                .one();
+    }
+
+    @Override
     public Mono<Long> countByUser(UUID userId) {
         return dbClient.sql("SELECT count(*) AS c FROM post WHERE user_id = :user_id")
                 .bind("user_id", userId)

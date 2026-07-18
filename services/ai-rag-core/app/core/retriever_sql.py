@@ -34,7 +34,7 @@ async def sql_analytics_search(tech_names: list[str], months: int = 6) -> list[d
                         yoy_growth
                     FROM tech_analytics
                     WHERE technology_name = ANY(:names)
-                      AND month >= (CURRENT_DATE - CAST(:months || ' months' AS INTERVAL))
+                      AND month >= (CURRENT_DATE - make_interval(months => :months))
                     ORDER BY technology_name, month DESC
                 """),
                 {"names": tech_names, "months": months},

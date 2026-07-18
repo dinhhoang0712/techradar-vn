@@ -17,4 +17,4 @@ Dựa vào các tín hiệu trên, hãy:
 
 QUAN TRỌNG: Chỉ dùng dữ liệu được cung cấp, không tự bịa thêm số liệu.
 
-Trả về JSON: {"direction": "growing|stable|declining", "confidence": 0.0-1.0, "reasoning": "..."}
+Trả về JSON: {{"direction": "growing|stable|declining", "confidence": 0.0-1.0, "reasoning": "..."}}

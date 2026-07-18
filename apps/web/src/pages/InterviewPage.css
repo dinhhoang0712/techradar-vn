@@ -85,6 +85,17 @@
     gap: 16px;
 }
 
+.interview-progress {
+    align-self: flex-start;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-3);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 4px 12px;
+}
+
 .chat-window {
     display: flex;
     flex-direction: column;

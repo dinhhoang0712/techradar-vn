@@ -4,8 +4,10 @@ import com.techpulse.techradar.features.company.application.GetCompaniesUseCase;
 import com.techpulse.techradar.features.company.domain.CompanyProfile;
 import com.techpulse.techradar.features.social.adapters.input.SocialDtos;
 import com.techpulse.techradar.features.social.ports.PostRepository;
+import com.techpulse.techradar.features.social.realtime.FeedBroadcaster;
 import com.techpulse.techradar.shared.exception.AppException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
@@ -14,6 +16,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class CreatePostUseCase {
@@ -24,6 +27,7 @@ public class CreatePostUseCase {
     private final PostImageService postImageService;
     private final GetCompaniesUseCase getCompaniesUseCase;
     private final MentionNotifier mentionNotifier;
+    private final FeedBroadcaster feedBroadcaster;
 
     public Mono<String> execute(String userId, String content, List<SocialDtos.ImageInput> images,
                                  String taggedCompanyId, List<String> mentionedUserIds) {
@@ -66,8 +70,21 @@ public class CreatePostUseCase {
                             LocalDateTime.now()));
                 })
                 .then(postImageService.persist(postId, preparedImages))
+                .then(broadcastNewPost(postId, userUuid))
                 .then(mentionNotifier.notify(userUuid, mentionedUserIds, "bài viết", "/feed"))
                 .thenReturn(postId.toString());
+    }
+
+    /** Broadcasts the freshly-created post to the live feed (Redis Pub/Sub -> SSE). Best-effort. */
+    private Mono<Void> broadcastNewPost(UUID postId, UUID authorId) {
+        return postRepository.findById(postId, authorId)
+                .map(FeedMapper::toFeedPost)
+                .doOnNext(feedBroadcaster::publishPostCreated)
+                .onErrorResume(e -> {
+                    log.warn("Could not broadcast new post {}", postId, e);
+                    return Mono.empty();
+                })
+                .then();
     }
 
     private Mono<CompanyProfile> resolveTaggedCompany(String taggedCompanyId) {

@@ -1,12 +1,19 @@
 from __future__ import annotations
 
+import json
 import logging
 import re
 from dataclasses import dataclass
+from pathlib import Path
 
 import pandas as pd
 
 logger = logging.getLogger(__name__)
+
+# Export tĩnh của dp_tech_alias_map (Postgres, dùng chung giữa apps/backend và
+# data-platform) — xem scripts/export_tech_alias_seed.py. Check-in vào git để
+# service này không cần tự kết nối Postgres lúc train, vẫn portable/độc lập.
+SEED_ALIAS_FILE = Path(__file__).resolve().parents[2] / "conf" / "seed_data" / "tech_alias_seed.json"
 
 
 TECH_ALIAS_MAP: dict[str, str] = {
@@ -145,9 +152,34 @@ def normalize_tech_key(name: str) -> str:
     return " ".join(text.split())
 
 
+def _load_seed_aliases(seed_path: Path) -> dict[str, str]:
+    if not seed_path.exists():
+        logger.warning("Không tìm thấy seed alias file %s — chỉ dùng TECH_ALIAS_MAP hardcode.", seed_path)
+        return {}
+    try:
+        data = json.loads(seed_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.warning("Đọc seed alias file %s thất bại (%s) — chỉ dùng TECH_ALIAS_MAP hardcode.", seed_path, exc)
+        return {}
+    # Key trong seed file là alias_normalized của dp_tech_alias_map (chỉ casefold+trim,
+    # KHÔNG collapse separator) — chuẩn hoá lại qua normalize_tech_key() để khớp cùng
+    # key-space với TECH_ALIAS_MAP (vd "express.js" → "express js").
+    return {normalize_tech_key(alias): canonical for alias, canonical in data.get("aliases", {}).items()}
+
+
+def _build_merged_alias_map(hardcoded: dict[str, str], seed_path: Path) -> dict[str, str]:
+    # Seed (dp_tech_alias_map) đè lên hardcoded khi trùng key — đây là canonical name
+    # ĐANG thật sự được ghi vào Neo4j (write-time canonicalization + tech_dedup), nên
+    # cluster label phải khớp theo, không phải bảng cũ của riêng ml-clustering.
+    return {**hardcoded, **_load_seed_aliases(seed_path)}
+
+
+MERGED_ALIAS_MAP: dict[str, str] = _build_merged_alias_map(TECH_ALIAS_MAP, SEED_ALIAS_FILE)
+
+
 def canonical_tech_name(name: str) -> str:
     key = normalize_tech_key(name)
-    return TECH_ALIAS_MAP.get(key, str(name or "").strip())
+    return MERGED_ALIAS_MAP.get(key, str(name or "").strip())
 
 
 def _canonical_group_key(name: str) -> str:

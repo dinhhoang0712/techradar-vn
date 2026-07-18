@@ -16,8 +16,14 @@ public interface ReportRepository {
 
     Mono<Long> countPending();
 
+    /** @return the report row (any status), or empty if no report with this id exists. */
+    Mono<ReportRow> findById(UUID reportId);
+
     /** @return true if a PENDING report with this id was dismissed. */
     Mono<Boolean> dismiss(UUID reportId, UUID adminId);
+
+    /** @return true if the AI moderation suggestion was persisted for this report. */
+    Mono<Boolean> saveAiSuggestion(UUID reportId, String action, String reason, double confidence);
 
     record ReportRow(
             UUID id,
@@ -29,7 +35,11 @@ public interface ReportRepository {
             String targetAuthorName,
             String reason,
             String status,
-            LocalDateTime createdAt
+            LocalDateTime createdAt,
+            String aiSuggestedAction,
+            String aiSuggestedReason,
+            Double aiConfidence,
+            LocalDateTime aiSuggestedAt
     ) {
     }
 }

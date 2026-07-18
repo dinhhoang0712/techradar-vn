@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     getNotifications,
+    getUnreadCount,
     markNotificationRead,
     markAllNotificationsRead,
     streamNotifications,
@@ -26,14 +27,27 @@ export default function NotificationsPage() {
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState(false);
+    const [unreadCount, setUnreadCount] = useState(0);
     const navigate = useNavigate();
     const notify = useToast();
+
+    const refreshUnreadCount = useCallback(async () => {
+        try {
+            const count = await getUnreadCount();
+            setUnreadCount(Number(count) || 0);
+        } catch {
+            // giữ nguyên giá trị cũ nếu gọi API thất bại
+        }
+    }, []);
 
     const loadFirstPage = useCallback(async () => {
         setLoading(true);
         setError(false);
         try {
-            const list = await getNotifications({ limit: PAGE_SIZE, offset: 0 });
+            const [list] = await Promise.all([
+                getNotifications({ limit: PAGE_SIZE, offset: 0 }),
+                refreshUnreadCount(),
+            ]);
             setItems(Array.isArray(list) ? list : []);
             setOffset(list.length);
             setHasMore(list.length === PAGE_SIZE);
@@ -43,7 +57,7 @@ export default function NotificationsPage() {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [refreshUnreadCount]);
 
     useEffect(() => {
         loadFirstPage();
@@ -55,6 +69,7 @@ export default function NotificationsPage() {
         const controller = streamNotifications(
             (n) => {
                 setItems((prev) => (prev.some((x) => x.id === n.id) ? prev : [n, ...prev]));
+                if (!n.read) setUnreadCount((c) => c + 1);
             },
             (err) => console.warn('[NotificationsPage] stream error:', err),
         );
@@ -79,10 +94,12 @@ export default function NotificationsPage() {
     const handleItemClick = async (n) => {
         if (!n.read) {
             setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
+            setUnreadCount((c) => Math.max(0, c - 1));
             try {
                 await markNotificationRead(n.id);
             } catch {
                 setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: false } : x)));
+                setUnreadCount((c) => c + 1);
                 notify({ title: 'Không thể đánh dấu đã đọc', body: 'Vui lòng thử lại.', variant: 'error' });
             }
         }
@@ -90,17 +107,18 @@ export default function NotificationsPage() {
     };
 
     const handleMarkAll = async () => {
-        const previous = items;
+        const previousItems = items;
+        const previousUnread = unreadCount;
         setItems((prev) => prev.map((x) => ({ ...x, read: true })));
+        setUnreadCount(0);
         try {
             await markAllNotificationsRead();
         } catch {
-            setItems(previous);
+            setItems(previousItems);
+            setUnreadCount(previousUnread);
             notify({ title: 'Không thể đánh dấu tất cả đã đọc', body: 'Vui lòng thử lại.', variant: 'error' });
         }
     };
-
-    const unreadCount = items.filter((n) => !n.read).length;
 
     return (
         <div className="notifpage">

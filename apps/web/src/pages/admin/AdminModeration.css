@@ -151,3 +151,31 @@
     white-space: nowrap;
     color: var(--text-2);
 }
+
+.ai-suggestion-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ai-action-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 99px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.ai-action-badge.remove  { background: var(--danger-glow); color: var(--danger-light); }
+.ai-action-badge.dismiss { background: var(--green-glow);  color: var(--green-light); }
+
+.ai-suggestion-reason {
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-3);
+    font-size: 0.78rem;
+}

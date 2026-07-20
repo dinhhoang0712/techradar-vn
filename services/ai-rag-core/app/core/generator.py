@@ -12,7 +12,7 @@ _RETRY_DELAY = 5  # seconds
 
 @lru_cache(maxsize=1)
 def get_llm():
-    """Khởi tạo LLM một lần duy nhất — tuỳ LLM_PROVIDER trong config (openai | gemini)."""
+    """Khởi tạo LLM một lần duy nhất — tuỳ LLM_PROVIDER trong config (openai | gemini | groq)."""
     settings = get_settings()
 
     if settings.llm_provider == "openai":
@@ -20,6 +20,13 @@ def get_llm():
         return ChatOpenAI(
             model=settings.llm_model,
             openai_api_key=settings.openai_api_key,
+            temperature=0.2,
+        )
+    elif settings.llm_provider == "groq":
+        from langchain_groq import ChatGroq
+        return ChatGroq(
+            model=settings.llm_model,
+            groq_api_key=settings.groq_api_key,
             temperature=0.2,
         )
     else:

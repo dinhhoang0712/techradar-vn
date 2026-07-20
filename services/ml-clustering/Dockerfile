@@ -7,7 +7,7 @@ FROM python:3.11-slim
 WORKDIR /app/src/ml-clustering
 
 COPY requirements-api.txt ./
-RUN pip install --no-cache-dir -r requirements-api.txt
+RUN pip install --no-cache-dir --timeout 600 -r requirements-api.txt
 
 COPY . .
 

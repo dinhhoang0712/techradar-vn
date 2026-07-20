@@ -103,6 +103,14 @@ public class KafkaConfig {
     }
 
     @Bean
+    public NewTopic roadmapAlertsTopic() {
+        return TopicBuilder.name(KafkaTopicConstants.ROADMAP_ALERTS)
+                .partitions(1)
+                .replicas(1)
+                .build();
+    }
+
+    @Bean
     public ProducerFactory<String, String> producerFactory() {
         Map<String, Object> props = new HashMap<>();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);

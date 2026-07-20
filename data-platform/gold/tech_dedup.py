@@ -194,6 +194,16 @@ def _call_llm(names: list[str], settings: Settings) -> list[dict]:
             messages=[{"role": "user", "content": prompt}],
         )
         raw = response.choices[0].message.content
+    elif provider == "groq":
+        from groq import Groq
+        client = Groq(api_key=settings.groq_api_key)
+        response = client.chat.completions.create(
+            model=settings.tech_dedup_groq_model,
+            temperature=0.0,
+            response_format={"type": "json_object"},
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = response.choices[0].message.content
     else:
         import google.generativeai as genai
         genai.configure(api_key=settings.gemini_api_key)

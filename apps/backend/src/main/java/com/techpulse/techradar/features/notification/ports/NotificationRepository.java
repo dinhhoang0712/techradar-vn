@@ -28,6 +28,9 @@ public interface NotificationRepository {
     /** Users whose profile technologies overlap any of {@code technologies}, wanting at least one channel. */
     Flux<TrendSubscriber> findJobMatchSubscribers(List<String> technologies);
 
+    /** Users with at least one profile technology, wanting at least one channel — weekly roadmap-alert scan candidates. */
+    Flux<TrendSubscriber> findRoadmapCandidates();
+
     /** Notification counts grouped by {@code type} (e.g. JOB_MATCH, TREND_ALERT), for admin dashboards. */
     Flux<TypeCount> countGroupedByType();
 

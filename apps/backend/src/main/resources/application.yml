@@ -126,6 +126,7 @@ app:
     radar-cache-ttl: ${REDIS_RADAR_CACHE_TTL:3600}
     company-cache-ttl: ${REDIS_COMPANY_CACHE_TTL:1800}
     job-cache-ttl: ${REDIS_JOB_CACHE_TTL:1800}
+    roadmap-cache-ttl: ${REDIS_ROADMAP_CACHE_TTL:1800}
     public-stats-cache-ttl: ${REDIS_PUBLIC_STATS_CACHE_TTL:1800}
     chat-rate-limit:
       max-requests: ${CHAT_RATE_LIMIT_MAX:20}
@@ -140,8 +141,17 @@ app:
 
   notifications:
     # Min month-over-month growth (%) for a technology to raise a trend alert during the ETL.
-    # Each alert is published to Kafka (trend.alerts) and fanned out to subscribed users.
+    # Each alert is published to Kafka (trend.alerts) and fanned out to subscribed users. Also
+    # reused by the roadmap alert scan below as the "hot skill" threshold.
     trend-threshold: ${NOTIF_TREND_THRESHOLD:30}
+
+  roadmap:
+    alert:
+      # Weekly scan: recompute each user's career roadmap and, if their #1 recommended next skill
+      # is growing at least app.notifications.trend-threshold%, publish a roadmap.alerts event.
+      # Off by default (each run triggers 2 LLM calls per candidate user).
+      enabled: ${ROADMAP_ALERT_ENABLED:false}
+      cron: ${ROADMAP_ALERT_CRON:0 0 4 * * MON}
 
 # Log appenders/patterns live in logback-spring.xml (console for dev, JSON+file for prod).
 # Only levels are configured here; LOG_DIR (file output dir) is read by logback-spring.xml.

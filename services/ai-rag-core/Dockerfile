@@ -41,6 +41,10 @@ snapshot_download( \
 AutoTokenizer.from_pretrained('NlpHust/ner-vietnamese-electra-base'); \
 AutoModelForTokenClassification.from_pretrained('NlpHust/ner-vietnamese-electra-base')"
 
+# Groq LLM provider (langchain_groq) — cài riêng SAU bước tải model nặng ở trên, để
+# thêm/đổi version ở đây không làm invalidate cache của layer torch/model (nhiều GB).
+RUN pip install --no-cache-dir --user langchain-groq==0.1.9
+
 # Runtime stage: không có compiler toolchain, chỉ có package + model đã tải sẵn từ builder.
 FROM python:3.11-slim
 

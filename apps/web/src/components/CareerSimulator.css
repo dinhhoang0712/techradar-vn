@@ -1,0 +1,206 @@
+/* ── Career Simulator ("what if I learned X") ────────────────────────────── */
+.simulator-card {
+    position: relative;
+    overflow: hidden;
+    margin: 28px auto 0;
+    max-width: 900px;
+}
+
+.simulator-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--gradient-brand);
+}
+
+.simulator-subtitle {
+    font-size: 0.85rem;
+    color: var(--text-2);
+    margin: 4px 0 18px;
+}
+
+.simulator-form {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.simulator-form .form-input {
+    flex: 1;
+    min-width: 220px;
+}
+
+.simulator-submit-btn {
+    white-space: nowrap;
+    box-shadow: var(--shadow-primary);
+}
+
+.simulator-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+    margin-top: 22px;
+}
+
+.sim-tile {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: border-color var(--t), transform var(--t);
+}
+
+.sim-tile:hover {
+    border-color: var(--border-2);
+    transform: translateY(-2px);
+}
+
+.sim-tile-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--text-3);
+}
+
+.sim-tile-value-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.sim-tile-before {
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--text-2);
+}
+
+.sim-tile-arrow {
+    color: var(--text-3);
+    font-size: 1rem;
+}
+
+.sim-tile-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--text);
+    font-variant-numeric: proportional-nums;
+}
+
+.sim-tile-value small {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--text-3);
+    margin-left: 4px;
+}
+
+.sim-tile-empty {
+    font-size: 0.8rem;
+    color: var(--text-3);
+    margin: 4px 0 0;
+}
+
+/* Status pill: icon + label, background tint of the status color — never color alone. */
+.sim-delta-badge,
+.sim-trend-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    align-self: flex-start;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 999px;
+}
+
+.sim-delta-badge.up,
+.sim-trend-badge.sim-trend--up {
+    background: var(--green-glow);
+    color: var(--green);
+    border: 1px solid rgba(34, 211, 164, 0.35);
+}
+
+.sim-delta-badge.down,
+.sim-trend-badge.sim-trend--down {
+    background: var(--danger-glow);
+    color: var(--danger);
+    border: 1px solid rgba(255, 92, 114, 0.35);
+}
+
+.sim-trend-badge.sim-trend--stable {
+    background: var(--yellow-glow);
+    color: var(--yellow);
+    border: 1px solid rgba(246, 185, 59, 0.35);
+}
+
+/* Salary range meter: one ramp — primary marker on a neutral track. */
+.sim-range-meter {
+    margin-top: 2px;
+}
+
+.sim-range-track {
+    position: relative;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--border);
+}
+
+.sim-range-marker {
+    position: absolute;
+    top: 50%;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--primary);
+    box-shadow: 0 0 0 2px var(--surface-2);
+    transform: translate(-50%, -50%);
+}
+
+.sim-range-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.68rem;
+    color: var(--text-3);
+    margin-top: 4px;
+}
+
+/* Forecast confidence meter — same ramp as the range meter (primary fill on neutral track). */
+.sim-confidence-meter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 2px;
+}
+
+.sim-confidence-track {
+    flex: 1;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+    overflow: hidden;
+}
+
+.sim-confidence-fill {
+    height: 100%;
+    background: var(--primary);
+    border-radius: 2px;
+}
+
+.sim-confidence-label {
+    font-size: 0.68rem;
+    color: var(--text-3);
+    white-space: nowrap;
+}
+
+.sim-reasoning {
+    font-size: 0.78rem;
+    color: var(--text-2);
+    line-height: 1.45;
+    margin: 2px 0 0;
+}

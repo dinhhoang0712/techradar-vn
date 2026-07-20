@@ -25,6 +25,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -128,5 +129,19 @@ class GetJobMatchesUseCaseTest {
 
         StepVerifier.create(useCase.execute("user-1", null, null, 10))
                 .verifyComplete();
+    }
+
+    @Test
+    void executeForSkills_bypassesProfileLookupAndScoresTheGivenListDirectly() {
+        when(jobRepository.findMatchingJobs(anyList(), anyInt())).thenReturn(Flux.just(
+                raw("Backend Dev", "Hà Nội", List.of("Java", "Kubernetes"), List.of("Java"), 5.0)
+        ));
+
+        StepVerifier.create(useCase.executeForSkills(List.of("Java"), 10).map(JobMatch::title))
+                .expectNext("Backend Dev")
+                .verifyComplete();
+
+        verify(userProfileRepository, never()).findByUserId(anyString());
+        verify(jobRepository).findMatchingJobs(eq(List.of("java")), anyInt());
     }
 }

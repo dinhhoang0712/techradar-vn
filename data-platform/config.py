@@ -39,9 +39,11 @@ class Settings(BaseSettings):
     # Tech Dedup (LLM judge cho case chưa có trong dp_tech_alias_map)
     openai_api_key: str = ""
     gemini_api_key: str = ""
-    tech_dedup_llm_provider: str = "gemini"  # "gemini" | "openai"
+    groq_api_key: str = ""
+    tech_dedup_llm_provider: str = "gemini"  # "gemini" | "openai" | "groq"
     tech_dedup_openai_model: str = "gpt-4o-mini"
     tech_dedup_gemini_model: str = "gemini-2.5-flash"
+    tech_dedup_groq_model: str = "llama-3.3-70b-versatile"
 
     # Scheduler cron (hour, minute in Asia/Ho_Chi_Minh)
     article_sync_hour: int = 2

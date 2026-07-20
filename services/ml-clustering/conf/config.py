@@ -45,6 +45,7 @@ class Settings(BaseSettings):
 
     gemini_api_key: str = ""
     openai_api_key: str = ""
+    groq_api_key: str = ""
 
     model_config = SettingsConfigDict(
         env_file=str(ENV_FILE),
@@ -187,9 +188,10 @@ class MLflowParams(BaseModel):
 
 
 class LabelingParams(BaseModel):
-    provider: str = "gemini"           # "gemini" | "openai"
+    provider: str = "gemini"           # "gemini" | "openai" | "groq"
     gemini_model: str = "gemini-2.5-flash"
     openai_model: str = "gpt-4o-mini"
+    groq_model: str = "llama-3.3-70b-versatile"
     max_members_in_prompt: int = 25
     temperature: float = 0.2
     cache_dir: str = "data/labels/.llm_cache"

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { getUserProfile, updateUserProfile, uploadAvatar } from '../api/userService';
 import { getRecommendations } from '../api/recommendService';
 import { useToast } from '../components/common/toastContext';
+import TechRecommendationCards from '../components/TechRecommendationCards';
 import './UserProfile.css';
 
 /**
@@ -390,56 +391,11 @@ export default function UserProfile() {
             </div>
 
             {/* Recommendations section */}
-            {(loadingRecs || recommendations.length > 0) && (
-                <div className="profile-recommendations">
-                    <h2 className="profile-recs-title">Công nghệ được gợi ý cho bạn</h2>
-                    {!loadingRecs && recsBasedOn.length > 0 && (
-                        <p className="profile-recs-based-on">Dựa trên: {recsBasedOn.join(', ')}</p>
-                    )}
-                    {loadingRecs ? (
-                        <div className="recs-loading">Đang tải gợi ý...</div>
-                    ) : (
-                        <div className="recs-grid">
-                            {recommendations.map((rec) => (
-                                <div key={rec.tech_name} className="rec-card">
-                                    <div className="rec-header">
-                                        <span className="rec-name">{rec.tech_name}</span>
-                                        {rec.ring && (
-                                            <span className={`rec-ring rec-ring--${rec.ring.toLowerCase()}`}>
-                                                {rec.ring}
-                                            </span>
-                                        )}
-                                    </div>
-                                    {rec.reason && (
-                                        <p className="rec-reason">{rec.reason}</p>
-                                    )}
-                                    <div className="rec-meta">
-                                        {rec.growth_rate != null && (
-                                            <span className={`rec-growth ${rec.growth_rate >= 0 ? 'up' : 'down'}`}>
-                                                {rec.growth_rate >= 0 ? '+' : ''}{Number(rec.growth_rate).toFixed(1)}%
-                                            </span>
-                                        )}
-                                        {rec.co_occurrence > 0 && (
-                                            <span className="rec-cooc">Co-use: {rec.co_occurrence}</span>
-                                        )}
-                                    </div>
-                                    {rec.confidence != null && (
-                                        <div className="rec-confidence">
-                                            <div className="rec-confidence-track">
-                                                <div
-                                                    className="rec-confidence-fill"
-                                                    style={{ width: `${Math.round(rec.confidence * 100)}%` }}
-                                                />
-                                            </div>
-                                            <span className="rec-confidence-label">{Math.round(rec.confidence * 100)}% phù hợp</span>
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            )}
+            <TechRecommendationCards
+                recommendations={recommendations}
+                basedOn={recsBasedOn}
+                loading={loadingRecs}
+            />
         </div>
     );
 }

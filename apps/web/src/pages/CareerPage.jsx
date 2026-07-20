@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { getCareerAdvice } from '../api/careerService';
-import { getUserProfile } from '../api/userService';
+import { getCareerAdvice, getCareerRoadmap, simulateCareerMove } from '../api/careerService';
 import { getJobMatches } from '../api/jobService';
 import { renderMarkdown } from '../utils/markdown';
+import TechRecommendationCards from '../components/TechRecommendationCards';
+import CareerSimulator from '../components/CareerSimulator';
 import './CareerPage.css';
 
 const COMMON_ROLES = [
@@ -33,22 +34,46 @@ export default function CareerPage() {
     const [jobLocation, setJobLocation] = useState('');
     const [jobMinSalary, setJobMinSalary] = useState('');
 
-    // Tải kỹ năng từ profile nếu có
+    const [nextSkills, setNextSkills] = useState([]);
+    const [roadmapLoading, setRoadmapLoading] = useState(false);
+    const [roadmapError, setRoadmapError] = useState('');
+    const [hasTechnologies, setHasTechnologies] = useState(null);
+
+    // Tự động tải lộ trình (gợi ý công nghệ + roadmap theo role + job phù hợp) qua GET
+    // /career/roadmap thay vì phải điền form và bấm nút riêng ở từng phần.
     useEffect(() => {
         const token = localStorage.getItem('access_token');
         if (!token) return;
         setHasToken(true);
-        getUserProfile()
-            .then((res) => {
-                const data = res?.data ?? res ?? {};
-                const techs = data.profile?.technologies || data.technologies || [];
+        loadRoadmap();
+    }, []);
+
+    const loadRoadmap = async () => {
+        setRoadmapLoading(true);
+        setRoadmapError('');
+        try {
+            const res = await getCareerRoadmap();
+            const data = res?.data ?? res ?? {};
+            setHasTechnologies(!!data.has_technologies);
+            if (data.has_technologies) {
+                const techs = data.current_technologies || [];
                 if (techs.length > 0) {
                     setCurrentSkills(techs.join(', '));
                     setProfileLoaded(true);
                 }
-            })
-            .catch(() => {});
-    }, []);
+                setNextSkills(data.next_skills || []);
+                if (data.career_path?.target_role) {
+                    setTargetRole(data.career_path.target_role);
+                    setResult(data.career_path);
+                }
+                setJobMatches(data.job_matches || []);
+            }
+        } catch (err) {
+            setRoadmapError(err.message || 'Không thể tải lộ trình. Vui lòng thử lại.');
+        } finally {
+            setRoadmapLoading(false);
+        }
+    };
 
     const loadJobMatches = async () => {
         setJobsLoading(true);
@@ -83,6 +108,11 @@ export default function CareerPage() {
         }
     };
 
+    const handleSimulate = async (technology) => {
+        const res = await simulateCareerMove(technology);
+        return res?.data ?? res;
+    };
+
     return (
         <div className="career-page">
             <div className="career-hero">
@@ -91,6 +121,27 @@ export default function CareerPage() {
                     Phân tích khoảng cách kỹ năng và nhận lộ trình học tập cá nhân hoá
                 </p>
             </div>
+
+            {hasToken && (
+                <TechRecommendationCards
+                    recommendations={nextSkills}
+                    loading={roadmapLoading}
+                    title="Nên học tiếp"
+                    emptyMessage={
+                        roadmapError ||
+                        (hasTechnologies === false
+                            ? 'Hãy thêm công nghệ quan tâm trong Hồ sơ cá nhân để nhận gợi ý lộ trình, job phù hợp và kỹ năng nên học tiếp.'
+                            : null)
+                    }
+                />
+            )}
+
+            {hasToken && (
+                <CareerSimulator
+                    suggestions={nextSkills.map((s) => s.tech_name).filter(Boolean)}
+                    onSimulate={handleSimulate}
+                />
+            )}
 
             <div className="career-layout">
                 {/* Form */}

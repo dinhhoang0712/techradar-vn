@@ -43,4 +43,12 @@ public class CacheAdminController {
         return redisCache.evictByPattern("cache:job:match:*")
                 .thenReturn(ResponseEntity.ok(ApiResponse.<Void>success(null, "Job match cache evicted")));
     }
+
+    @Operation(summary = "Evict all cached career roadmaps (GetCareerRoadmapUseCase — one entry per user)")
+    @PostMapping("/roadmap/evict")
+    @PreAuthorize("hasRole('ADMIN')")
+    public Mono<ResponseEntity<ApiResponse<Void>>> evictRoadmaps() {
+        return redisCache.evictByPattern("cache:roadmap:*")
+                .thenReturn(ResponseEntity.ok(ApiResponse.<Void>success(null, "Roadmap cache evicted")));
+    }
 }

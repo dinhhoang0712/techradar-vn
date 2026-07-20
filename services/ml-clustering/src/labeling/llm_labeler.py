@@ -248,7 +248,7 @@ def render_prompt(
 
 
 def _call_llm_raw(prompt: str, params: LabelingParams) -> str:
-    """Gọi LLM (OpenAI hoặc Gemini) và trả về raw text."""
+    """Gọi LLM (OpenAI, Gemini hoặc Groq) và trả về raw text."""
     provider = getattr(params, "provider", "gemini")
 
     if provider == "openai":
@@ -256,6 +256,16 @@ def _call_llm_raw(prompt: str, params: LabelingParams) -> str:
         client = OpenAI(api_key=get_settings().openai_api_key)
         response = client.chat.completions.create(
             model=params.openai_model,
+            temperature=params.temperature,
+            response_format={"type": "json_object"},
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.choices[0].message.content.strip()
+    elif provider == "groq":
+        from groq import Groq
+        client = Groq(api_key=get_settings().groq_api_key)
+        response = client.chat.completions.create(
+            model=params.groq_model,
             temperature=params.temperature,
             response_format={"type": "json_object"},
             messages=[{"role": "user", "content": prompt}],

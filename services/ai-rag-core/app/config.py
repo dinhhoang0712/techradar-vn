@@ -23,7 +23,8 @@ class Settings(BaseSettings):
     # LLM
     gemini_api_key: str = ""
     openai_api_key: str = ""
-    llm_provider: str = "openai"   # "openai" | "gemini"
+    groq_api_key: str = ""
+    llm_provider: str = "openai"   # "openai" | "gemini" | "groq"
 
     # PostgreSQL
     postgres_host: str = "localhost"

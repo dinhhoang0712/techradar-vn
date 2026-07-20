@@ -18,6 +18,9 @@ public final class KafkaTopicConstants {
     /** Domain event: a brand-new job posting was ingested (Kafka writer → notifications). */
     public static final String JOB_MATCH_ALERTS = "job.match.alerts";
 
+    /** Domain event: a user's top recommended next skill is growing fast (roadmap weekly scan → notifications). */
+    public static final String ROADMAP_ALERTS = "roadmap.alerts";
+
     private KafkaTopicConstants() {
         // Constants only
     }

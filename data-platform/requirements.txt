@@ -8,5 +8,11 @@ requests==2.32.3
 loguru==0.7.2
 redis==5.0.8
 
+# LLM providers (gold/tech_dedup.py — Giai đoạn B, chỉ import khi có tên chưa
+# resolve qua dp_tech_alias_map và TECH_DEDUP_LLM_PROVIDER tương ứng được chọn)
+openai>=1.40.0,<2.0.0
+google-generativeai==0.7.2
+groq>=0.9.0,<1.0.0
+
 # Testing
 pytest==8.4.2

@@ -114,6 +114,25 @@ public class PostgresNotificationRepository implements NotificationRepository {
     }
 
     @Override
+    public Flux<TrendSubscriber> findRoadmapCandidates() {
+        // Same GIN-indexed user_profile table as findTrendSubscribers/findJobMatchSubscribers,
+        // just without a specific-technology filter — any user with a non-empty tech list is a
+        // candidate for the weekly roadmap recompute.
+        return dbClient.sql(
+                "SELECT u.id AS user_id, u.email AS email, p.notify_inapp, p.notify_email " +
+                "FROM user_profile p JOIN users u ON u.id = p.user_id " +
+                "WHERE p.technologies IS NOT NULL AND array_length(p.technologies, 1) > 0 " +
+                "AND (p.notify_inapp = true OR p.notify_email = true)"
+        )
+                .map((row, meta) -> new TrendSubscriber(
+                        row.get("user_id", UUID.class),
+                        row.get("email", String.class),
+                        Boolean.TRUE.equals(row.get("notify_inapp", Boolean.class)),
+                        Boolean.TRUE.equals(row.get("notify_email", Boolean.class))))
+                .all();
+    }
+
+    @Override
     public Flux<TypeCount> countGroupedByType() {
         return dbClient.sql("SELECT type, count(*) AS c FROM notification GROUP BY type ORDER BY c DESC")
                 .map((row, meta) -> new TypeCount(row.get("type", String.class), row.get("c", Long.class)))

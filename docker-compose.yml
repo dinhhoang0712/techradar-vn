@@ -118,6 +118,7 @@ services:
       LLM_PROVIDER: ${LLM_PROVIDER:-openai}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
       MODEL_WARMUP: ${MODEL_WARMUP:-background}
       # Must match data-platform's EMBED_SECRET (POST /embed/trigger)
@@ -160,6 +161,7 @@ services:
       USE_LOCAL_NEO4J: "false"
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
       MLCLUSTER_MINIO_CACHE_DIR: /tmp/ml-clustering-cache
       # Pre-trained artifacts (snapshot parquet + cluster_labels.json) cached on the bundled
       # MinIO — leave MLCLUSTER_MINIO_BUCKET blank to skip and always cluster from Neo4j directly.
@@ -297,6 +299,7 @@ services:
       # gold/tech_dedup.py — Giai đoạn B (LLM discovery), thiếu key thì tự skip, không lỗi.
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
       TECH_DEDUP_LLM_PROVIDER: ${TECH_DEDUP_LLM_PROVIDER:-gemini}
       # common/job_trigger_listener.py — nhận lệnh "chạy ngay" từ admin (Java) qua Pub/Sub.
       REDIS_URL: redis://redis:6379

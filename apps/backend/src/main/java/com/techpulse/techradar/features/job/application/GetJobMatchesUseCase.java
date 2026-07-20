@@ -53,6 +53,16 @@ public class GetJobMatchesUseCase {
                 .flatMapMany(skills -> matchJobs(skills, location, minSalaryMVnd, effectiveLimit));
     }
 
+    /**
+     * Same scoring as {@link #execute}, against an explicit skill list instead of a stored
+     * profile — used by the "what-if" career simulator to preview a hypothetical skill without
+     * persisting it to the user's profile.
+     */
+    public Flux<JobMatch> executeForSkills(List<String> skills, int limit) {
+        int effectiveLimit = limit <= 0 ? 20 : Math.min(limit, MAX_LIMIT);
+        return matchJobs(skills == null ? List.of() : skills, null, null, effectiveLimit);
+    }
+
     private Flux<JobMatch> matchJobs(List<String> skills, String location, Double minSalaryMVnd, int limit) {
         List<String> skillsLower = skills.stream()
                 .filter(s -> s != null && !s.isBlank())

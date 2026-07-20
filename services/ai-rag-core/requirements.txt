@@ -21,6 +21,7 @@ langchain-core==0.2.43
 langchain-google-genai==1.0.10
 google-generativeai==0.7.2
 langchain-openai==0.1.25
+langchain-groq==0.1.9
 
 # Evaluation (RAGAS)
 datasets==2.20.0

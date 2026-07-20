@@ -60,6 +60,14 @@ class TechClusterResult(BaseModel):
     membership_probability: float | None = None  # độ tin cậy gán cụm (0..1) — chỉ có với hdbscan
     outlier_score: float | None = None            # GLOSH outlier score — chỉ có với hdbscan
     near_clusters: list[NearClusterEntry] = []    # cụm "gần" khác, hữu ích với noise/biên
+    # Provisional: tech chưa có trong snapshot (thật sự mới, hoặc chưa retrain kịp) được
+    # gán TẠM vào cluster của tech đã biết có tên giống nhất (difflib, xem
+    # AppStore.find_nearest_known_tech) — thay vì bắt caller đợi tới lần retrain kế tiếp.
+    # found vẫn là False (không phải kết quả HDBSCAN thật) — luôn kiểm tra `provisional`
+    # trước khi coi cluster_id là đáng tin cậy.
+    provisional: bool = False
+    matched_via: str | None = None   # tên tech đã biết được dùng để suy ra cluster tạm
+    match_score: float | None = None  # difflib ratio() của matched_via, 0..1
 
 
 # ---------------------------------------------------------------------------
@@ -73,7 +81,8 @@ class BatchPredictRequest(BaseModel):
 class BatchPredictResponse(BaseModel):
     results: list[TechClusterResult]
     n_found: int
-    n_not_found: int
+    n_provisional: int = 0   # found=False nhưng gán tạm được qua find_nearest_known_tech
+    n_not_found: int         # thật sự không tìm được gì, kể cả provisional
     snapshot_tag: str
 
 

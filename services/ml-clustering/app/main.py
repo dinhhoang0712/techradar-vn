@@ -72,14 +72,30 @@ app.include_router(pipeline_router)
 def _build_tech_result(name: str, store) -> TechClusterResult:
     tech_id, cluster_id = store.lookup_tech(name)
     if tech_id is None:
+        provisional = store.find_nearest_known_tech(name)
+        if provisional is None:
+            return TechClusterResult(
+                tech_name=name,
+                tech_id=None,
+                cluster_id=None,
+                label=None,
+                label_en=None,
+                domain=None,
+                found=False,
+            )
+        matched_name, matched_cluster_id, score = provisional
+        label_info = store.get_cluster_label(matched_cluster_id)
         return TechClusterResult(
             tech_name=name,
             tech_id=None,
-            cluster_id=None,
-            label=None,
-            label_en=None,
-            domain=None,
+            cluster_id=matched_cluster_id,
+            label=label_info.get("label") if label_info else None,
+            label_en=label_info.get("label_en") if label_info else None,
+            domain=label_info.get("domain") if label_info else None,
             found=False,
+            provisional=True,
+            matched_via=matched_name,
+            match_score=score,
         )
 
     label_info = store.get_cluster_label(cluster_id) if cluster_id is not None and cluster_id != -1 else None
@@ -230,14 +246,18 @@ def update_cluster_label(
 
 @app.get("/tech/{tech_name}/cluster", response_model=TechClusterResult)
 def get_tech_cluster(tech_name: str):
-    """Tra cứu cluster của 1 công nghệ theo tên."""
+    """
+    Tra cứu cluster của 1 công nghệ theo tên. Tech chưa có trong snapshot nhưng
+    khớp đủ giống 1 tech đã biết (`provisional=True`, xem `find_nearest_known_tech`)
+    vẫn trả 200 kèm cluster tạm — chỉ 404 khi thật sự không suy ra được gì.
+    """
     store = get_store()
     result = _build_tech_result(tech_name, store)
-    if not result.found:
+    if not result.found and not result.provisional:
         raise HTTPException(
             status_code=404,
-            detail=f"'{tech_name}' không có trong snapshot (tag={store.tag}). "
-                   "Chạy lại pipeline khi DB được update.",
+            detail=f"'{tech_name}' không có trong snapshot (tag={store.tag}), và không khớp đủ "
+                   "giống tech nào đã biết để gán tạm. Chạy lại pipeline khi DB được update.",
         )
     return result
 
@@ -248,15 +268,19 @@ def predict_batch(req: BatchPredictRequest):
     Batch lookup cluster cho danh sách tech names.
 
     - Tìm trong snapshot hiện tại (best_labels.parquet).
-    - `found=false` nếu tech chưa có trong DB / chưa pass noise filter.
-    - Khi DB update → chạy lại pipeline → gọi lại endpoint này.
+    - `found=false` nếu tech chưa có trong DB / chưa pass noise filter — nhưng nếu khớp
+      đủ giống 1 tech đã biết, vẫn trả cluster tạm (`provisional=true`, xem `n_provisional`).
+    - Khi DB update → chạy lại pipeline → gọi lại endpoint này để có kết quả HDBSCAN thật.
     """
     store = get_store()
     results = [_build_tech_result(name, store) for name in req.tech_names]
     n_found = sum(1 for r in results if r.found)
+    n_provisional = sum(1 for r in results if r.provisional)
+    n_not_found = sum(1 for r in results if not r.found and not r.provisional)
     return BatchPredictResponse(
         results=results,
         n_found=n_found,
-        n_not_found=len(results) - n_found,
+        n_provisional=n_provisional,
+        n_not_found=n_not_found,
         snapshot_tag=store.tag,
     )

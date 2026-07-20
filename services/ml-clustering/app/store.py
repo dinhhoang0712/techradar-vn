@@ -11,6 +11,7 @@ store sẽ đọc manifest trên MinIO và tự reload theo TTL khi tag đổi.
 """
 from __future__ import annotations
 
+import difflib
 import json
 import logging
 import os
@@ -32,6 +33,12 @@ logger = logging.getLogger(__name__)
 # MinIO luôn cần path-style addressing (không hỗ trợ virtual-hosted-style qua DNS wildcard).
 _ADDRESSING_STYLE = "path"
 _REGION = "us-east-1"  # không có ý nghĩa thật với MinIO, boto3 chỉ yêu cầu có giá trị.
+
+# Ngưỡng difflib.SequenceMatcher.ratio() để chấp nhận 1 match "đủ giống" cho
+# provisional lookup (xem AppStore.find_nearest_known_tech) — tuned thủ công:
+# 0.72 bắt được biến thể viết hoa/thường/khoảng trắng ("nextjs" ~ "next.js") mà
+# không quá lỏng tới mức khớp nhầm 2 tech không liên quan.
+_PROVISIONAL_MATCH_THRESHOLD = 0.72
 
 
 def _get_minio_settings() -> dict | None:
@@ -329,6 +336,39 @@ class AppStore:
             return None, None
         cluster_id = self.tech_to_cluster.get(tech_id)
         return tech_id, cluster_id
+
+    def find_nearest_known_tech(self, name: str) -> tuple[str, int, float] | None:
+        """
+        Fallback khi `lookup_tech()` không khớp — tech thật sự mới (chưa từng có trong
+        snapshot) phải đợi tới lần retrain kế tiếp mới được HDBSCAN phân cụm thật. Ở
+        đây tìm tech ĐÃ BIẾT có tên giống nhất (difflib, so mặt chữ) để gán PROVISIONAL
+        vào cùng cluster ngay — tốt hơn 404 trắng, dù kém chính xác hơn embedding
+        ngữ nghĩa thật (E5). Cố tình KHÔNG dùng embedding model ở serving layer để giữ
+        container nhẹ (`requirements-api.txt` không có torch/sentence-transformers).
+
+        Trả (matched_name, cluster_id, score) hoặc None nếu không có ứng viên nào đạt
+        `_PROVISIONAL_MATCH_THRESHOLD`, hoặc ứng viên tốt nhất lại là noise (cluster -1
+        — gán "provisional noise" không phải tín hiệu hữu ích cho caller).
+        """
+        if not self.name_lower_to_id:
+            return None
+
+        target = name.lower().strip()
+        candidates = difflib.get_close_matches(
+            target, self.name_lower_to_id.keys(), n=1, cutoff=_PROVISIONAL_MATCH_THRESHOLD
+        )
+        if not candidates:
+            return None
+
+        matched_lower = candidates[0]
+        tech_id = self.name_lower_to_id[matched_lower]
+        cluster_id = self.tech_to_cluster.get(tech_id)
+        if cluster_id is None or cluster_id == -1:
+            return None
+
+        score = difflib.SequenceMatcher(None, target, matched_lower).ratio()
+        matched_name = self.id_to_name.get(tech_id, matched_lower)
+        return matched_name, cluster_id, round(score, 3)
 
     def get_cluster_label(self, cluster_id: int) -> dict | None:
         return self.cluster_labels.get(cluster_id)

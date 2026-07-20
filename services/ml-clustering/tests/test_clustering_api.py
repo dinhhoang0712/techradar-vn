@@ -40,6 +40,9 @@ def mock_store():
     store.get_near_clusters = lambda tid: (
         [{"cluster_id": 1, "score": 0.71, "label": "Data", "label_en": "Data"}] if tid == "t1" else []
     )
+    # Mặc định: không có ứng viên provisional nào (giống store thật khi không match đủ giống).
+    # Test riêng cho nhánh provisional override lambda này.
+    store.find_nearest_known_tech = lambda n: None
 
     def _save_cluster_override(cid, *, label=None, label_en=None, description=None, domain=None, actor=None):
         if cid not in store.cluster_labels:
@@ -104,6 +107,44 @@ def test_api_technology_prediction_service(client):
     assert resp["cluster_id"] == 0
     batch = client.post("/predict/batch", json={"tech_names": ["Python"]}).json()
     assert batch["n_found"] == 1
+
+
+def test_api_technology_unknown_with_no_provisional_match_returns_404(client):
+    """Không khớp gì cả (kể cả provisional) → 404, không đoán liều."""
+    resp = client.get("/tech/CompletelyUnknownTech/cluster")
+    assert resp.status_code == 404
+
+
+def test_api_technology_provisional_match_returns_200_with_flag(client, mock_store):
+    """Tech chưa có trong snapshot nhưng khớp đủ giống 1 tech đã biết (difflib) →
+    vẫn trả 200 kèm cluster tạm, found=False nhưng provisional=True."""
+    mock_store.find_nearest_known_tech = lambda n: ("Python", 0, 0.86)
+
+    resp = client.get("/tech/Pythonn/cluster")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["found"] is False
+    assert body["provisional"] is True
+    assert body["cluster_id"] == 0
+    assert body["label"] == "Backend"
+    assert body["matched_via"] == "Python"
+    assert body["match_score"] == 0.86
+
+
+def test_api_batch_predict_counts_provisional_separately_from_not_found(client, mock_store):
+    """n_provisional phải tách biệt khỏi n_found/n_not_found trong batch."""
+    def _fake_provisional(name):
+        return ("Python", 0, 0.8) if name == "Pythonn" else None
+    mock_store.find_nearest_known_tech = _fake_provisional
+
+    batch = client.post(
+        "/predict/batch", json={"tech_names": ["Python", "Pythonn", "TotallyUnknown"]}
+    ).json()
+
+    assert batch["n_found"] == 1
+    assert batch["n_provisional"] == 1
+    assert batch["n_not_found"] == 1
 
 
 def test_api_technology_soft_clustering_and_near_clusters(client):

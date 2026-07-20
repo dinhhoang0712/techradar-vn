@@ -484,8 +484,8 @@ Stage 5 — WRITEBACK
 | GET | `/pipeline/status` | Public | Pipeline status |
 | GET | `/clusters` | Public | Danh sách clusters |
 | GET | `/clusters/{id}` | Public | Chi tiết cluster |
-| GET | `/tech/{name}/cluster` | Public | Tra cứu cluster của tech |
-| POST | `/predict/batch` | Public | Batch lookup |
+| GET | `/tech/{name}/cluster` | Public | Tra cứu cluster của tech — tech chưa có trong snapshot vẫn có thể trả `provisional=true` nếu khớp đủ giống tech đã biết |
+| POST | `/predict/batch` | Public | Batch lookup, trả thêm `n_provisional` |
 
 ### 3.4 Cluster Serving
 
@@ -522,6 +522,19 @@ Query params: `?is_coherent=true` để lọc chỉ cluster coherent.
   "tech_names": ["React", "Kubernetes", "UnknownTech"]
 }
 ```
+
+> **Provisional lookup (tech chưa có trong snapshot):** tech thật sự mới (chưa từng crawl,
+> hoặc mới ingest sau lần train gần nhất) phải đợi tới lần retrain kế tiếp mới được HDBSCAN
+> phân cụm thật — `Stage 3 — TRAIN` không hỗ trợ incremental fit. Để không trả 404 trắng
+> trong lúc chờ, `AppStore.find_nearest_known_tech()` (`app/store.py`) so tên tech mới với
+> mọi tên đã biết bằng `difflib` (string similarity thuần, **không** dùng embedding model —
+> container serving cố tình không có `torch`/`sentence-transformers`, xem `requirements-api.txt`)
+> — nếu đủ giống (`ratio() ≥ 0.72`) và tech khớp không phải noise, trả về cluster của nó kèm
+> `"found": false, "provisional": true, "matched_via": "<tên đã biết>", "match_score": 0.86`.
+> Đây là suy luận thô theo MẶT CHỮ, không hiểu ngữ nghĩa (khó khớp `"K8s"` ~ `"Kubernetes"` trừ
+> khi đã có sẵn alias `dp_tech_alias_map` chuẩn hoá tên trước khi tới đây) — chỉ 404 khi không
+> tìm được ứng viên nào đủ giống. `POST /predict/batch` trả thêm `n_provisional` tách biệt
+> khỏi `n_found`/`n_not_found` để caller biết kết quả nào là tạm.
 
 ### 3.5 Pipeline Trigger
 

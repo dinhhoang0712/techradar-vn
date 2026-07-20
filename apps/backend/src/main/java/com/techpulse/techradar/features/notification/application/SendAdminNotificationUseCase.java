@@ -1,7 +1,7 @@
 package com.techpulse.techradar.features.notification.application;
 
 import com.techpulse.techradar.features.notification.domain.Notification;
-import com.techpulse.techradar.features.user.application.UserService;
+import com.techpulse.techradar.features.user.application.AdminUserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -23,7 +23,7 @@ public class SendAdminNotificationUseCase {
     private static final String TYPE = "ADMIN_ANNOUNCEMENT";
 
     private final NotificationService notificationService;
-    private final UserService userService;
+    private final AdminUserService userService;
 
     public Mono<Long> execute(String title, String body, String link, String targetUserId) {
         if (title == null || title.isBlank()) {

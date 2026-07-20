@@ -10,7 +10,7 @@ import com.techpulse.techradar.features.social.ports.FollowRepository;
 import com.techpulse.techradar.features.social.ports.PostRepository;
 import com.techpulse.techradar.features.social.ports.ReportRepository;
 import com.techpulse.techradar.features.system.ports.ActivityLogRepository;
-import com.techpulse.techradar.features.user.application.UserService;
+import com.techpulse.techradar.features.user.application.AdminUserService;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -41,7 +41,7 @@ public class AdminDashboardController {
 
     private static final int TOP_N = 10;
 
-    private final UserService userService;
+    private final AdminUserService userService;
     private final ActivityLogRepository activityLog;
     private final PostRepository postRepository;
     private final CommentRepository commentRepository;

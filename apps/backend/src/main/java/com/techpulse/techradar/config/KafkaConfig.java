@@ -21,7 +21,10 @@ import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.config.TopicBuilder;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Kafka configuration for Spring Boot.
@@ -32,6 +35,39 @@ import java.util.Map;
 @Configuration
 @EnableKafka
 public class KafkaConfig {
+
+    /** Declarative name/partitions/replicas spec for a topic; see {@link #TOPIC_SPECS}. */
+    private record TopicSpec(String name, int partitions, short replicas) {
+    }
+
+    /**
+     * Single source of truth for every topic this application declares. Each {@code @Bean
+     * NewTopic} method below simply looks up its spec here by name, so adding/changing a topic's
+     * partitions or replicas only requires editing this list.
+     */
+    private static final List<TopicSpec> TOPIC_SPECS = List.of(
+            new TopicSpec(KafkaTopicConstants.RAW_ARTICLES, 3, (short) 1),
+            new TopicSpec(KafkaTopicConstants.RAW_JOBS, 3, (short) 1),
+            new TopicSpec(KafkaTopicConstants.EXTRACTED_ARTICLES, 3, (short) 1),
+            new TopicSpec(KafkaTopicConstants.EXTRACTED_JOBS, 3, (short) 1),
+            new TopicSpec(KafkaTopicConstants.ARTICLE_VECTORS, 3, (short) 1),
+            new TopicSpec(KafkaTopicConstants.JOB_VECTORS, 3, (short) 1),
+            new TopicSpec(KafkaTopicConstants.TREND_ALERTS, 1, (short) 1),
+            new TopicSpec(KafkaTopicConstants.ROADMAP_ALERTS, 1, (short) 1));
+
+    private static final Map<String, TopicSpec> TOPIC_SPECS_BY_NAME =
+            TOPIC_SPECS.stream().collect(Collectors.toMap(TopicSpec::name, Function.identity()));
+
+    private static NewTopic newTopic(String name) {
+        TopicSpec spec = TOPIC_SPECS_BY_NAME.get(name);
+        if (spec == null) {
+            throw new IllegalStateException("No TopicSpec registered for topic '" + name + "'");
+        }
+        return TopicBuilder.name(spec.name())
+                .partitions(spec.partitions())
+                .replicas(spec.replicas())
+                .build();
+    }
 
     @Value("${spring.kafka.bootstrap-servers:localhost:9092}")
     private String bootstrapServers;
@@ -48,66 +84,42 @@ public class KafkaConfig {
 
     @Bean
     public NewTopic rawArticlesTopic() {
-        return TopicBuilder.name(KafkaTopicConstants.RAW_ARTICLES)
-                .partitions(3)
-                .replicas(1)
-                .build();
+        return newTopic(KafkaTopicConstants.RAW_ARTICLES);
     }
 
     @Bean
     public NewTopic rawJobsTopic() {
-        return TopicBuilder.name(KafkaTopicConstants.RAW_JOBS)
-                .partitions(3)
-                .replicas(1)
-                .build();
+        return newTopic(KafkaTopicConstants.RAW_JOBS);
     }
 
     @Bean
     public NewTopic extractedArticlesTopic() {
-        return TopicBuilder.name(KafkaTopicConstants.EXTRACTED_ARTICLES)
-                .partitions(3)
-                .replicas(1)
-                .build();
+        return newTopic(KafkaTopicConstants.EXTRACTED_ARTICLES);
     }
 
     @Bean
     public NewTopic extractedJobsTopic() {
-        return TopicBuilder.name(KafkaTopicConstants.EXTRACTED_JOBS)
-                .partitions(3)
-                .replicas(1)
-                .build();
+        return newTopic(KafkaTopicConstants.EXTRACTED_JOBS);
     }
 
     @Bean
     public NewTopic articleVectorsTopic() {
-        return TopicBuilder.name(KafkaTopicConstants.ARTICLE_VECTORS)
-                .partitions(3)
-                .replicas(1)
-                .build();
+        return newTopic(KafkaTopicConstants.ARTICLE_VECTORS);
     }
 
     @Bean
     public NewTopic jobVectorsTopic() {
-        return TopicBuilder.name(KafkaTopicConstants.JOB_VECTORS)
-                .partitions(3)
-                .replicas(1)
-                .build();
+        return newTopic(KafkaTopicConstants.JOB_VECTORS);
     }
 
     @Bean
     public NewTopic trendAlertsTopic() {
-        return TopicBuilder.name(KafkaTopicConstants.TREND_ALERTS)
-                .partitions(1)
-                .replicas(1)
-                .build();
+        return newTopic(KafkaTopicConstants.TREND_ALERTS);
     }
 
     @Bean
     public NewTopic roadmapAlertsTopic() {
-        return TopicBuilder.name(KafkaTopicConstants.ROADMAP_ALERTS)
-                .partitions(1)
-                .replicas(1)
-                .build();
+        return newTopic(KafkaTopicConstants.ROADMAP_ALERTS);
     }
 
     @Bean

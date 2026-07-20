@@ -1,11 +1,10 @@
 package com.techpulse.techradar.config;
 
-import com.techpulse.techradar.config.JwtTokenProvider;
 import com.techpulse.techradar.features.system.ports.ActivityLogRepository;
+import com.techpulse.techradar.shared.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
@@ -13,6 +12,7 @@ import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
+import reactor.util.context.ContextView;
 
 import java.util.List;
 import java.util.Set;
@@ -22,8 +22,9 @@ import java.util.Set;
  * dashboard shows real metrics. Recording is fire-and-forget and never blocks/fails the request.
  * <p>
  * Only SUCCESSFUL (2xx) requests are counted (so 401/404/polling-error noise is excluded), and the
- * real user id is captured from the Bearer token when present. Paths here have NO {@code /api/v1}
- * prefix — {@code spring.webflux.base-path} is stripped before WebFilters run.
+ * real user id is read from the already-authenticated {@code SecurityContext} when present. Paths
+ * here have NO {@code /api/v1} prefix — {@code spring.webflux.base-path} is stripped before
+ * WebFilters run.
  */
 @Component
 @Order(Ordered.LOWEST_PRECEDENCE)
@@ -36,7 +37,6 @@ public class ActivityTrackingFilter implements WebFilter {
             "/admin/dashboard", "/user/avatar"); // don't count dashboard polling or image fetches
 
     private final ActivityLogRepository activityLog;
-    private final JwtTokenProvider jwtTokenProvider;
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
@@ -47,33 +47,37 @@ public class ActivityTrackingFilter implements WebFilter {
             return chain.filter(exchange);
         }
 
-        return chain.filter(exchange).doOnSuccess(v -> {
+        // doOnEach (rather than doOnSuccess) so we can capture the Reactor ContextView carrying the
+        // authenticated SecurityContext that Spring Security's AuthenticationWebFilter wrote further
+        // upstream; a plain doOnSuccess callback has no access to that context.
+        return chain.filter(exchange).doOnEach(signal -> {
+            if (!signal.isOnComplete()) {
+                return;
+            }
             HttpStatusCode status = exchange.getResponse().getStatusCode();
             if (status == null || !status.is2xxSuccessful()) {
                 return; // only count successful requests
             }
-            String userId = userIdFromAuth(exchange);
-            activityLog.recordVisit(userId, path).onErrorComplete().subscribe();
-
-            if (SEARCH_PATHS.contains(path)) {
-                List<String> keywords = exchange.getRequest().getQueryParams().get("keywords");
-                if (keywords != null) {
-                    keywords.forEach(kw -> activityLog.recordSearch(kw).onErrorComplete().subscribe());
-                }
-            }
+            recordActivity(exchange, path, signal.getContextView());
         });
     }
 
-    private String userIdFromAuth(ServerWebExchange exchange) {
-        String header = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
-        if (header == null || !header.startsWith("Bearer ")) {
-            return null;
+    private void recordActivity(ServerWebExchange exchange, String path, ContextView contextView) {
+        // Fire-and-forget: never blocks or fails the request. The authenticated user id (if any) is
+        // read from the already-populated security context instead of re-parsing the Bearer token.
+        SecurityUtils.currentUserId()
+                .flatMap(userId -> activityLog.recordVisit(userId, path))
+                .switchIfEmpty(Mono.defer(() -> activityLog.recordVisit(null, path)))
+                .contextWrite(contextView)
+                .onErrorComplete()
+                .subscribe();
+
+        if (SEARCH_PATHS.contains(path)) {
+            List<String> keywords = exchange.getRequest().getQueryParams().get("keywords");
+            if (keywords != null) {
+                keywords.forEach(kw -> activityLog.recordSearch(kw).onErrorComplete().subscribe());
+            }
         }
-        String token = header.substring(7).trim();
-        if (token.isEmpty() || !jwtTokenProvider.isTokenValid(token) || !jwtTokenProvider.isAccessToken(token)) {
-            return null;
-        }
-        return jwtTokenProvider.getUserIdFromToken(token);
     }
 
     private boolean isIgnored(String path) {

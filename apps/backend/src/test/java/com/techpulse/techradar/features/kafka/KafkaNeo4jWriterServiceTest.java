@@ -2,6 +2,7 @@ package com.techpulse.techradar.features.kafka;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.techpulse.techradar.features.kafka.model.ExtractedJob;
 import com.techpulse.techradar.features.kafka.producer.KafkaProducerService;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.BeforeEach;
@@ -10,23 +11,20 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.neo4j.driver.Driver;
-import org.neo4j.driver.Result;
-import org.neo4j.driver.Session;
-import org.neo4j.driver.Transaction;
-import org.neo4j.driver.TransactionWork;
-import org.neo4j.driver.Value;
-
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Covers the CASE-based Cypher SET in writeJob that preserves an existing Company's
- * industry/size when the incoming job posting doesn't carry that data (e.g. crawlers other
- * than TopCV), instead of overwriting it with blank.
+ * Covers the KafkaNeo4jWriterService orchestration layer: delegating the actual Cypher write to
+ * {@link Neo4jExtractionWriter} and firing (or skipping) the {@code job.match.alert} publish
+ * based on the "is new" boolean {@link Neo4jExtractionWriter#writeJob} reports. That boolean is
+ * computed atomically inside the writer's own MERGE transaction — see
+ * {@code Neo4jExtractionWriterTest} for coverage of that logic itself.
  */
 @ExtendWith(MockitoExtension.class)
 class KafkaNeo4jWriterServiceTest {
@@ -37,29 +35,13 @@ class KafkaNeo4jWriterServiceTest {
     private KafkaProducerService kafkaProducer;
 
     @Mock
-    private Driver neo4jDriver;
-
-    @Mock
-    private Session session;
-
-    @Mock
-    private Transaction tx;
-
-    @Mock
-    private Result jobExistsResult;
+    private Neo4jExtractionWriter neo4jWriter;
 
     private KafkaNeo4jWriterService service;
 
     @BeforeEach
     void setUp() {
-        service = new KafkaNeo4jWriterService(objectMapper, neo4jDriver, kafkaProducer);
-        when(neo4jDriver.session()).thenReturn(session);
-        when(session.run(any(String.class), any(Value.class))).thenReturn(jobExistsResult);
-        when(jobExistsResult.hasNext()).thenReturn(true); // pretend the job already exists, skip the new-job alert path
-        when(session.executeWrite(any())).thenAnswer(invocation -> {
-            TransactionWork<Object> work = invocation.getArgument(0);
-            return work.execute(tx);
-        });
+        service = new KafkaNeo4jWriterService(objectMapper, neo4jWriter, kafkaProducer);
     }
 
     private static String extractedJobJson(String companySizeField, String companyIndustryField) {
@@ -86,69 +68,48 @@ class KafkaNeo4jWriterServiceTest {
                       "location": "Hà Nội"
                     },
                     "skills": [],
-                    "technologies": []
+                    "technologies": ["Java"]
                   }
                 }
                 """).formatted(companySizeField, companyIndustryField);
     }
 
-    private String companyMergeCypher() {
-        ArgumentCaptor<String> cypherCaptor = ArgumentCaptor.forClass(String.class);
-        org.mockito.Mockito.verify(tx, org.mockito.Mockito.atLeastOnce())
-                .run(cypherCaptor.capture(), any(Value.class));
-        return cypherCaptor.getAllValues().stream()
-                .filter(cypher -> cypher.contains("MERGE (c:Company"))
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("No Company MERGE Cypher was run"));
-    }
-
-    private Value companyMergeParams() {
-        ArgumentCaptor<String> cypherCaptor = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<Value> paramsCaptor = ArgumentCaptor.forClass(Value.class);
-        org.mockito.Mockito.verify(tx, org.mockito.Mockito.atLeastOnce())
-                .run(cypherCaptor.capture(), paramsCaptor.capture());
-        List<String> cyphers = cypherCaptor.getAllValues();
-        for (int i = 0; i < cyphers.size(); i++) {
-            if (cyphers.get(i).contains("MERGE (c:Company")) {
-                return paramsCaptor.getAllValues().get(i);
-            }
-        }
-        throw new AssertionError("No Company MERGE Cypher was run");
-    }
-
     @Test
-    void writeJob_usesConditionalCaseInsteadOfUnconditionallyOverwritingIndustryAndSize() {
+    void writeJob_publishesJobMatchAlertWhenWriterReportsANewJob() throws Exception {
+        when(neo4jWriter.writeJob(any(ExtractedJob.class))).thenReturn(true);
         ConsumerRecord<String, String> record = new ConsumerRecord<>(
                 "extracted_jobs", 0, 0, "key", extractedJobJson("\"100-500\"", "\"Fintech\""));
 
         service.consumeExtractedJob(record);
 
-        String cypher = companyMergeCypher();
-        assertThat(cypher).contains("CASE WHEN $company_industry IS NULL OR $company_industry = ''");
-        assertThat(cypher).contains("CASE WHEN $company_size IS NULL OR $company_size = ''");
+        verify(kafkaProducer, times(1)).send(eqTopic(), any());
     }
 
     @Test
-    void writeJob_passesTheIncomingIndustryAndSizeAsCypherParameters() {
+    void writeJob_doesNotPublishJobMatchAlertWhenWriterReportsAnExistingJob() {
+        when(neo4jWriter.writeJob(any(ExtractedJob.class))).thenReturn(false);
         ConsumerRecord<String, String> record = new ConsumerRecord<>(
                 "extracted_jobs", 0, 0, "key", extractedJobJson("\"100-500\"", "\"Fintech\""));
 
         service.consumeExtractedJob(record);
 
-        Value params = companyMergeParams();
-        assertThat(params.get("company_size").asString()).isEqualTo("100-500");
-        assertThat(params.get("company_industry").asString()).isEqualTo("Fintech");
+        verify(kafkaProducer, never()).send(any(), any());
     }
 
     @Test
-    void writeJob_passesBlankIndustryAndSizeWhenTheJobPostingHasNone() {
+    void writeJob_delegatesTheActualCypherWriteToNeo4jExtractionWriter() {
+        when(neo4jWriter.writeJob(any(ExtractedJob.class))).thenReturn(false);
         ConsumerRecord<String, String> record = new ConsumerRecord<>(
-                "extracted_jobs", 0, 0, "key", extractedJobJson("\"\"", "\"\""));
+                "extracted_jobs", 0, 0, "key", extractedJobJson("\"100-500\"", "\"Fintech\""));
 
         service.consumeExtractedJob(record);
 
-        Value params = companyMergeParams();
-        assertThat(params.get("company_size").asString()).isEmpty();
-        assertThat(params.get("company_industry").asString()).isEmpty();
+        ArgumentCaptor<ExtractedJob> jobCaptor = ArgumentCaptor.forClass(ExtractedJob.class);
+        verify(neo4jWriter).writeJob(jobCaptor.capture());
+        assertThat(jobCaptor.getValue().getData().getJob().getTitle()).isEqualTo("Backend Developer");
+    }
+
+    private static String eqTopic() {
+        return KafkaTopicConstants.JOB_MATCH_ALERTS;
     }
 }

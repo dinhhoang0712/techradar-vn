@@ -4,7 +4,8 @@ import com.techpulse.techradar.features.auth.ports.UserRepository;
 import com.techpulse.techradar.features.notification.application.NotificationService;
 import com.techpulse.techradar.features.notification.domain.Notification;
 import com.techpulse.techradar.features.social.ports.FollowRepository;
-import com.techpulse.techradar.shared.exception.AppException;
+import com.techpulse.techradar.shared.exception.BadRequestException;
+import com.techpulse.techradar.shared.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -23,7 +24,7 @@ public class ToggleFollowUseCase {
 
     public Mono<Void> follow(String followerId, String followeeId) {
         if (followerId.equals(followeeId)) {
-            return Mono.error(new AppException("Cannot follow yourself", 400, "INVALID_FOLLOW"));
+            return Mono.error(new BadRequestException(ErrorCode.INVALID_FOLLOW, "Cannot follow yourself"));
         }
         return followRepository.follow(UUID.fromString(followerId), UUID.fromString(followeeId))
                 .flatMap(isNewFollow -> {

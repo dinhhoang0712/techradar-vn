@@ -15,7 +15,8 @@ import java.util.List;
  * WebFlux configuration for reactive stack setup.
  * <p>
  * Exception-to-HTTP mapping lives in {@code shared.exception.GlobalExceptionHandler}
- * ({@code @RestControllerAdvice}); non-application errors fall back to Spring Boot's default handler.
+ * ({@code @RestControllerAdvice}), including a catch-all so every error — application or not —
+ * returns the {@code ApiResponse} envelope instead of Spring Boot's default error body.
  */
 @Slf4j
 @Configuration

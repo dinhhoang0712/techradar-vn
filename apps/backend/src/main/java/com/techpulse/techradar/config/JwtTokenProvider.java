@@ -21,6 +21,27 @@ import java.util.*;
 @RequiredArgsConstructor
 public class JwtTokenProvider {
 
+    /**
+     * The {@code token_type} claim value, as an enum instead of a raw string literal scattered
+     * across generation/validation methods. {@link #claimValue()} returns the exact same string
+     * that was previously hardcoded, so tokens already issued/in use remain valid — the value on
+     * the wire is unchanged.
+     */
+    public enum TokenType {
+        ACCESS("access"),
+        REFRESH("refresh");
+
+        private final String claimValue;
+
+        TokenType(String claimValue) {
+            this.claimValue = claimValue;
+        }
+
+        public String claimValue() {
+            return claimValue;
+        }
+    }
+
     @Value("${app.jwt.secret}")
     private String jwtSecret;
 
@@ -39,14 +60,14 @@ public class JwtTokenProvider {
         claims.put("sub", userId);
         claims.put("email", email);
         claims.put("role", role);
-        claims.put("token_type", "access");
+        claims.put("token_type", TokenType.ACCESS.claimValue());
         return createToken(claims, userId, jwtExpiration);
     }
 
     public String generateRefreshToken(String userId) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("sub", userId);
-        claims.put("token_type", "refresh");
+        claims.put("token_type", TokenType.REFRESH.claimValue());
         return createToken(claims, userId, refreshExpiration);
     }
 
@@ -99,7 +120,7 @@ public class JwtTokenProvider {
     public boolean isAccessToken(String token) {
         try {
             String tokenType = getTokenTypeFromToken(token);
-            return "access".equals(tokenType);
+            return TokenType.ACCESS.claimValue().equals(tokenType);
         } catch (Exception e) {
             return false;
         }
@@ -108,7 +129,7 @@ public class JwtTokenProvider {
     public boolean isRefreshToken(String token) {
         try {
             String tokenType = getTokenTypeFromToken(token);
-            return "refresh".equals(tokenType);
+            return TokenType.REFRESH.claimValue().equals(tokenType);
         } catch (Exception e) {
             return false;
         }

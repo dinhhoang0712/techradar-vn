@@ -6,30 +6,23 @@ package com.techpulse.techradar.shared.exception;
  */
 public class AppException extends RuntimeException {
 
-    private final int statusCode;
-    private final String errorCode;
+    private final ErrorCode errorCode;
 
-    public AppException(String message) {
-        this(message, 500, "INTERNAL_SERVER_ERROR");
-    }
-
-    public AppException(String message, int statusCode, String errorCode) {
+    public AppException(ErrorCode errorCode, String message) {
         super(message);
-        this.statusCode = statusCode;
         this.errorCode = errorCode;
     }
 
-    public AppException(String message, Throwable cause, int statusCode, String errorCode) {
+    public AppException(ErrorCode errorCode, String message, Throwable cause) {
         super(message, cause);
-        this.statusCode = statusCode;
         this.errorCode = errorCode;
     }
 
     public int getStatusCode() {
-        return statusCode;
+        return errorCode.getStatus().value();
     }
 
     public String getErrorCode() {
-        return errorCode;
+        return errorCode.name();
     }
 }

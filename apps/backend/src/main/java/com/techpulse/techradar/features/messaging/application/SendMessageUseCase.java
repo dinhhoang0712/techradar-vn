@@ -7,7 +7,8 @@ import com.techpulse.techradar.features.messaging.ports.MessageRepository;
 import com.techpulse.techradar.features.messaging.realtime.MessageBroadcaster;
 import com.techpulse.techradar.features.notification.application.NotificationService;
 import com.techpulse.techradar.features.notification.domain.Notification;
-import com.techpulse.techradar.shared.exception.AppException;
+import com.techpulse.techradar.shared.exception.BadRequestException;
+import com.techpulse.techradar.shared.exception.ErrorCode;
 import com.techpulse.techradar.shared.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,10 +35,10 @@ public class SendMessageUseCase {
     public Mono<DirectMessage> execute(String conversationId, String senderId, String content) {
         String trimmed = content == null ? "" : content.trim();
         if (trimmed.isEmpty()) {
-            return Mono.error(new AppException("Message content must not be empty", 400, "INVALID_CONTENT"));
+            return Mono.error(new BadRequestException(ErrorCode.INVALID_CONTENT, "Message content must not be empty"));
         }
         if (trimmed.length() > MAX_CONTENT_LENGTH) {
-            return Mono.error(new AppException("Message too long (max " + MAX_CONTENT_LENGTH + " chars)", 400, "INVALID_CONTENT"));
+            return Mono.error(new BadRequestException(ErrorCode.INVALID_CONTENT, "Message too long (max " + MAX_CONTENT_LENGTH + " chars)"));
         }
 
         UUID convId = UUID.fromString(conversationId);

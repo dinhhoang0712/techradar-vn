@@ -1,0 +1,53 @@
+{
+  "_note": "Canonical tech-name keyword vocabulary for EntityExtractionService (Java Kafka realtime pipeline). MUST be kept in sync with the TECH_KEYWORDS / VN_TECH_ALIASES lists in data-platform/common/tech_keywords.py — same class of cross-write-path fragmentation problem that dp_tech_alias_map / TechAliasCache already solves for alias normalization, just not yet extended to cover this base vocabulary (see EntityExtractionService.java header comment). Pulling this out of the .java source into one plain data file at least reduces the sync surface to a single, language-agnostic artifact.",
+  "keywords": [
+    "Python", "Java", "JavaScript", "TypeScript", "Golang", "Go", "Rust",
+    "C++", "C#", "PHP", "Ruby", "Swift", "Kotlin", "Scala", "Dart", "Perl",
+    "Elixir", "Haskell",
+
+    "React", "Vue", "Angular", "Svelte", "Next.js", "Nuxt", "jQuery",
+    "Tailwind", "Bootstrap", "Webpack", "Vite", "HTML", "CSS", "Sass",
+
+    "Spring Boot", "Spring", "Django", "Flask", "FastAPI", "Node.js",
+    "Express", "Laravel", "Rails", ".NET", "ASP.NET", "NestJS",
+
+    "Flutter", "React Native", "Android", "iOS", "Xamarin",
+
+    "AI", "ML", "NLP", "RPA", "Machine Learning", "Deep Learning",
+    "Computer Vision", "Big Data", "Data Science", "LLM", "GPT", "ChatGPT",
+    "Gemini", "Claude", "TensorFlow", "PyTorch", "Keras", "Hadoop", "Spark",
+    "Flink", "Airflow", "dbt", "Databricks", "Snowflake", "Power BI",
+    "Tableau", "BigQuery",
+
+    "SQL", "NoSQL", "PostgreSQL", "MySQL", "MongoDB", "Redis", "Neo4j",
+    "Qdrant", "Elasticsearch", "Cassandra", "SQLite", "Oracle", "MariaDB",
+    "GraphQL",
+
+    "AWS", "GCP", "Azure", "Docker", "Kubernetes", "CI/CD", "DevOps",
+    "Terraform", "Ansible", "Jenkins", "GitLab", "GitHub Actions",
+    "Prometheus", "Grafana",
+
+    "Kafka", "RabbitMQ", "gRPC", "Microservices", "WebSocket",
+
+    "Blockchain", "Web3", "Solidity", "IoT", "AR", "VR", "Cybersecurity",
+    "5G", "Semiconductor"
+  ],
+  "vnAliases": {
+    "trí tuệ nhân tạo": "AI",
+    "học máy": "Machine Learning",
+    "học sâu": "Deep Learning",
+    "dữ liệu lớn": "Big Data",
+    "an ninh mạng": "Cybersecurity",
+    "bảo mật mạng": "Cybersecurity",
+    "chuyển đổi số": "Digital Transformation",
+    "bán dẫn": "Semiconductor",
+    "chip bán dẫn": "Semiconductor",
+    "vi mạch": "Semiconductor",
+    "điện toán đám mây": "Cloud",
+    "chuỗi khối": "Blockchain",
+    "thực tế ảo": "VR",
+    "thực tế tăng cường": "AR",
+    "vạn vật kết nối": "IoT",
+    "internet vạn vật": "IoT"
+  }
+}

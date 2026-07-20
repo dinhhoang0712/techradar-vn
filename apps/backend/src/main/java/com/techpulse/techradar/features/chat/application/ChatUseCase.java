@@ -12,6 +12,7 @@ import com.techpulse.techradar.features.chat.ports.ChatRepository;
 import com.techpulse.techradar.shared.exception.ForbiddenException;
 import com.techpulse.techradar.shared.exception.RateLimitExceededException;
 import com.techpulse.techradar.shared.redis.ChatRateLimiterService;
+import com.techpulse.techradar.shared.util.UuidUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.codec.ServerSentEvent;
@@ -136,7 +137,7 @@ public class ChatUseCase {
         UUID id = sessionId != null && !sessionId.isBlank() ? UUID.fromString(sessionId) : UUID.randomUUID();
         ChatSession session = ChatSession.builder()
                 .id(id)
-                .userId(isValidUuid(userId) ? UUID.fromString(userId) : null)
+                .userId(UuidUtils.isValid(userId) ? UUID.fromString(userId) : null)
                 .createdAt(Instant.now())
                 .updatedAt(Instant.now())
                 .build();
@@ -145,17 +146,5 @@ public class ChatUseCase {
             return Mono.just(session);
         }
         return chatRepository.saveSession(session);
-    }
-
-    private boolean isValidUuid(String value) {
-        if (value == null || value.isBlank()) {
-            return false;
-        }
-        try {
-            UUID.fromString(value);
-            return true;
-        } catch (IllegalArgumentException e) {
-            return false;
-        }
     }
 }

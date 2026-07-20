@@ -6,6 +6,8 @@ import com.techpulse.techradar.features.social.adapters.input.SocialDtos;
 import com.techpulse.techradar.features.social.ports.PostRepository;
 import com.techpulse.techradar.features.social.realtime.FeedBroadcaster;
 import com.techpulse.techradar.shared.exception.AppException;
+import com.techpulse.techradar.shared.exception.BadRequestException;
+import com.techpulse.techradar.shared.exception.ErrorCode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -104,7 +106,7 @@ class CreatePostUseCaseTest {
     void execute_rejectsInvalidImagesBeforeInsertingThePost() {
         List<SocialDtos.ImageInput> images = List.of(new SocialDtos.ImageInput("image/png", "not-valid-base64"));
         when(postImageService.validate(images))
-                .thenThrow(new AppException("Image empty or too large (max 3MB)", 400, "INVALID_IMAGE"));
+                .thenThrow(new BadRequestException(ErrorCode.INVALID_IMAGE, "Image empty or too large (max 3MB)"));
 
         StepVerifier.create(useCase.execute(userId, "Bad image", images, null, null))
                 .expectErrorSatisfies(e -> assertThat(((AppException) e).getErrorCode()).isEqualTo("INVALID_IMAGE"))

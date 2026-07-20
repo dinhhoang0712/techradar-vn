@@ -1,6 +1,6 @@
 package com.techpulse.techradar.features.user.adapters.input;
 
-import com.techpulse.techradar.features.user.application.UserService;
+import com.techpulse.techradar.features.user.application.AdminUserService;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -23,7 +23,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class UserAdminController {
 
-    private final UserService userService;
+    private final AdminUserService userService;
 
     @Operation(summary = "List all users")
     @GetMapping("/users")

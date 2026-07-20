@@ -1,6 +1,6 @@
 package com.techpulse.techradar.features.user.adapters.input;
 
-import com.techpulse.techradar.features.user.application.UserService;
+import com.techpulse.techradar.features.user.application.ProfileService;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,13 +24,13 @@ import java.util.Objects;
 @RequiredArgsConstructor
 public class UserController {
 
-    private final UserService userService;
+    private final ProfileService profileService;
 
     @Operation(summary = "Get current user profile")
     @GetMapping("/profile")
     public Mono<ResponseEntity<ApiResponse<UserProfileView>>> getProfile() {
         return extractCurrentUserId()
-                .flatMap(userService::getProfileData)
+                .flatMap(profileService::getProfileData)
                 .map(data -> UserProfileView.from(data.user(), data.profile()))
                 .map(profile -> ResponseEntity.ok(ApiResponse.success(profile, "Profile retrieved")))
                 .switchIfEmpty(Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -43,7 +43,7 @@ public class UserController {
             @Valid @RequestBody UpdateProfileRequest request
     ) {
         return extractCurrentUserId()
-                .flatMap(userId -> userService.updateProfile(userId, request))
+                .flatMap(userId -> profileService.updateProfile(userId, request))
                 .map(data -> UserProfileView.from(data.user(), data.profile()))
                 .map(updated -> ResponseEntity.ok(ApiResponse.success(updated, "Profile updated")))
                 .switchIfEmpty(Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED)

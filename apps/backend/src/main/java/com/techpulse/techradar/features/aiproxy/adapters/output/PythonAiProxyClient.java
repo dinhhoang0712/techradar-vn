@@ -1,7 +1,8 @@
 package com.techpulse.techradar.features.aiproxy.adapters.output;
 
 import com.techpulse.techradar.features.aiproxy.ports.AiProxyPort;
-import com.techpulse.techradar.shared.exception.DatabaseUnavailableException;
+import com.techpulse.techradar.shared.client.PythonServiceWebClientFactory;
+import com.techpulse.techradar.shared.http.AbstractPythonServiceClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,7 +18,7 @@ import java.util.Map;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class PythonAiProxyClient implements AiProxyPort {
+public class PythonAiProxyClient extends AbstractPythonServiceClient implements AiProxyPort {
 
     private static final ParameterizedTypeReference<Map<String, Object>> MAP_TYPE =
             new ParameterizedTypeReference<>() {};
@@ -30,27 +31,21 @@ public class PythonAiProxyClient implements AiProxyPort {
     @Value("${app.python.internal-token:}")
     private String internalToken;
 
-    private WebClient webClient() {
-        WebClient.Builder builder = webClientBuilder.baseUrl(aiBaseUrl);
-        if (internalToken != null && !internalToken.isBlank()) {
-            builder = builder.defaultHeader("X-Internal-Auth", internalToken);
-        }
-        return builder.build();
+    private WebClient client() {
+        return PythonServiceWebClientFactory.build(webClientBuilder, aiBaseUrl, internalToken);
     }
 
     @Override
     public Mono<Map<String, Object>> forward(String path, Map<String, Object> body, Duration timeout) {
-        return webClient()
+        Mono<Map<String, Object>> request = client()
                 .post()
                 .uri(path)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(body)
                 .retrieve()
-                .bodyToMono(MAP_TYPE)
-                .timeout(timeout)
-                .onErrorResume(ex -> {
-                    log.error("AI proxy service error for path={}", path, ex);
-                    return Mono.error(new DatabaseUnavailableException("AI service unavailable: " + path));
-                });
+                .bodyToMono(MAP_TYPE);
+        return mapMono(request, false, timeout,
+                ex -> log.error("AI proxy service error for path={}", path, ex),
+                "AI service unavailable: " + path);
     }
 }

@@ -6,6 +6,8 @@ import com.techpulse.techradar.features.social.adapters.input.SocialDtos;
 import com.techpulse.techradar.features.social.ports.PostRepository;
 import com.techpulse.techradar.features.social.realtime.FeedBroadcaster;
 import com.techpulse.techradar.shared.exception.AppException;
+import com.techpulse.techradar.shared.exception.BadRequestException;
+import com.techpulse.techradar.shared.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -33,16 +35,16 @@ public class CreatePostUseCase {
                                  String taggedCompanyId, List<String> mentionedUserIds) {
         String trimmed = content == null ? "" : content.trim();
         if (trimmed.isEmpty()) {
-            return Mono.error(new AppException("Post content must not be empty", 400, "INVALID_CONTENT"));
+            return Mono.error(new BadRequestException(ErrorCode.INVALID_CONTENT, "Post content must not be empty"));
         }
         if (trimmed.length() > MAX_CONTENT_LENGTH) {
-            return Mono.error(new AppException("Post content too long (max " + MAX_CONTENT_LENGTH + " chars)", 400, "INVALID_CONTENT"));
+            return Mono.error(new BadRequestException(ErrorCode.INVALID_CONTENT, "Post content too long (max " + MAX_CONTENT_LENGTH + " chars)"));
         }
         if (MentionNotifier.tooMany(mentionedUserIds)) {
             // Validated before any write: failing after the post/images already exist would leave
             // a persisted post behind an error response.
-            return Mono.error(new AppException(
-                    "Too many mentions (max " + MentionNotifier.MAX_MENTIONS + ")", 400, "INVALID_MENTIONS"));
+            return Mono.error(new BadRequestException(
+                    ErrorCode.INVALID_MENTIONS, "Too many mentions (max " + MentionNotifier.MAX_MENTIONS + ")"));
         }
 
         List<PostImageService.PreparedImage> preparedImages;
@@ -94,6 +96,6 @@ public class CreatePostUseCase {
         return getCompaniesUseCase.all()
                 .filter(c -> taggedCompanyId.equals(c.id()))
                 .next()
-                .switchIfEmpty(Mono.error(new AppException("Company not found", 400, "INVALID_COMPANY")));
+                .switchIfEmpty(Mono.error(new BadRequestException(ErrorCode.INVALID_COMPANY, "Company not found")));
     }
 }

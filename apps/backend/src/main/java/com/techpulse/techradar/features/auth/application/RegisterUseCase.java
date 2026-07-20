@@ -5,7 +5,8 @@ import com.techpulse.techradar.features.auth.adapters.input.LoginResponse;
 import com.techpulse.techradar.features.auth.adapters.input.RegisterRequest;
 import com.techpulse.techradar.features.auth.domain.User;
 import com.techpulse.techradar.features.auth.ports.UserRepository;
-import com.techpulse.techradar.shared.exception.AppException;
+import com.techpulse.techradar.shared.exception.ConflictException;
+import com.techpulse.techradar.shared.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -30,7 +31,7 @@ public class RegisterUseCase {
                     if (exists) {
                         log.warn("Registration rejected: email already registered: {}", request.getEmail());
                         return Mono.error(
-                                new AppException("Email already registered", 409, "EMAIL_ALREADY_EXISTS")
+                                new ConflictException(ErrorCode.EMAIL_ALREADY_EXISTS, "Email already registered")
                         );
                     }
                     return createUser(request);

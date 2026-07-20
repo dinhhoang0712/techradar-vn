@@ -5,14 +5,15 @@ import com.techpulse.techradar.features.chat.adapters.input.dto.ChatMessageItem;
 import com.techpulse.techradar.features.chat.adapters.input.dto.ChatRequest;
 import com.techpulse.techradar.features.chat.adapters.input.dto.ChatResponse;
 import com.techpulse.techradar.features.chat.ports.ChatPort;
-import com.techpulse.techradar.shared.exception.DatabaseUnavailableException;
+import com.techpulse.techradar.shared.client.PythonServiceWebClientFactory;
+import com.techpulse.techradar.shared.http.AbstractPythonServiceClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.core.ParameterizedTypeReference;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -23,7 +24,7 @@ import java.time.Duration;
  */
 @Component
 @RequiredArgsConstructor
-public class PythonChatClient implements ChatPort {
+public class PythonChatClient extends AbstractPythonServiceClient implements ChatPort {
 
     private final WebClient.Builder webClientBuilder;
 
@@ -36,62 +37,54 @@ public class PythonChatClient implements ChatPort {
     @Value("${app.python.internal-token:}")
     private String internalToken;
 
-    private WebClient webClient() {
-        WebClient.Builder builder = webClientBuilder.baseUrl(pythonRagBaseUrl);
-        if (internalToken != null && !internalToken.isBlank()) {
-            builder = builder.defaultHeader("X-Internal-Auth", internalToken);
-        }
-        return builder.build();
+    private WebClient client() {
+        return PythonServiceWebClientFactory.build(webClientBuilder, pythonRagBaseUrl, internalToken);
     }
 
     @Override
     public Mono<ChatHealthResponse> getHealth() {
-        return webClient()
+        Mono<ChatHealthResponse> request = client()
                 .get()
                 .uri("/health")
                 .accept(MediaType.APPLICATION_JSON)
                 .retrieve()
-                .bodyToMono(ChatHealthResponse.class)
-                .timeout(Duration.ofMillis(timeout))
-                .onErrorMap(ex -> new DatabaseUnavailableException("RAG service unavailable", ex));
+                .bodyToMono(ChatHealthResponse.class);
+        return mapMono(request, false, Duration.ofMillis(timeout), "RAG service unavailable");
     }
 
     @Override
-    public Mono<ChatResponse> chat(ChatRequest request) {
-        return webClient()
+    public Mono<ChatResponse> chat(ChatRequest chatRequest) {
+        Mono<ChatResponse> response = client()
                 .post()
                 .uri("/chat")
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(request)
+                .bodyValue(chatRequest)
                 .retrieve()
-                .bodyToMono(ChatResponse.class)
-                .timeout(Duration.ofMillis(timeout))
-                .onErrorMap(ex -> new DatabaseUnavailableException("RAG service unavailable", ex));
+                .bodyToMono(ChatResponse.class);
+        return mapMono(response, false, Duration.ofMillis(timeout), "RAG service unavailable");
     }
 
     @Override
     public Flux<ChatMessageItem> listMessages(String sessionId) {
-        return webClient()
+        Flux<ChatMessageItem> request = client()
                 .get()
                 .uri(uriBuilder -> uriBuilder.path("/chat/session/{sessionId}/messages").build(sessionId))
                 .accept(MediaType.APPLICATION_JSON)
                 .retrieve()
-                .bodyToFlux(ChatMessageItem.class)
-                .timeout(Duration.ofMillis(timeout))
-                .onErrorMap(ex -> new DatabaseUnavailableException("RAG service unavailable", ex));
+                .bodyToFlux(ChatMessageItem.class);
+        return mapFlux(request, false, Duration.ofMillis(timeout), "RAG service unavailable");
     }
 
     @Override
-    public Flux<ServerSentEvent<String>> streamChat(ChatRequest request) {
-        return webClient()
+    public Flux<ServerSentEvent<String>> streamChat(ChatRequest chatRequest) {
+        Flux<ServerSentEvent<String>> stream = client()
                 .post()
                 .uri("/chat/stream")
                 .contentType(MediaType.APPLICATION_JSON)
                 .accept(MediaType.TEXT_EVENT_STREAM)
-                .bodyValue(request)
+                .bodyValue(chatRequest)
                 .retrieve()
-                .bodyToFlux(new ParameterizedTypeReference<ServerSentEvent<String>>() {})
-                .timeout(Duration.ofMillis(timeout))
-                .onErrorMap(ex -> new DatabaseUnavailableException("RAG stream unavailable", ex));
+                .bodyToFlux(new ParameterizedTypeReference<ServerSentEvent<String>>() {});
+        return mapFlux(stream, false, Duration.ofMillis(timeout), "RAG stream unavailable");
     }
 }

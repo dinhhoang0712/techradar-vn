@@ -1,7 +1,8 @@
 package com.techpulse.techradar.features.social.application;
 
 import com.techpulse.techradar.features.social.ports.ReportRepository;
-import com.techpulse.techradar.shared.exception.AppException;
+import com.techpulse.techradar.shared.exception.BadRequestException;
+import com.techpulse.techradar.shared.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
@@ -30,10 +31,10 @@ public class ReportContentUseCase {
     private Mono<Void> execute(UUID postId, UUID commentId, String reporterId, String reason) {
         String trimmed = reason == null ? "" : reason.trim();
         if (trimmed.isEmpty()) {
-            return Mono.error(new AppException("Report reason must not be empty", 400, "INVALID_REASON"));
+            return Mono.error(new BadRequestException(ErrorCode.INVALID_REASON, "Report reason must not be empty"));
         }
         if (trimmed.length() > MAX_REASON_LENGTH) {
-            return Mono.error(new AppException("Report reason too long (max " + MAX_REASON_LENGTH + " chars)", 400, "INVALID_REASON"));
+            return Mono.error(new BadRequestException(ErrorCode.INVALID_REASON, "Report reason too long (max " + MAX_REASON_LENGTH + " chars)"));
         }
         return reportRepository.insert(UUID.randomUUID(), UUID.fromString(reporterId), postId, commentId, trimmed)
                 .then();

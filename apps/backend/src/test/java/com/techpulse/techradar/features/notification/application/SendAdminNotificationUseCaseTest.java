@@ -2,7 +2,7 @@ package com.techpulse.techradar.features.notification.application;
 
 import com.techpulse.techradar.features.auth.domain.User;
 import com.techpulse.techradar.features.notification.domain.Notification;
-import com.techpulse.techradar.features.user.application.UserService;
+import com.techpulse.techradar.features.user.application.AdminUserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,7 +27,7 @@ class SendAdminNotificationUseCaseTest {
     @Mock
     private NotificationService notificationService;
     @Mock
-    private UserService userService;
+    private AdminUserService userService;
 
     private SendAdminNotificationUseCase useCase;
 

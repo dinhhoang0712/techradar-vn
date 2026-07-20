@@ -22,6 +22,8 @@ import org.springframework.security.web.server.util.matcher.ServerWebExchangeMat
 import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatchers;
 import org.springframework.web.cors.reactive.CorsConfigurationSource;
 
+import java.util.List;
+
 /**
  * Spring Security configuration for the reactive stack.
  * <p>
@@ -35,28 +37,55 @@ import org.springframework.web.cors.reactive.CorsConfigurationSource;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
+    /**
+     * A single {@code (method, pattern)} public route, reachable without a valid JWT.
+     * This is the ONE source of truth for "public" routes: both the JWT filter's
+     * "skip authentication" matcher and the {@code authorizeExchange} {@code permitAll()}
+     * matcher are derived from {@link #PUBLIC_ROUTES} so the two can never drift apart.
+     */
+    private record PublicRoute(HttpMethod method, String pattern) {
+
+        /** A route open to every HTTP method. */
+        static PublicRoute anyMethod(String pattern) {
+            return new PublicRoute(null, pattern);
+        }
+
+        ServerWebExchangeMatcher toMatcher() {
+            return method == null
+                    ? ServerWebExchangeMatchers.pathMatchers(pattern)
+                    : ServerWebExchangeMatchers.pathMatchers(method, pattern);
+        }
+    }
+
     /** Endpoints reachable without a valid JWT. */
     // NOTE: spring.webflux.base-path (/api/v1) is stripped by the HttpHandler BEFORE the security
     // WebFilter chain runs, so these matchers must NOT include the /api/v1 prefix.
-    private static final String[] PUBLIC_PATHS = {
-            "/auth/login",
-            "/auth/register",
-            "/auth/refresh",
-            "/auth/logout",
-            "/auth/forgot-password",
-            "/auth/reset-password",
-            "/health",
-            "/status",
-            "/stats/public",
-            "/actuator/**",
-            "/swagger-ui.html",
-            "/swagger-ui/**",
-            "/v3/api-docs/**",
-            "/webjars/**",
-            "/forecast",
-            "/report",
-            "/chat/summarize"
-    };
+    private static final List<PublicRoute> PUBLIC_ROUTES = List.of(
+            PublicRoute.anyMethod("/auth/login"),
+            PublicRoute.anyMethod("/auth/register"),
+            PublicRoute.anyMethod("/auth/refresh"),
+            PublicRoute.anyMethod("/auth/logout"),
+            PublicRoute.anyMethod("/auth/forgot-password"),
+            PublicRoute.anyMethod("/auth/reset-password"),
+            PublicRoute.anyMethod("/health"),
+            PublicRoute.anyMethod("/status"),
+            PublicRoute.anyMethod("/stats/public"),
+            PublicRoute.anyMethod("/actuator/**"),
+            PublicRoute.anyMethod("/swagger-ui.html"),
+            PublicRoute.anyMethod("/swagger-ui/**"),
+            PublicRoute.anyMethod("/v3/api-docs/**"),
+            PublicRoute.anyMethod("/webjars/**"),
+            PublicRoute.anyMethod("/forecast"),
+            PublicRoute.anyMethod("/report"),
+            PublicRoute.anyMethod("/chat/summarize"),
+            new PublicRoute(HttpMethod.OPTIONS, "/**"),
+            new PublicRoute(HttpMethod.GET, "/user/avatar/**"),
+            new PublicRoute(HttpMethod.GET, "/posts/*/images/**"));
+
+    /** {@link #PUBLIC_ROUTES} as matchers, shared by both the JWT filter and {@code authorizeExchange}. */
+    private static ServerWebExchangeMatcher[] publicRouteMatchers() {
+        return PUBLIC_ROUTES.stream().map(PublicRoute::toMatcher).toArray(ServerWebExchangeMatcher[]::new);
+    }
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -74,20 +103,15 @@ public class SecurityConfig {
         jwtFilter.setServerAuthenticationConverter(authenticationConverter);
         jwtFilter.setSecurityContextRepository(NoOpServerSecurityContextRepository.getInstance());
         // Only attempt JWT authentication on protected paths so a stale token never blocks a public endpoint.
-        ServerWebExchangeMatcher publicMatcher = ServerWebExchangeMatchers.matchers(
-                ServerWebExchangeMatchers.pathMatchers(HttpMethod.OPTIONS, "/**"),
-                ServerWebExchangeMatchers.pathMatchers(HttpMethod.GET, "/user/avatar/**"),
-                ServerWebExchangeMatchers.pathMatchers(HttpMethod.GET, "/posts/*/images/**"),
-                ServerWebExchangeMatchers.pathMatchers(PUBLIC_PATHS));
+        // Derived from the SAME PUBLIC_ROUTES list used by authorizeExchange below, so the two can
+        // never drift apart.
+        ServerWebExchangeMatcher publicMatcher = ServerWebExchangeMatchers.matchers(publicRouteMatchers());
         jwtFilter.setRequiresAuthenticationMatcher(new NegatedServerWebExchangeMatcher(publicMatcher));
 
         http
                 .securityContextRepository(NoOpServerSecurityContextRepository.getInstance())
                 .authorizeExchange(authorize -> authorize
-                        .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .pathMatchers(HttpMethod.GET, "/user/avatar/**").permitAll()  // public avatar images
-                        .pathMatchers(HttpMethod.GET, "/posts/*/images/**").permitAll()  // public post images
-                        .pathMatchers(PUBLIC_PATHS).permitAll()
+                        .matchers(publicRouteMatchers()).permitAll()
                         .anyExchange().authenticated())
                 .addFilterAt(jwtFilter, SecurityWebFiltersOrder.AUTHENTICATION)
                 // Trả 401 thuần (không kèm WWW-Authenticate: Basic) để trình duyệt

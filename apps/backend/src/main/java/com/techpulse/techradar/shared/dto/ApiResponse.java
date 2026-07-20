@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 /**
  * Generic API response wrapper for all endpoints.
  */
@@ -19,7 +21,12 @@ public class ApiResponse<T> {
     private T data;
     private String message;
     private String errorCode;
+    /** Per-field breakdown for multi-field validation errors; null for every other error. */
+    private List<FieldErrorDetail> errors;
     private long timestamp;
+
+    public record FieldErrorDetail(String field, String message) {
+    }
 
     public static <T> ApiResponse<T> success(T data, String message) {
         return ApiResponse.<T>builder()
@@ -43,6 +50,16 @@ public class ApiResponse<T> {
                 .success(false)
                 .message(message)
                 .errorCode(errorCode)
+                .timestamp(System.currentTimeMillis())
+                .build();
+    }
+
+    public static <T> ApiResponse<T> error(String message, String errorCode, List<FieldErrorDetail> errors) {
+        return ApiResponse.<T>builder()
+                .success(false)
+                .message(message)
+                .errorCode(errorCode)
+                .errors(errors)
                 .timestamp(System.currentTimeMillis())
                 .build();
     }

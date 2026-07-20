@@ -6,6 +6,7 @@ import com.techpulse.techradar.features.clustering.application.TriggerPipelineUs
 import com.techpulse.techradar.features.clustering.application.UpdateClusterLabelUseCase;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import com.techpulse.techradar.shared.exception.ConflictException;
+import com.techpulse.techradar.shared.exception.ErrorCode;
 import com.techpulse.techradar.shared.exception.NotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -63,7 +64,7 @@ class AdminClusteringControllerTest {
     @Test
     void triggerPipeline_surfacesConflict_whenAlreadyRunning() {
         when(triggerPipelineUseCase.execute())
-                .thenReturn(Mono.error(new ConflictException("Đang chạy", "PIPELINE_RUNNING")));
+                .thenReturn(Mono.error(new ConflictException(ErrorCode.PIPELINE_RUNNING, "Đang chạy")));
 
         StepVerifier.create(controller.triggerPipeline())
                 .expectErrorMatches(ex -> ex instanceof ConflictException

@@ -1,6 +1,7 @@
 package com.techpulse.techradar.features.system.application;
 
 import com.techpulse.techradar.features.social.ports.CommentRepository;
+import com.techpulse.techradar.features.social.ports.ModerationPostRepository;
 import com.techpulse.techradar.features.social.ports.PostRepository;
 import com.techpulse.techradar.features.social.ports.ReportRepository;
 import com.techpulse.techradar.features.system.ports.ModerationSuggestionPort;
@@ -21,7 +22,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class SocialModerationService {
 
-    private final PostRepository postRepository;
+    private final ModerationPostRepository postRepository;
     private final CommentRepository commentRepository;
     private final ReportRepository reportRepository;
     private final ModerationSuggestionPort moderationSuggestionPort;

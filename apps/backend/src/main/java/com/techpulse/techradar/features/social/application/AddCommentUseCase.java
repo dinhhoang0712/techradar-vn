@@ -6,9 +6,11 @@ import com.techpulse.techradar.features.notification.domain.Notification;
 import com.techpulse.techradar.features.social.ports.CommentRepository;
 import com.techpulse.techradar.features.social.ports.PostRepository;
 import com.techpulse.techradar.features.social.realtime.FeedBroadcaster;
+import com.techpulse.techradar.shared.exception.AppException;
 import com.techpulse.techradar.shared.exception.BadRequestException;
 import com.techpulse.techradar.shared.exception.ErrorCode;
 import com.techpulse.techradar.shared.exception.NotFoundException;
+import com.techpulse.techradar.shared.util.ContentValidator;
 import com.techpulse.techradar.shared.util.UuidUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,12 +38,11 @@ public class AddCommentUseCase {
     private final FeedBroadcaster feedBroadcaster;
 
     public Mono<String> execute(String postId, String userId, String content, String parentId, List<String> mentionedUserIds) {
-        String trimmed = content == null ? "" : content.trim();
-        if (trimmed.isEmpty()) {
-            return Mono.error(new BadRequestException(ErrorCode.INVALID_CONTENT, "Comment content must not be empty"));
-        }
-        if (trimmed.length() > MAX_CONTENT_LENGTH) {
-            return Mono.error(new BadRequestException(ErrorCode.INVALID_CONTENT, "Comment content too long (max " + MAX_CONTENT_LENGTH + " chars)"));
+        String trimmed;
+        try {
+            trimmed = ContentValidator.requireValidLength(content, MAX_CONTENT_LENGTH, "Comment content");
+        } catch (AppException e) {
+            return Mono.error(e);
         }
         if (MentionNotifier.tooMany(mentionedUserIds)) {
             // Validated before any write: failing after the comment already exists would leave a

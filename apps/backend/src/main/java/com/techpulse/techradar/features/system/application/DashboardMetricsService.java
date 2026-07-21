@@ -7,7 +7,7 @@ import com.techpulse.techradar.features.messaging.ports.ConversationRepository;
 import com.techpulse.techradar.features.notification.ports.NotificationRepository;
 import com.techpulse.techradar.features.social.ports.CommentRepository;
 import com.techpulse.techradar.features.social.ports.FollowRepository;
-import com.techpulse.techradar.features.social.ports.PostRepository;
+import com.techpulse.techradar.features.social.ports.PostAnalyticsRepository;
 import com.techpulse.techradar.features.social.ports.ReportRepository;
 import com.techpulse.techradar.features.system.ports.ActivityLogRepository;
 import com.techpulse.techradar.features.user.application.AdminUserService;
@@ -35,7 +35,7 @@ public class DashboardMetricsService {
 
     private final AdminUserService userService;
     private final ActivityLogRepository activityLog;
-    private final PostRepository postRepository;
+    private final PostAnalyticsRepository postAnalyticsRepository;
     private final CommentRepository commentRepository;
     private final FollowRepository followRepository;
     private final ReportRepository reportRepository;
@@ -67,12 +67,12 @@ public class DashboardMetricsService {
     public Mono<SocialEngagementStats> socialEngagement() {
         LocalDateTime todayStart = LocalDate.now().atStartOfDay();
         return Mono.zip(
-                postRepository.countAll(),
-                postRepository.countCreatedSince(todayStart),
+                postAnalyticsRepository.countAll(),
+                postAnalyticsRepository.countCreatedSince(todayStart),
                 commentRepository.countAll(),
-                postRepository.countAllLikes(),
+                postAnalyticsRepository.countAllLikes(),
                 followRepository.countAll(),
-                postRepository.topPosters(TOP_N).map(TopPoster::from).collectList(),
+                postAnalyticsRepository.topPosters(TOP_N).map(TopPoster::from).collectList(),
                 reportRepository.countPending()
         ).map(t -> SocialEngagementStats.builder()
                 .totalPosts(t.getT1())
@@ -140,7 +140,7 @@ public class DashboardMetricsService {
         String fullName;
         long postCount;
 
-        static TopPoster from(PostRepository.TopPosterRow r) {
+        static TopPoster from(PostAnalyticsRepository.TopPosterRow r) {
             return TopPoster.builder()
                     .userId(r.userId().toString())
                     .fullName(r.fullName())

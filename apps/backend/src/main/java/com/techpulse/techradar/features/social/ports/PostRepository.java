@@ -36,21 +36,6 @@ public interface PostRepository {
 
     Mono<Void> unlike(UUID postId, UUID userId);
 
-    /** Admin moderation: every post regardless of author/followers, newest first. */
-    Flux<FeedRow> findAllForModeration(int limit, int offset);
-
-    /** Admin moderation: delete any post by id, bypassing ownership. @return true if it existed. */
-    Mono<Boolean> deleteById(UUID postId);
-
-    Mono<Long> countAll();
-
-    Mono<Long> countCreatedSince(LocalDateTime since);
-
-    Mono<Long> countAllLikes();
-
-    /** Users with the most posts, for an admin "most active" widget. */
-    Flux<TopPosterRow> topPosters(int limit);
-
     record NewPost(
             UUID id,
             UUID userId,
@@ -78,13 +63,6 @@ public interface PostRepository {
             String taggedCompanyId,
             String taggedCompanyName,
             String taggedCompanyLocation
-    ) {
-    }
-
-    record TopPosterRow(
-            UUID userId,
-            String fullName,
-            long postCount
     ) {
     }
 }

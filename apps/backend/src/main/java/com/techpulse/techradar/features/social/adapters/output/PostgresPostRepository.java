@@ -8,7 +8,6 @@ import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
@@ -19,7 +18,7 @@ public class PostgresPostRepository implements PostRepository {
 
     private final DatabaseClient dbClient;
 
-    private static final String SELECT_FEED_ROW =
+    static final String SELECT_FEED_ROW =
             "SELECT p.id, p.user_id, u.full_name, up.avatar_url, p.content, p.created_at, " +
             "       (SELECT count(*) FROM post_like pl WHERE pl.post_id = p.id) AS like_count, " +
             "       (SELECT count(*) FROM post_comment pc WHERE pc.post_id = p.id) AS comment_count, " +
@@ -146,85 +145,7 @@ public class PostgresPostRepository implements PostRepository {
                 .fetch().rowsUpdated().then();
     }
 
-    @Override
-    public Flux<FeedRow> findAllForModeration(int limit, int offset) {
-        return dbClient.sql(
-                "SELECT p.id, p.user_id, u.full_name, up.avatar_url, p.content, p.created_at, " +
-                "       (SELECT count(*) FROM post_like pl WHERE pl.post_id = p.id) AS like_count, " +
-                "       (SELECT count(*) FROM post_comment pc WHERE pc.post_id = p.id) AS comment_count " +
-                "FROM post p " +
-                "JOIN users u ON u.id = p.user_id " +
-                "LEFT JOIN user_profile up ON up.user_id = p.user_id " +
-                "ORDER BY p.created_at DESC LIMIT :limit OFFSET :offset")
-                .bind("limit", limit)
-                .bind("offset", offset)
-                .map((row, meta) -> new FeedRow(
-                        row.get("id", UUID.class),
-                        row.get("user_id", UUID.class),
-                        row.get("full_name", String.class),
-                        row.get("avatar_url", String.class),
-                        row.get("content", String.class),
-                        row.get("created_at", LocalDateTime.class),
-                        row.get("like_count", Long.class),
-                        row.get("comment_count", Long.class),
-                        false,
-                        List.of(),
-                        List.of(),
-                        null,
-                        null,
-                        null))
-                .all();
-    }
-
-    @Override
-    public Mono<Boolean> deleteById(UUID postId) {
-        return dbClient.sql("DELETE FROM post WHERE id = :id")
-                .bind("id", postId)
-                .fetch().rowsUpdated()
-                .map(rows -> rows > 0);
-    }
-
-    @Override
-    public Mono<Long> countAll() {
-        return dbClient.sql("SELECT count(*) AS c FROM post")
-                .map((row, meta) -> row.get("c", Long.class))
-                .one()
-                .defaultIfEmpty(0L);
-    }
-
-    @Override
-    public Mono<Long> countCreatedSince(LocalDateTime since) {
-        return dbClient.sql("SELECT count(*) AS c FROM post WHERE created_at >= :since")
-                .bind("since", since)
-                .map((row, meta) -> row.get("c", Long.class))
-                .one()
-                .defaultIfEmpty(0L);
-    }
-
-    @Override
-    public Mono<Long> countAllLikes() {
-        return dbClient.sql("SELECT count(*) AS c FROM post_like")
-                .map((row, meta) -> row.get("c", Long.class))
-                .one()
-                .defaultIfEmpty(0L);
-    }
-
-    @Override
-    public Flux<TopPosterRow> topPosters(int limit) {
-        return dbClient.sql(
-                "SELECT p.user_id, u.full_name, count(*) AS post_count " +
-                "FROM post p JOIN users u ON u.id = p.user_id " +
-                "GROUP BY p.user_id, u.full_name " +
-                "ORDER BY post_count DESC LIMIT :limit")
-                .bind("limit", limit)
-                .map((row, meta) -> new TopPosterRow(
-                        row.get("user_id", UUID.class),
-                        row.get("full_name", String.class),
-                        row.get("post_count", Long.class)))
-                .all();
-    }
-
-    private static FeedRow mapRow(Row row) {
+    static FeedRow mapRow(Row row) {
         UUID[] imageIds = row.get("image_ids", UUID[].class);
         String[] hashtags = row.get("hashtags", String[].class);
         return new FeedRow(
@@ -233,7 +154,7 @@ public class PostgresPostRepository implements PostRepository {
                 row.get("full_name", String.class),
                 row.get("avatar_url", String.class),
                 row.get("content", String.class),
-                row.get("created_at", LocalDateTime.class),
+                row.get("created_at", java.time.LocalDateTime.class),
                 row.get("like_count", Long.class),
                 row.get("comment_count", Long.class),
                 Boolean.TRUE.equals(row.get("liked_by_me", Boolean.class)),

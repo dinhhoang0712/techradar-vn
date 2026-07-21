@@ -1,11 +1,13 @@
 package com.techpulse.techradar.features.user.adapters.output;
 
+import com.techpulse.techradar.features.user.domain.NotificationRecipient;
 import com.techpulse.techradar.features.user.domain.UserProfile;
 import com.techpulse.techradar.features.user.ports.UserProfileRepository;
 import io.r2dbc.spi.Row;
 import lombok.RequiredArgsConstructor;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
@@ -58,6 +60,57 @@ public class PostgresUserProfileRepository implements UserProfileRepository {
         spec = bindNullable(spec, "avatar_url", profile.getAvatarUrl());
 
         return spec.fetch().rowsUpdated().thenReturn(profile);
+    }
+
+    @Override
+    public Flux<NotificationRecipient> findSubscribersByTechnology(String technology) {
+        // @> (contains) instead of `:tech = ANY(technologies)` so the GIN index on
+        // user_profile.technologies (V10) can be used instead of a sequential scan.
+        return dbClient.sql(
+                "SELECT u.id AS user_id, u.email AS email, p.notify_inapp, p.notify_email " +
+                "FROM user_profile p JOIN users u ON u.id = p.user_id " +
+                "WHERE p.technologies @> :tech AND (p.notify_inapp = true OR p.notify_email = true)"
+        )
+                .bind("tech", new String[] { technology })
+                .map((row, meta) -> mapRecipientRow(row))
+                .all();
+    }
+
+    @Override
+    public Flux<NotificationRecipient> findSubscribersByAnyTechnology(List<String> technologies) {
+        // && (overlap) instead of per-technology containment so one query covers every skill the
+        // job requires; still served by the GIN index on user_profile.technologies (V10).
+        return dbClient.sql(
+                "SELECT u.id AS user_id, u.email AS email, p.notify_inapp, p.notify_email " +
+                "FROM user_profile p JOIN users u ON u.id = p.user_id " +
+                "WHERE p.technologies && :techs AND (p.notify_inapp = true OR p.notify_email = true)"
+        )
+                .bind("techs", technologies.toArray(new String[0]))
+                .map((row, meta) -> mapRecipientRow(row))
+                .all();
+    }
+
+    @Override
+    public Flux<NotificationRecipient> findSubscribersWithAnyTechnology() {
+        // Same GIN-indexed user_profile table as findSubscribersByTechnology/findSubscribersByAnyTechnology,
+        // just without a specific-technology filter — any user with a non-empty tech list is a
+        // candidate for the weekly roadmap recompute.
+        return dbClient.sql(
+                "SELECT u.id AS user_id, u.email AS email, p.notify_inapp, p.notify_email " +
+                "FROM user_profile p JOIN users u ON u.id = p.user_id " +
+                "WHERE p.technologies IS NOT NULL AND array_length(p.technologies, 1) > 0 " +
+                "AND (p.notify_inapp = true OR p.notify_email = true)"
+        )
+                .map((row, meta) -> mapRecipientRow(row))
+                .all();
+    }
+
+    private NotificationRecipient mapRecipientRow(Row row) {
+        return new NotificationRecipient(
+                row.get("user_id", UUID.class),
+                row.get("email", String.class),
+                Boolean.TRUE.equals(row.get("notify_inapp", Boolean.class)),
+                Boolean.TRUE.equals(row.get("notify_email", Boolean.class)));
     }
 
     private UserProfile mapRow(Row row) {

@@ -1,7 +1,7 @@
 package com.techpulse.techradar.features.system.application;
 
+import com.techpulse.techradar.features.system.ports.PipelineRunRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -18,20 +18,11 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class DataPlatformJobStatusService {
 
-    private final DatabaseClient dbClient;
+    private final PipelineRunRepository pipelineRunRepository;
 
     /** Latest run (any status) per job name, newest first per group. Missing jobs are simply absent. */
     public Flux<Map<String, Object>> findLatestStatuses(List<String> jobNames) {
-        String[] names = jobNames.toArray(new String[0]);
-        return dbClient.sql(
-                "SELECT DISTINCT ON (job_name) job_name, status, rows_affected, error_msg, "
-                        + "started_at, finished_at "
-                        + "FROM dp_pipeline_runs "
-                        + "WHERE job_name = ANY(:names) "
-                        + "ORDER BY job_name, started_at DESC")
-                .bind("names", names)
-                .fetch()
-                .all();
+        return pipelineRunRepository.findLatestStatuses(jobNames);
     }
 
     /** Whether the given job's latest logged run is still in-flight. */

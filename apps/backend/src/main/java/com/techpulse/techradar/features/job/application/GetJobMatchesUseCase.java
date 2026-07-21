@@ -75,10 +75,26 @@ public class GetJobMatchesUseCase {
             return Flux.empty();
         }
 
+        List<JobMatchFilter> filters = buildFilters(location, minSalaryMVnd);
         return rawMatches(skillsLower)
-                .filter(match -> matchesLocation(match, location))
-                .filter(match -> matchesMinSalary(match, minSalaryMVnd))
+                .filter(match -> filters.stream().allMatch(f -> f.matches(match)))
                 .take(limit);
+    }
+
+    /**
+     * Builds the set of independent {@link JobMatchFilter}s active for this call — only the
+     * dimensions with a non-null/non-blank argument are included, so a job with zero active
+     * filters passes unconditionally (matches original behavior).
+     */
+    private List<JobMatchFilter> buildFilters(String location, Double minSalaryMVnd) {
+        List<JobMatchFilter> filters = new ArrayList<>();
+        if (location != null && !location.isBlank()) {
+            filters.add(JobMatchFilter.byLocation(location));
+        }
+        if (minSalaryMVnd != null) {
+            filters.add(JobMatchFilter.byMinSalary(minSalaryMVnd));
+        }
+        return filters;
     }
 
     /**
@@ -137,17 +153,6 @@ public class GetJobMatchesUseCase {
             }
         }
         return result;
-    }
-
-    private boolean matchesLocation(JobMatch match, String location) {
-        if (location == null || location.isBlank()) return true;
-        return match.location() != null
-                && match.location().toLowerCase(Locale.ROOT).contains(location.toLowerCase(Locale.ROOT));
-    }
-
-    private boolean matchesMinSalary(JobMatch match, Double minSalaryMVnd) {
-        if (minSalaryMVnd == null) return true;
-        return match.salaryMaxVnd() != null && match.salaryMaxVnd() >= minSalaryMVnd;
     }
 
     private LocalDate parseDate(String raw) {

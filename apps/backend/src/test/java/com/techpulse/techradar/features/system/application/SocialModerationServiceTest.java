@@ -1,7 +1,7 @@
 package com.techpulse.techradar.features.system.application;
 
 import com.techpulse.techradar.features.social.ports.CommentRepository;
-import com.techpulse.techradar.features.social.ports.PostRepository;
+import com.techpulse.techradar.features.social.ports.ModerationPostRepository;
 import com.techpulse.techradar.features.social.ports.ReportRepository;
 import com.techpulse.techradar.features.social.ports.ReportRepository.ReportRow;
 import com.techpulse.techradar.features.system.ports.ModerationSuggestionPort;
@@ -30,7 +30,7 @@ import static org.mockito.Mockito.when;
 class SocialModerationServiceTest {
 
     @Mock
-    private PostRepository postRepository;
+    private ModerationPostRepository postRepository;
 
     @Mock
     private CommentRepository commentRepository;

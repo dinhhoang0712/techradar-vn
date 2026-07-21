@@ -1,8 +1,7 @@
 package com.techpulse.techradar.features.social.application;
 
-import com.techpulse.techradar.features.company.application.GetCompaniesUseCase;
-import com.techpulse.techradar.features.company.domain.CompanyProfile;
 import com.techpulse.techradar.features.social.adapters.input.SocialDtos;
+import com.techpulse.techradar.features.social.ports.CompanyLookupPort;
 import com.techpulse.techradar.features.social.ports.PostRepository;
 import com.techpulse.techradar.features.social.realtime.FeedBroadcaster;
 import com.techpulse.techradar.shared.exception.AppException;
@@ -14,7 +13,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -40,7 +38,7 @@ class CreatePostUseCaseTest {
     @Mock
     private PostImageService postImageService;
     @Mock
-    private GetCompaniesUseCase getCompaniesUseCase;
+    private CompanyLookupPort companyLookupPort;
     @Mock
     private MentionNotifier mentionNotifier;
     @Mock
@@ -58,7 +56,7 @@ class CreatePostUseCaseTest {
 
     @BeforeEach
     void setUp() {
-        useCase = new CreatePostUseCase(postRepository, postImageService, getCompaniesUseCase, mentionNotifier, feedBroadcaster);
+        useCase = new CreatePostUseCase(postRepository, postImageService, companyLookupPort, mentionNotifier, feedBroadcaster);
         lenient().when(postRepository.insert(any())).thenReturn(Mono.empty());
         lenient().when(postRepository.findById(any(), any())).thenAnswer(inv -> Mono.just(sampleFeedRow(inv.getArgument(0))));
         lenient().when(postImageService.validate(any())).thenReturn(List.of());
@@ -130,8 +128,8 @@ class CreatePostUseCaseTest {
     @Test
     void execute_resolvesAndSnapshotsTaggedCompany() {
         String companyId = "neo4j-company-1";
-        when(getCompaniesUseCase.all()).thenReturn(Flux.just(
-                new CompanyProfile(companyId, "Acme Corp", "Hà Nội", List.of("Java"), 5, null, null)));
+        when(companyLookupPort.findById(companyId)).thenReturn(
+                Mono.just(new CompanyLookupPort.CompanySummary(companyId, "Acme Corp", "Hà Nội")));
 
         useCase.execute(userId, "Working at Acme!", null, companyId, null).block();
 
@@ -144,7 +142,7 @@ class CreatePostUseCaseTest {
 
     @Test
     void execute_rejectsAnUnknownTaggedCompanyId() {
-        when(getCompaniesUseCase.all()).thenReturn(Flux.empty());
+        when(companyLookupPort.findById("does-not-exist")).thenReturn(Mono.empty());
 
         StepVerifier.create(useCase.execute(userId, "Tagging a ghost company", null, "does-not-exist", null))
                 .expectErrorSatisfies(e -> assertThat(((AppException) e).getErrorCode()).isEqualTo("INVALID_COMPANY"))

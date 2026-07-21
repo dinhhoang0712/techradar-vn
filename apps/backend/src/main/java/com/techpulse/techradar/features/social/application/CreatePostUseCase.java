@@ -1,13 +1,13 @@
 package com.techpulse.techradar.features.social.application;
 
-import com.techpulse.techradar.features.company.application.GetCompaniesUseCase;
-import com.techpulse.techradar.features.company.domain.CompanyProfile;
 import com.techpulse.techradar.features.social.adapters.input.SocialDtos;
+import com.techpulse.techradar.features.social.ports.CompanyLookupPort;
 import com.techpulse.techradar.features.social.ports.PostRepository;
 import com.techpulse.techradar.features.social.realtime.FeedBroadcaster;
 import com.techpulse.techradar.shared.exception.AppException;
 import com.techpulse.techradar.shared.exception.BadRequestException;
 import com.techpulse.techradar.shared.exception.ErrorCode;
+import com.techpulse.techradar.shared.util.ContentValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -27,18 +27,17 @@ public class CreatePostUseCase {
 
     private final PostRepository postRepository;
     private final PostImageService postImageService;
-    private final GetCompaniesUseCase getCompaniesUseCase;
+    private final CompanyLookupPort companyLookupPort;
     private final MentionNotifier mentionNotifier;
     private final FeedBroadcaster feedBroadcaster;
 
     public Mono<String> execute(String userId, String content, List<SocialDtos.ImageInput> images,
                                  String taggedCompanyId, List<String> mentionedUserIds) {
-        String trimmed = content == null ? "" : content.trim();
-        if (trimmed.isEmpty()) {
-            return Mono.error(new BadRequestException(ErrorCode.INVALID_CONTENT, "Post content must not be empty"));
-        }
-        if (trimmed.length() > MAX_CONTENT_LENGTH) {
-            return Mono.error(new BadRequestException(ErrorCode.INVALID_CONTENT, "Post content too long (max " + MAX_CONTENT_LENGTH + " chars)"));
+        String trimmed;
+        try {
+            trimmed = ContentValidator.requireValidLength(content, MAX_CONTENT_LENGTH, "Post content");
+        } catch (AppException e) {
+            return Mono.error(e);
         }
         if (MentionNotifier.tooMany(mentionedUserIds)) {
             // Validated before any write: failing after the post/images already exist would leave
@@ -63,7 +62,7 @@ public class CreatePostUseCase {
                 .map(Optional::of)
                 .defaultIfEmpty(Optional.empty())
                 .flatMap(companyOpt -> {
-                    CompanyProfile company = companyOpt.orElse(null);
+                    CompanyLookupPort.CompanySummary company = companyOpt.orElse(null);
                     return postRepository.insert(new PostRepository.NewPost(
                             postId, userUuid, trimmed, hashtags,
                             company != null ? company.id() : null,
@@ -89,13 +88,11 @@ public class CreatePostUseCase {
                 .then();
     }
 
-    private Mono<CompanyProfile> resolveTaggedCompany(String taggedCompanyId) {
+    private Mono<CompanyLookupPort.CompanySummary> resolveTaggedCompany(String taggedCompanyId) {
         if (taggedCompanyId == null || taggedCompanyId.isBlank()) {
             return Mono.empty();
         }
-        return getCompaniesUseCase.all()
-                .filter(c -> taggedCompanyId.equals(c.id()))
-                .next()
+        return companyLookupPort.findById(taggedCompanyId)
                 .switchIfEmpty(Mono.error(new BadRequestException(ErrorCode.INVALID_COMPANY, "Company not found")));
     }
 }

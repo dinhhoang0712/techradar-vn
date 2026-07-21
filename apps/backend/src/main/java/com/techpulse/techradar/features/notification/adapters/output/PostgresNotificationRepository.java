@@ -3,6 +3,7 @@ package com.techpulse.techradar.features.notification.adapters.output;
 import com.techpulse.techradar.features.notification.domain.Notification;
 import com.techpulse.techradar.features.notification.domain.TrendSubscriber;
 import com.techpulse.techradar.features.notification.ports.NotificationRepository;
+import com.techpulse.techradar.features.user.ports.UserProfileRepository;
 import io.r2dbc.spi.Row;
 import lombok.RequiredArgsConstructor;
 import org.springframework.r2dbc.core.DatabaseClient;
@@ -14,13 +15,17 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * PostgreSQL adapter for the {@code notification} table and trend-alert subscriber lookups.
+ * PostgreSQL adapter for the {@code notification} table. Subscriber lookups (trend/job-match/
+ * roadmap alerts) delegate to {@link UserProfileRepository} instead of querying
+ * {@code user_profile} directly — that table belongs to the {@code user} feature, so notification
+ * should only see it through that feature's own port.
  */
 @Repository
 @RequiredArgsConstructor
 public class PostgresNotificationRepository implements NotificationRepository {
 
     private final DatabaseClient dbClient;
+    private final UserProfileRepository userProfileRepository;
 
     @Override
     public Mono<Notification> insert(Notification n) {
@@ -79,57 +84,20 @@ public class PostgresNotificationRepository implements NotificationRepository {
 
     @Override
     public Flux<TrendSubscriber> findTrendSubscribers(String technology) {
-        // @> (contains) instead of `:tech = ANY(technologies)` so the GIN index on
-        // user_profile.technologies (V10) can be used instead of a sequential scan.
-        return dbClient.sql(
-                "SELECT u.id AS user_id, u.email AS email, p.notify_inapp, p.notify_email " +
-                "FROM user_profile p JOIN users u ON u.id = p.user_id " +
-                "WHERE p.technologies @> :tech AND (p.notify_inapp = true OR p.notify_email = true)"
-        )
-                .bind("tech", new String[] { technology })
-                .map((row, meta) -> new TrendSubscriber(
-                        row.get("user_id", UUID.class),
-                        row.get("email", String.class),
-                        Boolean.TRUE.equals(row.get("notify_inapp", Boolean.class)),
-                        Boolean.TRUE.equals(row.get("notify_email", Boolean.class))))
-                .all();
+        return userProfileRepository.findSubscribersByTechnology(technology)
+                .map(r -> new TrendSubscriber(r.userId(), r.email(), r.notifyInapp(), r.notifyEmail()));
     }
 
     @Override
     public Flux<TrendSubscriber> findJobMatchSubscribers(List<String> technologies) {
-        // && (overlap) instead of per-technology containment so one query covers every skill the
-        // job requires; still served by the GIN index on user_profile.technologies (V10).
-        return dbClient.sql(
-                "SELECT u.id AS user_id, u.email AS email, p.notify_inapp, p.notify_email " +
-                "FROM user_profile p JOIN users u ON u.id = p.user_id " +
-                "WHERE p.technologies && :techs AND (p.notify_inapp = true OR p.notify_email = true)"
-        )
-                .bind("techs", technologies.toArray(new String[0]))
-                .map((row, meta) -> new TrendSubscriber(
-                        row.get("user_id", UUID.class),
-                        row.get("email", String.class),
-                        Boolean.TRUE.equals(row.get("notify_inapp", Boolean.class)),
-                        Boolean.TRUE.equals(row.get("notify_email", Boolean.class))))
-                .all();
+        return userProfileRepository.findSubscribersByAnyTechnology(technologies)
+                .map(r -> new TrendSubscriber(r.userId(), r.email(), r.notifyInapp(), r.notifyEmail()));
     }
 
     @Override
     public Flux<TrendSubscriber> findRoadmapCandidates() {
-        // Same GIN-indexed user_profile table as findTrendSubscribers/findJobMatchSubscribers,
-        // just without a specific-technology filter — any user with a non-empty tech list is a
-        // candidate for the weekly roadmap recompute.
-        return dbClient.sql(
-                "SELECT u.id AS user_id, u.email AS email, p.notify_inapp, p.notify_email " +
-                "FROM user_profile p JOIN users u ON u.id = p.user_id " +
-                "WHERE p.technologies IS NOT NULL AND array_length(p.technologies, 1) > 0 " +
-                "AND (p.notify_inapp = true OR p.notify_email = true)"
-        )
-                .map((row, meta) -> new TrendSubscriber(
-                        row.get("user_id", UUID.class),
-                        row.get("email", String.class),
-                        Boolean.TRUE.equals(row.get("notify_inapp", Boolean.class)),
-                        Boolean.TRUE.equals(row.get("notify_email", Boolean.class))))
-                .all();
+        return userProfileRepository.findSubscribersWithAnyTechnology()
+                .map(r -> new TrendSubscriber(r.userId(), r.email(), r.notifyInapp(), r.notifyEmail()));
     }
 
     @Override

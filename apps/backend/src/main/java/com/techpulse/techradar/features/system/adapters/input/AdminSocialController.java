@@ -1,8 +1,8 @@
 package com.techpulse.techradar.features.system.adapters.input;
 
-import com.techpulse.techradar.features.social.ports.CommentRepository;
-import com.techpulse.techradar.features.social.ports.PostRepository;
-import com.techpulse.techradar.features.social.ports.ReportRepository;
+import com.techpulse.techradar.features.system.adapters.input.AdminSocialDtos.CommentView;
+import com.techpulse.techradar.features.system.adapters.input.AdminSocialDtos.PostView;
+import com.techpulse.techradar.features.system.adapters.input.AdminSocialDtos.ReportView;
 import com.techpulse.techradar.features.system.application.SocialModerationService;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import com.techpulse.techradar.shared.paging.PageRequest;
@@ -10,14 +10,11 @@ import com.techpulse.techradar.shared.security.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
-import lombok.Value;
-import lombok.Builder;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -109,93 +106,5 @@ public class AdminSocialController {
         return moderationService.getAiSuggestion(id, force)
                 .map(ReportView::from)
                 .map(view -> ResponseEntity.ok(ApiResponse.success(view, "AI suggestion")));
-    }
-
-    @Value
-    @Builder
-    public static class PostView {
-        String id;
-        String authorId;
-        String authorName;
-        String authorAvatarUrl;
-        String content;
-        LocalDateTime createdAt;
-        long likeCount;
-        long commentCount;
-
-        static PostView from(PostRepository.FeedRow r) {
-            return PostView.builder()
-                    .id(r.id().toString())
-                    .authorId(r.authorId().toString())
-                    .authorName(r.authorName())
-                    .authorAvatarUrl(r.authorAvatarUrl())
-                    .content(r.content())
-                    .createdAt(r.createdAt())
-                    .likeCount(r.likeCount())
-                    .commentCount(r.commentCount())
-                    .build();
-        }
-    }
-
-    @Value
-    @Builder
-    public static class CommentView {
-        String id;
-        String authorId;
-        String authorName;
-        String authorAvatarUrl;
-        String content;
-        LocalDateTime createdAt;
-
-        static CommentView from(CommentRepository.CommentRow r) {
-            return CommentView.builder()
-                    .id(r.id().toString())
-                    .authorId(r.authorId().toString())
-                    .authorName(r.authorName())
-                    .authorAvatarUrl(r.authorAvatarUrl())
-                    .content(r.content())
-                    .createdAt(r.createdAt())
-                    .build();
-        }
-    }
-
-    @Value
-    @Builder
-    public static class ReportView {
-        String id;
-        String reporterId;
-        String reporterName;
-        String postId;
-        String commentId;
-        String targetType;
-        String targetContent;
-        String targetAuthorName;
-        String reason;
-        String status;
-        LocalDateTime createdAt;
-        String aiSuggestedAction;
-        String aiSuggestedReason;
-        Double aiConfidence;
-        LocalDateTime aiSuggestedAt;
-
-        static ReportView from(ReportRepository.ReportRow r) {
-            return ReportView.builder()
-                    .id(r.id().toString())
-                    .reporterId(r.reporterId().toString())
-                    .reporterName(r.reporterName())
-                    .postId(r.postId() != null ? r.postId().toString() : null)
-                    .commentId(r.commentId() != null ? r.commentId().toString() : null)
-                    .targetType(r.postId() != null ? "POST" : "COMMENT")
-                    .targetContent(r.targetContent())
-                    .targetAuthorName(r.targetAuthorName())
-                    .reason(r.reason())
-                    .status(r.status())
-                    .createdAt(r.createdAt())
-                    .aiSuggestedAction(r.aiSuggestedAction())
-                    .aiSuggestedReason(r.aiSuggestedReason())
-                    .aiConfidence(r.aiConfidence())
-                    .aiSuggestedAt(r.aiSuggestedAt())
-                    .build();
-        }
     }
 }

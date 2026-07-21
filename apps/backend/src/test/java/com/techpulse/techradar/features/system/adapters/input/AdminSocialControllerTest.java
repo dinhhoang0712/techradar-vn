@@ -1,6 +1,7 @@
 package com.techpulse.techradar.features.system.adapters.input;
 
 import com.techpulse.techradar.features.social.ports.ReportRepository.ReportRow;
+import com.techpulse.techradar.features.system.adapters.input.AdminSocialDtos.ReportView;
 import com.techpulse.techradar.features.system.application.SocialModerationService;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,7 +47,7 @@ class AdminSocialControllerTest {
         StepVerifier.create(controller.getAiSuggestion(reportId.toString(), false))
                 .assertNext(response -> {
                     assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
-                    ApiResponse<AdminSocialController.ReportView> body = response.getBody();
+                    ApiResponse<ReportView> body = response.getBody();
                     assertThat(body).isNotNull();
                     assertThat(body.getData().getAiSuggestedAction()).isEqualTo("REMOVE");
                     assertThat(body.getData().getAiConfidence()).isEqualTo(0.85);

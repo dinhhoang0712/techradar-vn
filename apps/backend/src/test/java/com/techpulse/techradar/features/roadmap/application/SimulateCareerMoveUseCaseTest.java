@@ -13,6 +13,7 @@ import com.techpulse.techradar.shared.redis.ReactiveRedisCache;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Answers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -29,12 +30,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class SimulateCareerMoveUseCaseTest {
 
-    @Mock
+    @Mock(answer = Answers.CALLS_REAL_METHODS)
     private UserProfileRepository userProfileRepository;
 
     @Mock
@@ -53,7 +55,7 @@ class SimulateCareerMoveUseCaseTest {
 
     @BeforeEach
     void setUp() {
-        when(redisCache.getOrLoadMono(anyString(), any(Duration.class), any(Mono.class), any()))
+        lenient().when(redisCache.getOrLoadMono(anyString(), any(Duration.class), any(Mono.class), any()))
                 .thenAnswer(invocation -> invocation.getArgument(2));
         useCase = new SimulateCareerMoveUseCase(
                 userProfileRepository, getJobMatchesUseCase, getTechSalaryDetailUseCase, aiProxyPort, redisCache);

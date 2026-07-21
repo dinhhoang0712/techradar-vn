@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
+import reactor.util.concurrent.Queues;
 
 import java.util.UUID;
 
@@ -39,7 +40,10 @@ public class FeedBroadcaster {
     private final ObjectMapper objectMapper;
     private final FollowRepository followRepository;
 
-    private final Sinks.Many<FeedEvent> sink = Sinks.many().multicast().onBackpressureBuffer();
+    // autoCancel=false: if every viewer disconnects momentarily (e.g. a quiet overnight period),
+    // the default autoCancel=true would terminate this sink and silently refuse every subscriber
+    // for the rest of the process's lifetime.
+    private final Sinks.Many<FeedEvent> sink = Sinks.many().multicast().onBackpressureBuffer(Queues.SMALL_BUFFER_SIZE, false);
 
     @PostConstruct
     void subscribeToRedis() {

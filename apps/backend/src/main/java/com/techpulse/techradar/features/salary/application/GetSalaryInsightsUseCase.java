@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.util.List;
@@ -49,18 +50,19 @@ public class GetSalaryInsightsUseCase {
 
     private Flux<SalaryInsight> buildInsights(int minJobs, int techLimit) {
         return salaryRepository.findTechSalaries(minJobs, techLimit)
-                .map(raw -> {
+                .flatMap(raw -> {
                     List<Double> midpoints = raw.salaries().stream()
                             .map(SalaryParser::parse)
                             .filter(opt -> opt.isPresent())
                             .map(opt -> opt.get().midpoint())
                             .toList();
 
-                    if (midpoints.isEmpty()) return null;
+                    if (midpoints.isEmpty()) {
+                        return Mono.<SalaryInsight>empty();
+                    }
 
-                    return SalaryInsight.fromMidpoints(raw.techName(), raw.totalJobs(), midpoints, List.of());
+                    return Mono.just(SalaryInsight.fromMidpoints(raw.techName(), raw.totalJobs(), midpoints, List.of()));
                 })
-                .filter(i -> i != null)
                 .sort((a, b) -> Double.compare(b.medianVnd(), a.medianVnd()));
     }
 }

@@ -30,11 +30,12 @@ public final class SalaryParser {
             "|agreement|up\\s*to\\s*you|discuss|kh[oô]ng\\s*hi[eệ]n\\s*th[iị])",
             Pattern.UNICODE_CASE);
 
-    // "10 - 20"  or  "10-20"  (numbers may have commas/dots as thousands separator)
+    // "10 - 20"  or  "10-20"  (numbers may have commas/dots as thousands separator, and each side
+    // may repeat a leading currency symbol, e.g. "$1,500 - $3,000")
     private static final Pattern RANGE = Pattern.compile(
-            "([\\d][\\d,\\.]*)" +           // lower bound
+            "\\$?\\s*([\\d][\\d,\\.]*)" +   // lower bound
             "\\s*[-–—~]\\s*" +              // separator
-            "([\\d][\\d,\\.]*)",            // upper bound
+            "\\$?\\s*([\\d][\\d,\\.]*)",    // upper bound
             Pattern.UNICODE_CASE);
 
     // Single value with modifier: "trên 15", "trên 20", "lên đến 30", "tới 30"

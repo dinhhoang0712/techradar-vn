@@ -114,6 +114,11 @@ class NotificationServiceRedisCrossInstanceTest {
         public Flux<NotificationRepository.TypeCount> countGroupedByType() {
             return Flux.empty();
         }
+
+        @Override
+        public Flux<com.techpulse.techradar.features.notification.domain.TrendSubscriber> findRoadmapCandidates() {
+            return Flux.empty();
+        }
     }
 
     @Test

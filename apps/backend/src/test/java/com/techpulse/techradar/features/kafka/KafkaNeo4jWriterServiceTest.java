@@ -14,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -82,7 +83,7 @@ class KafkaNeo4jWriterServiceTest {
 
         service.consumeExtractedJob(record);
 
-        verify(kafkaProducer, times(1)).send(eqTopic(), any());
+        verify(kafkaProducer, times(1)).send(eq(eqTopic()), any());
     }
 
     @Test

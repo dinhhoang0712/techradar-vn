@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
+import reactor.util.concurrent.Queues;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -39,7 +40,10 @@ public class NotificationService {
     private final ReactiveStringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
 
-    private final Sinks.Many<Notification> sink = Sinks.many().multicast().onBackpressureBuffer();
+    // autoCancel=false: if every connected client disconnects momentarily, the default
+    // autoCancel=true would terminate this sink and silently refuse every subscriber for the
+    // rest of the process's lifetime.
+    private final Sinks.Many<Notification> sink = Sinks.many().multicast().onBackpressureBuffer(Queues.SMALL_BUFFER_SIZE, false);
 
     private record NotificationEvent(
             UUID id, UUID userId, String type, String title, String body, String link, boolean read,

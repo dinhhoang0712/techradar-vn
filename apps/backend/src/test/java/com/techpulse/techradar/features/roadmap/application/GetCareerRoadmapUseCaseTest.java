@@ -13,6 +13,7 @@ import com.techpulse.techradar.shared.redis.ReactiveRedisCache;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Answers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Flux;
@@ -29,6 +30,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -39,7 +41,7 @@ class GetCareerRoadmapUseCaseTest {
     @Mock
     private AiProxyPort aiProxyPort;
 
-    @Mock
+    @Mock(answer = Answers.CALLS_REAL_METHODS)
     private UserProfileRepository userProfileRepository;
 
     @Mock
@@ -55,7 +57,7 @@ class GetCareerRoadmapUseCaseTest {
 
     @BeforeEach
     void setUp() {
-        when(redisCache.getOrLoadMono(anyString(), any(Duration.class), any(Mono.class), any()))
+        lenient().when(redisCache.getOrLoadMono(anyString(), any(Duration.class), any(Mono.class), any()))
                 .thenAnswer(invocation -> invocation.getArgument(2));
         useCase = new GetCareerRoadmapUseCase(
                 aiProxyPort, userProfileRepository, getJobMatchesUseCase, roadAnalysisUseCase, redisCache);

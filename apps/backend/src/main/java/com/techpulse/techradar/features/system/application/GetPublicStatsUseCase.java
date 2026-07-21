@@ -38,11 +38,14 @@ public class GetPublicStatsUseCase {
         return redisCache.getOrLoadMono(
                 CACHE_KEY,
                 Duration.ofSeconds(cacheTtlSeconds),
-                Mono.zip(
+                // Deferred so a cache hit never even calls into the real sources — getOrLoadMono
+                // takes an already-built Mono, and Java evaluates method arguments eagerly, so
+                // without defer() the three real-source calls below would run on every request.
+                Mono.defer(() -> Mono.zip(
                         getCompaniesUseCase.all().count(),
                         jobRepository.countJobs(),
                         userStatsRepository.countAll()
-                ).map(t -> new PublicStats(t.getT1(), t.getT2(), t.getT3())),
+                ).map(t -> new PublicStats(t.getT1(), t.getT2(), t.getT3()))),
                 TYPE
         );
     }

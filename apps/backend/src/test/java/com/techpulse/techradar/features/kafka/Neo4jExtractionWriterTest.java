@@ -13,8 +13,8 @@ import org.neo4j.driver.Driver;
 import org.neo4j.driver.Record;
 import org.neo4j.driver.Result;
 import org.neo4j.driver.Session;
-import org.neo4j.driver.Transaction;
-import org.neo4j.driver.TransactionWork;
+import org.neo4j.driver.TransactionContext;
+import org.neo4j.driver.TransactionCallback;
 import org.neo4j.driver.Value;
 
 import java.util.List;
@@ -49,7 +49,7 @@ class Neo4jExtractionWriterTest {
     private Session session;
 
     @Mock
-    private Transaction tx;
+    private TransactionContext tx;
 
     @Mock
     private Result jobMergeResult;
@@ -64,7 +64,7 @@ class Neo4jExtractionWriterTest {
         writer = new Neo4jExtractionWriter(neo4jDriver);
         when(neo4jDriver.session()).thenReturn(session);
         when(session.executeWrite(any())).thenAnswer(invocation -> {
-            TransactionWork<Object> work = invocation.getArgument(0);
+            TransactionCallback<Object> work = invocation.getArgument(0);
             return work.execute(tx);
         });
         // The Job MERGE is the only call whose return value writeJob() reads (.single()), so a

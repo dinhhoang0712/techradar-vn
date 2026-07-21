@@ -11,6 +11,7 @@ import org.springframework.data.redis.listener.ReactiveRedisMessageListenerConta
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
+import reactor.util.concurrent.Queues;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -40,7 +41,10 @@ public class MessageBroadcaster {
     private final ObjectMapper objectMapper;
 
     private static final class UserChannel {
-        final Sinks.Many<DirectMessage> sink = Sinks.many().multicast().onBackpressureBuffer();
+        // autoCancel=false: a user closing their last tab must not permanently kill this sink —
+        // with the default autoCancel=true, the sink terminates once its subscriber count hits
+        // zero and silently refuses every subsequent subscribe() for this same UserChannel object.
+        final Sinks.Many<DirectMessage> sink = Sinks.many().multicast().onBackpressureBuffer(Queues.SMALL_BUFFER_SIZE, false);
         final AtomicInteger subscribers = new AtomicInteger(0);
     }
 
@@ -55,14 +59,24 @@ public class MessageBroadcaster {
 
     /** Subscribes the given user to their own live message stream (call once per SSE connection). */
     public Flux<DirectMessage> subscribe(String userId) {
-        UserChannel channel = channels.computeIfAbsent(userId, id -> new UserChannel());
-        channel.subscribers.incrementAndGet();
+        // compute() (not computeIfAbsent() + a separate incrementAndGet()) so a concurrent
+        // subscribe() for the same user can never observe the gap between "get-or-create the
+        // channel" and "record this subscriber on it" — that gap is exactly what let a resubscribe
+        // race the previous subscription's cleanup below and get silently dropped from the map.
+        UserChannel channel = channels.compute(userId, (id, existing) -> {
+            UserChannel target = existing != null ? existing : new UserChannel();
+            target.subscribers.incrementAndGet();
+            return target;
+        });
         return channel.sink.asFlux()
-                .doFinally(signal -> {
-                    if (channel.subscribers.decrementAndGet() <= 0) {
-                        channels.remove(userId, channel);
+                .doFinally(signal -> channels.computeIfPresent(userId, (id, current) -> {
+                    if (current != channel) {
+                        // A newer subscription already replaced this one for this user; it isn't
+                        // ours to decrement or remove.
+                        return current;
                     }
-                });
+                    return current.subscribers.decrementAndGet() <= 0 ? null : current;
+                }));
     }
 
     /** Publishes a message to a user's live stream, across all backend instances. */

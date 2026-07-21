@@ -40,7 +40,8 @@ class AdminDataPlatformControllerTest {
 
     @BeforeEach
     void setUp() {
-        controller = new AdminDataPlatformController(redisTemplate, jobStatusService, objectMapper);
+        RedisTriggerPublisher redisTriggerPublisher = new RedisTriggerPublisher(redisTemplate, objectMapper);
+        controller = new AdminDataPlatformController(jobStatusService, redisTriggerPublisher);
     }
 
     @Test

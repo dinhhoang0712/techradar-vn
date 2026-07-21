@@ -1,9 +1,7 @@
 package com.techpulse.techradar.features.notification.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.techpulse.techradar.features.auth.ports.EmailSender;
 import com.techpulse.techradar.features.kafka.KafkaTopicConstants;
-import com.techpulse.techradar.features.notification.domain.Notification;
 import com.techpulse.techradar.features.notification.domain.TrendSubscriber;
 import com.techpulse.techradar.features.notification.event.JobMatchEvent;
 import com.techpulse.techradar.features.notification.ports.NotificationRepository;
@@ -26,8 +24,7 @@ import reactor.core.publisher.Mono;
 public class JobMatchDispatcher {
 
     private final NotificationRepository repository;
-    private final NotificationService notificationService;
-    private final EmailSender emailSender;
+    private final AlertDeliveryDispatcher alertDeliveryDispatcher;
     private final ObjectMapper objectMapper;
 
     @KafkaListener(topics = KafkaTopicConstants.JOB_MATCH_ALERTS, groupId = "notification-dispatcher")
@@ -56,22 +53,7 @@ public class JobMatchDispatcher {
     }
 
     private Mono<Void> dispatch(TrendSubscriber sub, String title, String body) {
-        Mono<Void> inApp = sub.notifyInapp()
-                ? notificationService.save(Notification.builder()
-                        .userId(sub.userId())
-                        .type("JOB_MATCH")
-                        .title(title)
-                        .body(body)
-                        .link("/career")
-                        .read(false)
-                        .build()).then()
-                : Mono.empty();
-
-        Mono<Void> email = (sub.notifyEmail() && sub.email() != null && !sub.email().isBlank())
-                ? emailSender.sendNotification(sub.email(), title, body)
-                        .onErrorResume(e -> Mono.empty())
-                : Mono.empty();
-
-        return inApp.then(email);
+        return alertDeliveryDispatcher.dispatch(sub.userId(), "JOB_MATCH", title, body, "/career",
+                sub.notifyInapp(), sub.notifyEmail(), sub.email());
     }
 }

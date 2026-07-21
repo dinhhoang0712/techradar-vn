@@ -5,6 +5,7 @@ import com.techpulse.techradar.features.job.domain.JobMatch;
 import com.techpulse.techradar.features.job.ports.JobRepository;
 import com.techpulse.techradar.features.salary.domain.SalaryParser;
 import com.techpulse.techradar.features.salary.domain.SalaryRange;
+import com.techpulse.techradar.features.user.domain.UserProfiles;
 import com.techpulse.techradar.features.user.ports.UserProfileRepository;
 import com.techpulse.techradar.shared.redis.ReactiveRedisCache;
 import lombok.RequiredArgsConstructor;
@@ -48,7 +49,7 @@ public class GetJobMatchesUseCase {
         int effectiveLimit = limit <= 0 ? 20 : Math.min(limit, MAX_LIMIT);
 
         return userProfileRepository.findByUserId(userId)
-                .map(profile -> profile.getTechnologies() == null ? List.<String>of() : profile.getTechnologies())
+                .map(UserProfiles::technologiesOrEmpty)
                 .defaultIfEmpty(List.of())
                 .flatMapMany(skills -> matchJobs(skills, location, minSalaryMVnd, effectiveLimit));
     }

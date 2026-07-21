@@ -38,7 +38,8 @@ class CrawlerAdminControllerTest {
 
     @BeforeEach
     void setUp() {
-        controller = new CrawlerAdminController(redisTemplate, objectMapper);
+        RedisTriggerPublisher redisTriggerPublisher = new RedisTriggerPublisher(redisTemplate, objectMapper);
+        controller = new CrawlerAdminController(redisTemplate, objectMapper, redisTriggerPublisher);
     }
 
     @Test

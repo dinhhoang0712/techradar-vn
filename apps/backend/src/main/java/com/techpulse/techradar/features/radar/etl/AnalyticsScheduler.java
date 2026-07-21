@@ -1,5 +1,6 @@
 package com.techpulse.techradar.features.radar.etl;
 
+import com.techpulse.techradar.features.radar.application.RadarCacheKeys;
 import com.techpulse.techradar.shared.redis.ReactiveRedisCache;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,7 +26,7 @@ public class AnalyticsScheduler {
         log.info("Scheduled tech_analytics ETL starting");
         etlService.rebuild()
                 .doOnSuccess(count -> log.info("Scheduled ETL done: {} rows, evicting radar cache", count))
-                .flatMap(count -> redisCache.evictByPattern("cache:radar:*").thenReturn(count))
+                .flatMap(count -> redisCache.evictByPattern(RadarCacheKeys.EVICT_ALL_PATTERN).thenReturn(count))
                 .subscribe(
                         count -> log.info("Radar cache evicted after ETL"),
                         err -> log.error("Scheduled ETL failed", err));

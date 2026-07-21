@@ -7,6 +7,7 @@ import com.techpulse.techradar.features.graph.domain.GraphNode;
 import com.techpulse.techradar.features.job.application.GetJobMatchesUseCase;
 import com.techpulse.techradar.features.job.domain.JobMatch;
 import com.techpulse.techradar.features.roadmap.domain.RoadmapResult;
+import com.techpulse.techradar.features.user.domain.UserProfiles;
 import com.techpulse.techradar.features.user.ports.UserProfileRepository;
 import com.techpulse.techradar.shared.redis.ReactiveRedisCache;
 import lombok.RequiredArgsConstructor;
@@ -50,7 +51,7 @@ public class GetCareerRoadmapUseCase {
 
     public Mono<RoadmapResult> execute(String userId) {
         return userProfileRepository.findByUserId(userId)
-                .map(profile -> profile.getTechnologies() == null ? List.<String>of() : profile.getTechnologies())
+                .map(UserProfiles::technologiesOrEmpty)
                 .defaultIfEmpty(List.of())
                 .flatMap(technologies -> technologies.isEmpty()
                         ? Mono.just(RoadmapResult.empty(technologies))

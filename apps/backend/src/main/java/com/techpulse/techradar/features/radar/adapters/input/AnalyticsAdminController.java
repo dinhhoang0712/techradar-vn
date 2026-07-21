@@ -1,5 +1,6 @@
 package com.techpulse.techradar.features.radar.adapters.input;
 
+import com.techpulse.techradar.features.radar.application.RadarCacheKeys;
 import com.techpulse.techradar.features.radar.etl.RadarAnalyticsEtlService;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import com.techpulse.techradar.shared.redis.ReactiveRedisCache;
@@ -32,7 +33,7 @@ public class AnalyticsAdminController {
     @PreAuthorize("hasRole('ADMIN')")
     public Mono<ResponseEntity<ApiResponse<Map<String, Object>>>> rebuild() {
         return etlService.rebuild()
-                .flatMap(count -> redisCache.evictByPattern("cache:radar:*").thenReturn(count))
+                .flatMap(count -> redisCache.evictByPattern(RadarCacheKeys.EVICT_ALL_PATTERN).thenReturn(count))
                 .map(count -> ResponseEntity.ok(
                         ApiResponse.success(Map.<String, Object>of("rows_upserted", count), "Analytics rebuilt")))
                 .onErrorResume(ex -> Mono.just(ResponseEntity.status(503).body(

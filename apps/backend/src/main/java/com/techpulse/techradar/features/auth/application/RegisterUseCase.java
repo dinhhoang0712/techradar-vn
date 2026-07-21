@@ -1,6 +1,5 @@
 package com.techpulse.techradar.features.auth.application;
 
-import com.techpulse.techradar.config.JwtTokenProvider;
 import com.techpulse.techradar.features.auth.adapters.input.LoginResponse;
 import com.techpulse.techradar.features.auth.adapters.input.RegisterRequest;
 import com.techpulse.techradar.features.auth.domain.User;
@@ -23,7 +22,7 @@ public class RegisterUseCase {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final JwtTokenProvider jwtTokenProvider;
+    private final TokenIssuer tokenIssuer;
 
     public Mono<LoginResponse> execute(RegisterRequest request) {
         return userRepository.existsByEmail(request.getEmail())
@@ -52,23 +51,6 @@ public class RegisterUseCase {
         return userRepository.save(newUser)
                 .doOnNext(user -> log.info("User registered: id={}, email={}, tier={}",
                         user.getId(), user.getEmail(), user.getSubscriptionTier()))
-                .map(user -> {
-                    String accessToken = jwtTokenProvider.generateToken(
-                            user.getId().toString(),
-                            user.getEmail(),
-                            user.getRole()
-                    );
-                    String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId().toString());
-
-                    return LoginResponse.builder()
-                            .accessToken(accessToken)
-                            .refreshToken(refreshToken)
-                            .userId(user.getId().toString())
-                            .email(user.getEmail())
-                            .role(user.getRole())
-                            .expiresIn(jwtTokenProvider.getExpirationTime(accessToken) -
-                                    System.currentTimeMillis())
-                            .build();
-                });
+                .map(tokenIssuer::issueFor);
     }
 }

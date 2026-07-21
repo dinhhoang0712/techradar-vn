@@ -5,6 +5,7 @@ import com.techpulse.techradar.features.social.ports.PostRepository;
 import com.techpulse.techradar.features.social.ports.ReportRepository;
 import com.techpulse.techradar.features.system.application.SocialModerationService;
 import com.techpulse.techradar.shared.dto.ApiResponse;
+import com.techpulse.techradar.shared.paging.PageRequest;
 import com.techpulse.techradar.shared.security.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -37,7 +38,8 @@ public class AdminSocialController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return moderationService.listPosts(size, page * size)
+        PageRequest pageRequest = PageRequest.of(page, size, size, size);
+        return moderationService.listPosts(pageRequest.size(), pageRequest.offset())
                 .map(PostView::from)
                 .collectList()
                 .map(list -> ResponseEntity.ok(ApiResponse.success(list, "Posts")));
@@ -59,7 +61,8 @@ public class AdminSocialController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return moderationService.listComments(id, size, page * size)
+        PageRequest pageRequest = PageRequest.of(page, size, size, size);
+        return moderationService.listComments(id, pageRequest.size(), pageRequest.offset())
                 .map(CommentView::from)
                 .collectList()
                 .map(list -> ResponseEntity.ok(ApiResponse.success(list, "Comments")));
@@ -80,7 +83,8 @@ public class AdminSocialController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return moderationService.listPendingReports(size, page * size)
+        PageRequest pageRequest = PageRequest.of(page, size, size, size);
+        return moderationService.listPendingReports(pageRequest.size(), pageRequest.offset())
                 .map(ReportView::from)
                 .collectList()
                 .map(list -> ResponseEntity.ok(ApiResponse.success(list, "Pending reports")));

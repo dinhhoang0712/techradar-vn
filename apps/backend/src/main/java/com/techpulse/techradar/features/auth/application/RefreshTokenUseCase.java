@@ -21,6 +21,7 @@ public class RefreshTokenUseCase {
     private final UserRepository userRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final TokenBlacklistService tokenBlacklist;
+    private final TokenIssuer tokenIssuer;
 
     public Mono<LoginResponse> execute(String refreshToken) {
         return tokenBlacklist.isBlacklisted(refreshToken)
@@ -44,26 +45,7 @@ public class RefreshTokenUseCase {
                             log.warn("Refresh token failed: user not found userId={}", userId);
                             return Mono.error(new InvalidCredentialsException("User not found"));
                         }))
-                        .map(user -> {
-                            String newAccessToken = jwtTokenProvider.generateToken(
-                                    user.getId().toString(),
-                                    user.getEmail(),
-                                    user.getRole()
-                            );
-                            String newRefreshToken = jwtTokenProvider.generateRefreshToken(
-                                    user.getId().toString()
-                            );
-
-                            return LoginResponse.builder()
-                                    .accessToken(newAccessToken)
-                                    .refreshToken(newRefreshToken)
-                                    .userId(user.getId().toString())
-                                    .email(user.getEmail())
-                                    .role(user.getRole())
-                                    .expiresIn(jwtTokenProvider.getExpirationTime(newAccessToken) -
-                                            System.currentTimeMillis())
-                                    .build();
-                        })
+                        .map(tokenIssuer::issueFor)
         )
         .doOnSuccess(response -> log.info("Access token refreshed for userId={}", response.getUserId()))
         .doOnError(InvalidCredentialsException.class,

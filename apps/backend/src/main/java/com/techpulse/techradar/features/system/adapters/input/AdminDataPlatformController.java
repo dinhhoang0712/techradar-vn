@@ -1,13 +1,10 @@
 package com.techpulse.techradar.features.system.adapters.input;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.techpulse.techradar.features.system.application.DataPlatformJobStatusService;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -36,7 +33,6 @@ import java.util.Map;
  * {@code dp_pipeline_runs}, the Postgres audit table those jobs already write to on every run, so
  * (unlike the crawler) no Redis status key is needed here.
  */
-@Slf4j
 @Tag(name = "Admin", description = "Data platform gold job on-demand trigger")
 @RestController
 @RequestMapping("/admin/data-platform")
@@ -49,9 +45,8 @@ public class AdminDataPlatformController {
     private static final List<String> JOB_IDS = List.of(
             "neo4j_article_sync", "neo4j_job_sync", "neo4j_enricher", "tech_dedup", "embed_trigger");
 
-    private final ReactiveStringRedisTemplate redisTemplate;
     private final DataPlatformJobStatusService jobStatusService;
-    private final ObjectMapper objectMapper;
+    private final RedisTriggerPublisher redisTriggerPublisher;
 
     @Operation(summary = "List the 5 data-platform gold jobs with their latest run status")
     @GetMapping("/jobs")
@@ -84,22 +79,10 @@ public class AdminDataPlatformController {
     }
 
     private Mono<ResponseEntity<ApiResponse<Map<String, Object>>>> publishTrigger(String jobId) {
-        String json;
-        try {
-            json = objectMapper.writeValueAsString(Map.of("jobId", jobId));
-        } catch (Exception e) {
-            log.warn("Failed to serialize data-platform trigger event", e);
-            return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
-                    ApiResponse.<Map<String, Object>>error("Không thể gửi yêu cầu kích hoạt", "SERIALIZATION_ERROR")));
-        }
-        return redisTemplate.convertAndSend(TRIGGER_CHANNEL, json)
-                .map(subscribers -> {
-                    boolean delivered = subscribers != null && subscribers > 0;
-                    String message = delivered
-                            ? "Đã gửi yêu cầu, job sẽ bắt đầu trong giây lát"
-                            : "Đã gửi yêu cầu nhưng không có data-platform nào đang lắng nghe";
-                    return ResponseEntity.ok(
-                            ApiResponse.success(Map.<String, Object>of("delivered", delivered), message));
-                });
+        return redisTriggerPublisher.publish(
+                TRIGGER_CHANNEL,
+                Map.of("jobId", jobId),
+                "Đã gửi yêu cầu, job sẽ bắt đầu trong giây lát",
+                "Đã gửi yêu cầu nhưng không có data-platform nào đang lắng nghe");
     }
 }

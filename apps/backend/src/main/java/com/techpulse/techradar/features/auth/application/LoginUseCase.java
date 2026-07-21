@@ -1,6 +1,5 @@
 package com.techpulse.techradar.features.auth.application;
 
-import com.techpulse.techradar.config.JwtTokenProvider;
 import com.techpulse.techradar.features.auth.adapters.input.LoginRequest;
 import com.techpulse.techradar.features.auth.adapters.input.LoginResponse;
 import com.techpulse.techradar.features.auth.domain.User;
@@ -23,7 +22,7 @@ public class LoginUseCase {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final JwtTokenProvider jwtTokenProvider;
+    private final TokenIssuer tokenIssuer;
 
     public Mono<LoginResponse> execute(LoginRequest request) {
         return userRepository.findByEmail(request.getEmail())
@@ -47,24 +46,6 @@ public class LoginUseCase {
                 throw new InvalidCredentialsException("User account is inactive");
             }
             return user;
-        }).map(this::createLoginResponse);
-    }
-
-    private LoginResponse createLoginResponse(User user) {
-        String accessToken = jwtTokenProvider.generateToken(
-                user.getId().toString(),
-                user.getEmail(),
-                user.getRole()
-        );
-        String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId().toString());
-
-        return LoginResponse.builder()
-                .accessToken(accessToken)
-                .refreshToken(refreshToken)
-                .userId(user.getId().toString())
-                .email(user.getEmail())
-                .role(user.getRole())
-                .expiresIn(jwtTokenProvider.getExpirationTime(accessToken) - System.currentTimeMillis())
-                .build();
+        }).map(tokenIssuer::issueFor);
     }
 }

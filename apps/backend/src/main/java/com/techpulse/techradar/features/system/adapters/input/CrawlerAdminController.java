@@ -44,6 +44,7 @@ public class CrawlerAdminController {
 
     private final ReactiveStringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
+    private final RedisTriggerPublisher redisTriggerPublisher;
 
     @Operation(summary = "Trigger an immediate crawl run instead of waiting for the crawler's own schedule")
     @PostMapping("/trigger")
@@ -75,27 +76,15 @@ public class CrawlerAdminController {
     }
 
     private Mono<ResponseEntity<ApiResponse<Map<String, Object>>>> publishTrigger() {
-        String json;
-        try {
-            json = objectMapper.writeValueAsString(Map.of("triggeredAt", Instant.now().toString()));
-        } catch (Exception e) {
-            log.warn("Failed to serialize crawl trigger event", e);
-            return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
-                    ApiResponse.<Map<String, Object>>error("Không thể gửi yêu cầu kích hoạt", "SERIALIZATION_ERROR")));
-        }
-        return redisTemplate.convertAndSend(TRIGGER_CHANNEL, json)
-                .map(subscribers -> {
-                    // The crawler only runs under --profile crawl: unlike MessageBroadcaster's SSE fan-out
-                    // (where "zero subscribers" is a transient rolling-deploy blip), the container simply
-                    // not being up is a plausible persistent state here, so surface it instead of hiding it.
-                    boolean delivered = subscribers != null && subscribers > 0;
-                    String message = delivered
-                            ? "Đã kích hoạt Radar, crawler sẽ chạy ngay"
-                            : "Đã gửi yêu cầu nhưng không có crawler nào đang lắng nghe "
-                                    + "(kiểm tra container crawler đã bật --profile crawl chưa)";
-                    return ResponseEntity.ok(
-                            ApiResponse.success(Map.<String, Object>of("delivered", delivered), message));
-                });
+        // The crawler only runs under --profile crawl: unlike MessageBroadcaster's SSE fan-out
+        // (where "zero subscribers" is a transient rolling-deploy blip), the container simply
+        // not being up is a plausible persistent state here, so surface it instead of hiding it.
+        return redisTriggerPublisher.publish(
+                TRIGGER_CHANNEL,
+                Map.of("triggeredAt", Instant.now().toString()),
+                "Đã kích hoạt Radar, crawler sẽ chạy ngay",
+                "Đã gửi yêu cầu nhưng không có crawler nào đang lắng nghe "
+                        + "(kiểm tra container crawler đã bật --profile crawl chưa)");
     }
 
     private Mono<Map<String, Object>> readStatus() {

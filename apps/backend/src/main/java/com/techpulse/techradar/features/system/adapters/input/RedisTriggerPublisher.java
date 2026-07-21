@@ -14,14 +14,10 @@ import java.util.Map;
 
 /**
  * Shared serialize -> Redis Pub/Sub publish -> interpret-subscriber-count boilerplate for the
- * admin "trigger" endpoints ({@link AdminDataPlatformController}) that kick off out-of-process
- * Python jobs which have no HTTP server of their own to call directly: the payload is serialized
- * to JSON, published on a Redis channel, and the response reports whether any subscriber picked
- * it up.
- * <p>
- * NOTE: {@link CrawlerAdminController#publishTrigger()} still carries its own copy of this exact
- * logic (with a crawler-specific comment about "no subscriber" being a plausible persistent
- * state). Migrating it to use this helper too is a deliberate follow-up, not done here.
+ * admin "trigger" endpoints ({@link AdminDataPlatformController}, {@link CrawlerAdminController})
+ * that kick off out-of-process Python jobs which have no HTTP server of their own to call
+ * directly: the payload is serialized to JSON, published on a Redis channel, and the response
+ * reports whether any subscriber picked it up.
  */
 @Slf4j
 @Component

@@ -1,9 +1,7 @@
 package com.techpulse.techradar.features.notification.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.techpulse.techradar.features.auth.ports.EmailSender;
 import com.techpulse.techradar.features.kafka.KafkaTopicConstants;
-import com.techpulse.techradar.features.notification.domain.Notification;
 import com.techpulse.techradar.features.notification.event.RoadmapAlertEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,8 +22,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class RoadmapAlertDispatcher {
 
-    private final NotificationService notificationService;
-    private final EmailSender emailSender;
+    private final AlertDeliveryDispatcher alertDeliveryDispatcher;
     private final ObjectMapper objectMapper;
 
     @KafkaListener(topics = KafkaTopicConstants.ROADMAP_ALERTS, groupId = "notification-dispatcher")
@@ -45,22 +42,7 @@ public class RoadmapAlertDispatcher {
     }
 
     private Mono<Void> dispatch(RoadmapAlertEvent event, String title, String body) {
-        Mono<Void> inApp = event.isNotifyInapp()
-                ? notificationService.save(Notification.builder()
-                        .userId(UUID.fromString(event.getUserId()))
-                        .type("CAREER_ALERT")
-                        .title(title)
-                        .body(body)
-                        .link("/career")
-                        .read(false)
-                        .build()).then()
-                : Mono.empty();
-
-        Mono<Void> email = (event.isNotifyEmail() && event.getEmail() != null && !event.getEmail().isBlank())
-                ? emailSender.sendNotification(event.getEmail(), title, body)
-                        .onErrorResume(e -> Mono.empty())
-                : Mono.empty();
-
-        return inApp.then(email);
+        return alertDeliveryDispatcher.dispatch(UUID.fromString(event.getUserId()), "CAREER_ALERT", title, body,
+                "/career", event.isNotifyInapp(), event.isNotifyEmail(), event.getEmail());
     }
 }

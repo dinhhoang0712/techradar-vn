@@ -4,6 +4,7 @@ import com.techpulse.techradar.features.system.application.AuditLogService;
 import com.techpulse.techradar.features.system.domain.AuditLogEntry;
 import com.techpulse.techradar.features.user.application.AdminUserService;
 import com.techpulse.techradar.shared.dto.ApiResponse;
+import com.techpulse.techradar.shared.paging.PageRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.Builder;
@@ -30,6 +31,9 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AuditLogAdminController {
 
+    private static final int DEFAULT_SIZE = 50;
+    private static final int MAX_SIZE = 200;
+
     private final AuditLogService auditLogService;
     private final AdminUserService userService;
 
@@ -40,8 +44,7 @@ public class AuditLogAdminController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size
     ) {
-        int cappedSize = Math.min(Math.max(size, 1), 200);
-        int safePage = Math.max(page, 0);
+        PageRequest pageRequest = PageRequest.of(page, size, DEFAULT_SIZE, MAX_SIZE);
 
         // Small admin user base — one full listUsers() per request is cheap and avoids an N+1
         // lookup per audit row just to show a human-readable actor instead of a raw UUID.
@@ -49,7 +52,7 @@ public class AuditLogAdminController {
                 .collectMap(u -> u.getId().toString(), u -> u.getEmail());
 
         return actorEmailsById.flatMap(actorEmails ->
-                auditLogService.list(cappedSize, safePage * cappedSize)
+                auditLogService.list(pageRequest.size(), pageRequest.offset())
                         .map(e -> AuditLogView.from(e, actorEmails.get(e.getActorId().toString())))
                         .collectList()
                         .map(list -> ResponseEntity.ok(ApiResponse.success(list, "Audit log retrieved"))));

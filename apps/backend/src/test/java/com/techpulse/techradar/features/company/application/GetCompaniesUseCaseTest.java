@@ -63,7 +63,7 @@ class GetCompaniesUseCaseTest {
         List<CompanyRepository.CompanyRaw> raws = IntStream.range(0, 25).mapToObj(GetCompaniesUseCaseTest::raw).toList();
         when(companyRepository.findAllWithTechStack()).thenReturn(Flux.fromIterable(raws));
 
-        StepVerifier.create(useCase.execute(1, 10).map(CompanyProfile::name))
+        StepVerifier.create(useCase.execute(null, 1, 10).map(CompanyProfile::name))
                 .expectNext("Company 10", "Company 11", "Company 12", "Company 13", "Company 14",
                         "Company 15", "Company 16", "Company 17", "Company 18", "Company 19")
                 .verifyComplete();
@@ -75,7 +75,7 @@ class GetCompaniesUseCaseTest {
         List<CompanyRepository.CompanyRaw> raws = IntStream.range(0, 25).mapToObj(GetCompaniesUseCaseTest::raw).toList();
         when(companyRepository.findAllWithTechStack()).thenReturn(Flux.fromIterable(raws));
 
-        StepVerifier.create(useCase.execute(0, 0))
+        StepVerifier.create(useCase.execute(null, 0, 0))
                 .expectNextCount(20)
                 .verifyComplete();
     }
@@ -86,7 +86,7 @@ class GetCompaniesUseCaseTest {
         List<CompanyRepository.CompanyRaw> raws = IntStream.range(0, 150).mapToObj(GetCompaniesUseCaseTest::raw).toList();
         when(companyRepository.findAllWithTechStack()).thenReturn(Flux.fromIterable(raws));
 
-        StepVerifier.create(useCase.execute(0, 500))
+        StepVerifier.create(useCase.execute(null, 0, 500))
                 .expectNextCount(100)
                 .verifyComplete();
     }
@@ -133,14 +133,6 @@ class GetCompaniesUseCaseTest {
 
         StepVerifier.create(useCase.execute(null, 0, 20)).expectNextCount(2).verifyComplete();
         StepVerifier.create(useCase.execute("   ", 0, 20)).expectNextCount(2).verifyComplete();
-    }
-
-    @Test
-    void execute_twoArgOverload_delegatesToUnfilteredThreeArgVersion() {
-        stubCacheAsPassThrough();
-        when(companyRepository.findAllWithTechStack()).thenReturn(Flux.just(raw(1), raw(2)));
-
-        StepVerifier.create(useCase.execute(0, 20)).expectNextCount(2).verifyComplete();
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.techpulse.techradar.features.social.application;
 
 import com.techpulse.techradar.features.social.ports.HashtagRepository;
+import com.techpulse.techradar.shared.paging.PageRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
@@ -18,7 +19,7 @@ public class GetTrendingHashtagsUseCase {
     private final HashtagRepository hashtagRepository;
 
     public Flux<HashtagRepository.TrendingRow> execute(int limit) {
-        int effectiveLimit = limit <= 0 ? DEFAULT_LIMIT : Math.min(limit, MAX_LIMIT);
+        int effectiveLimit = PageRequest.of(0, limit, DEFAULT_LIMIT, MAX_LIMIT).size();
         LocalDateTime since = LocalDateTime.now().minusDays(TRENDING_WINDOW_DAYS);
         return hashtagRepository.trending(since, effectiveLimit);
     }

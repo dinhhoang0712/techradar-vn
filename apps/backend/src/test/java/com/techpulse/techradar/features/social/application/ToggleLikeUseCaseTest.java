@@ -1,15 +1,11 @@
 package com.techpulse.techradar.features.social.application;
 
-import com.techpulse.techradar.features.auth.domain.User;
-import com.techpulse.techradar.features.auth.ports.UserRepository;
-import com.techpulse.techradar.features.notification.application.NotificationService;
-import com.techpulse.techradar.features.notification.domain.Notification;
+import com.techpulse.techradar.features.notification.application.ActivityNotifier;
 import com.techpulse.techradar.features.social.ports.PostRepository;
 import com.techpulse.techradar.features.social.realtime.FeedBroadcaster;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
@@ -19,7 +15,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.lenient;
@@ -33,9 +28,7 @@ class ToggleLikeUseCaseTest {
     @Mock
     private PostRepository postRepository;
     @Mock
-    private NotificationService notificationService;
-    @Mock
-    private UserRepository userRepository;
+    private ActivityNotifier activityNotifier;
     @Mock
     private FeedBroadcaster feedBroadcaster;
 
@@ -53,7 +46,7 @@ class ToggleLikeUseCaseTest {
 
     @BeforeEach
     void setUp() {
-        useCase = new ToggleLikeUseCase(postRepository, notificationService, userRepository, feedBroadcaster);
+        useCase = new ToggleLikeUseCase(postRepository, activityNotifier, feedBroadcaster);
         lenient().when(postRepository.findById(any(), any())).thenReturn(Mono.just(feedRow(1)));
     }
 
@@ -61,17 +54,12 @@ class ToggleLikeUseCaseTest {
     void like_notifiesAuthorOnANewLikeBySomeoneElse() {
         when(postRepository.like(postId, likerId)).thenReturn(Mono.just(true));
         when(postRepository.findAuthorId(postId)).thenReturn(Mono.just(authorId));
-        when(userRepository.findById(likerId.toString()))
-                .thenReturn(Mono.just(User.builder().id(likerId).fullName("Lê Văn C").build()));
-        when(notificationService.save(any())).thenReturn(Mono.just(Notification.builder().build()));
+        when(activityNotifier.notify(likerId, authorId, "POST_LIKE", "đã thích bài viết của bạn", "/feed"))
+                .thenReturn(Mono.empty());
 
         StepVerifier.create(useCase.like(postId.toString(), likerId.toString())).verifyComplete();
 
-        ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
-        verify(notificationService).save(captor.capture());
-        assertThat(captor.getValue().getUserId()).isEqualTo(authorId);
-        assertThat(captor.getValue().getType()).isEqualTo("POST_LIKE");
-        assertThat(captor.getValue().getTitle()).contains("Lê Văn C");
+        verify(activityNotifier).notify(likerId, authorId, "POST_LIKE", "đã thích bài viết của bạn", "/feed");
     }
 
     @Test
@@ -80,7 +68,7 @@ class ToggleLikeUseCaseTest {
 
         StepVerifier.create(useCase.like(postId.toString(), likerId.toString())).verifyComplete();
 
-        verify(notificationService, never()).save(any());
+        verify(activityNotifier, never()).notify(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -90,7 +78,7 @@ class ToggleLikeUseCaseTest {
 
         StepVerifier.create(useCase.like(postId.toString(), likerId.toString())).verifyComplete();
 
-        verify(notificationService, never()).save(any());
+        verify(activityNotifier, never()).notify(any(), any(), any(), any(), any());
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.techpulse.techradar.features.system.adapters.output;
 
 import com.techpulse.techradar.features.system.ports.ActivityLogRepository;
+import com.techpulse.techradar.shared.util.UuidUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
@@ -24,7 +25,7 @@ public class PostgresActivityLogRepository implements ActivityLogRepository {
     public Mono<Void> recordVisit(String userId, String path) {
         DatabaseClient.GenericExecuteSpec spec = dbClient.sql(
                 "INSERT INTO activity_log (type, user_id, path) VALUES ('visit', :user_id, :path)");
-        spec = userId != null && isUuid(userId)
+        spec = userId != null && UuidUtils.isValid(userId)
                 ? spec.bind("user_id", UUID.fromString(userId))
                 : spec.bindNull("user_id", UUID.class);
         spec = path != null ? spec.bind("path", path) : spec.bindNull("path", String.class);
@@ -75,14 +76,5 @@ public class PostgresActivityLogRepository implements ActivityLogRepository {
                 .bind("limit", limit)
                 .map((row, meta) -> row.get("keyword", String.class))
                 .all();
-    }
-
-    private static boolean isUuid(String v) {
-        try {
-            UUID.fromString(v);
-            return true;
-        } catch (IllegalArgumentException e) {
-            return false;
-        }
     }
 }

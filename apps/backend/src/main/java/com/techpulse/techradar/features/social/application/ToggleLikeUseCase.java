@@ -1,8 +1,6 @@
 package com.techpulse.techradar.features.social.application;
 
-import com.techpulse.techradar.features.auth.ports.UserRepository;
-import com.techpulse.techradar.features.notification.application.NotificationService;
-import com.techpulse.techradar.features.notification.domain.Notification;
+import com.techpulse.techradar.features.notification.application.ActivityNotifier;
 import com.techpulse.techradar.features.social.ports.PostRepository;
 import com.techpulse.techradar.features.social.realtime.FeedBroadcaster;
 import lombok.RequiredArgsConstructor;
@@ -18,8 +16,7 @@ import java.util.UUID;
 public class ToggleLikeUseCase {
 
     private final PostRepository postRepository;
-    private final NotificationService notificationService;
-    private final UserRepository userRepository;
+    private final ActivityNotifier activityNotifier;
     private final FeedBroadcaster feedBroadcaster;
 
     public Mono<Void> like(String postId, String userId) {
@@ -58,14 +55,8 @@ public class ToggleLikeUseCase {
     private Mono<Void> notifyLike(UUID postId, UUID likerId) {
         return postRepository.findAuthorId(postId)
                 .filter(authorId -> !authorId.equals(likerId))
-                .flatMap(authorId -> userRepository.findById(likerId.toString())
-                        .flatMap(liker -> notificationService.save(Notification.builder()
-                                .userId(authorId)
-                                .type("POST_LIKE")
-                                .title(liker.getFullName() + " đã thích bài viết của bạn")
-                                .link("/feed")
-                                .read(false)
-                                .build())))
+                .flatMap(authorId -> activityNotifier.notify(
+                        likerId, authorId, "POST_LIKE", "đã thích bài viết của bạn", "/feed"))
                 .then();
     }
 }

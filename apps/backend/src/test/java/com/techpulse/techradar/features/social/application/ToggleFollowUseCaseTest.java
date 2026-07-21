@@ -1,15 +1,11 @@
 package com.techpulse.techradar.features.social.application;
 
-import com.techpulse.techradar.features.auth.domain.User;
-import com.techpulse.techradar.features.auth.ports.UserRepository;
-import com.techpulse.techradar.features.notification.application.NotificationService;
-import com.techpulse.techradar.features.notification.domain.Notification;
+import com.techpulse.techradar.features.notification.application.ActivityNotifier;
 import com.techpulse.techradar.features.social.ports.FollowRepository;
 import com.techpulse.techradar.shared.exception.AppException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
@@ -30,9 +26,7 @@ class ToggleFollowUseCaseTest {
     @Mock
     private FollowRepository followRepository;
     @Mock
-    private NotificationService notificationService;
-    @Mock
-    private UserRepository userRepository;
+    private ActivityNotifier activityNotifier;
 
     private ToggleFollowUseCase useCase;
 
@@ -41,23 +35,19 @@ class ToggleFollowUseCaseTest {
 
     @BeforeEach
     void setUp() {
-        useCase = new ToggleFollowUseCase(followRepository, notificationService, userRepository);
+        useCase = new ToggleFollowUseCase(followRepository, activityNotifier);
     }
 
     @Test
     void follow_notifiesFolloweeOnANewFollow() {
         when(followRepository.follow(followerId, followeeId)).thenReturn(Mono.just(true));
-        when(userRepository.findById(followerId.toString()))
-                .thenReturn(Mono.just(User.builder().id(followerId).fullName("Phạm Văn D").build()));
-        when(notificationService.save(any())).thenReturn(Mono.just(Notification.builder().build()));
+        when(activityNotifier.notify(followerId, followeeId, "NEW_FOLLOWER", "đã bắt đầu theo dõi bạn",
+                "/users/" + followerId)).thenReturn(Mono.empty());
 
         StepVerifier.create(useCase.follow(followerId.toString(), followeeId.toString())).verifyComplete();
 
-        ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
-        verify(notificationService).save(captor.capture());
-        assertThat(captor.getValue().getUserId()).isEqualTo(followeeId);
-        assertThat(captor.getValue().getType()).isEqualTo("NEW_FOLLOWER");
-        assertThat(captor.getValue().getTitle()).contains("Phạm Văn D");
+        verify(activityNotifier).notify(followerId, followeeId, "NEW_FOLLOWER", "đã bắt đầu theo dõi bạn",
+                "/users/" + followerId);
     }
 
     @Test
@@ -66,7 +56,7 @@ class ToggleFollowUseCaseTest {
 
         StepVerifier.create(useCase.follow(followerId.toString(), followeeId.toString())).verifyComplete();
 
-        verify(notificationService, never()).save(any());
+        verify(activityNotifier, never()).notify(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -78,13 +68,14 @@ class ToggleFollowUseCaseTest {
                 })
                 .verify();
 
-        verifyNoInteractions(followRepository, notificationService);
+        verifyNoInteractions(followRepository, activityNotifier);
     }
 
     @Test
     void follow_stillSucceedsWhenNotificationLookupFails() {
         when(followRepository.follow(followerId, followeeId)).thenReturn(Mono.just(true));
-        when(userRepository.findById(followerId.toString())).thenReturn(Mono.error(new RuntimeException("boom")));
+        when(activityNotifier.notify(followerId, followeeId, "NEW_FOLLOWER", "đã bắt đầu theo dõi bạn",
+                "/users/" + followerId)).thenReturn(Mono.error(new RuntimeException("boom")));
 
         StepVerifier.create(useCase.follow(followerId.toString(), followeeId.toString())).verifyComplete();
     }

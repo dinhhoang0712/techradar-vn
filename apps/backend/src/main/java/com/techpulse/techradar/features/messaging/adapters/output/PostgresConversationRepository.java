@@ -1,6 +1,7 @@
 package com.techpulse.techradar.features.messaging.adapters.output;
 
 import com.techpulse.techradar.features.messaging.ports.ConversationRepository;
+import com.techpulse.techradar.features.messaging.ports.MessagingStatsRepository;
 import io.r2dbc.spi.Row;
 import lombok.RequiredArgsConstructor;
 import org.springframework.r2dbc.core.DatabaseClient;
@@ -13,7 +14,7 @@ import java.util.UUID;
 
 @Repository
 @RequiredArgsConstructor
-public class PostgresConversationRepository implements ConversationRepository {
+public class PostgresConversationRepository implements ConversationRepository, MessagingStatsRepository {
 
     private final DatabaseClient dbClient;
 

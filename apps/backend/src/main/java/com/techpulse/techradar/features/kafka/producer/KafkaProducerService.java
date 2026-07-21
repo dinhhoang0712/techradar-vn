@@ -33,4 +33,19 @@ public class KafkaProducerService {
             throw new IllegalStateException("Unable to serialize Kafka payload", e);
         }
     }
+
+    /**
+     * Same as {@link #send(String, Object)} but with an explicit message key (e.g. so
+     * same-key messages land on the same partition), for producers that need one.
+     */
+    public void send(String topic, String key, Object payload) {
+        try {
+            String message = objectMapper.writeValueAsString(payload);
+            kafkaTemplate.send(topic, key, message);
+            LOGGER.debug("Sent Kafka message to topic {} with key {}: {}", topic, key, message);
+        } catch (JsonProcessingException e) {
+            LOGGER.error("Failed to serialize Kafka payload for topic {}", topic, e);
+            throw new IllegalStateException("Unable to serialize Kafka payload", e);
+        }
+    }
 }

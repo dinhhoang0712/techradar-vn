@@ -2,6 +2,7 @@ package com.techpulse.techradar.features.auth.adapters.output;
 
 import com.techpulse.techradar.features.auth.domain.User;
 import com.techpulse.techradar.features.auth.ports.UserRepository;
+import com.techpulse.techradar.features.auth.ports.UserStatsRepository;
 import io.r2dbc.spi.Row;
 import lombok.RequiredArgsConstructor;
 import org.springframework.r2dbc.core.DatabaseClient;
@@ -18,7 +19,7 @@ import java.util.UUID;
  */
 @Repository
 @RequiredArgsConstructor
-public class PostgresUserRepository implements UserRepository {
+public class PostgresUserRepository implements UserRepository, UserStatsRepository {
 
     private final DatabaseClient dbClient;
 

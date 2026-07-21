@@ -9,6 +9,7 @@ import com.techpulse.techradar.features.graph.domain.SentimentBand;
 import com.techpulse.techradar.features.graph.ports.GraphRepository;
 import com.techpulse.techradar.shared.exception.BadRequestException;
 import com.techpulse.techradar.shared.exception.ErrorCode;
+import com.techpulse.techradar.shared.neo4j.Neo4jReadTemplate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.neo4j.driver.Driver;
@@ -19,7 +20,6 @@ import org.neo4j.driver.types.Relationship;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -292,15 +292,12 @@ public class Neo4jGraphRepository implements GraphRepository {
      * Runs {@code work} against a fresh Neo4j session on the bounded-elastic scheduler,
      * deferred until subscription (so any exception {@code work} throws — including
      * validation errors like {@link BadRequestException} — surfaces as a reactive error rather
-     * than a synchronous throw), and closes the session afterward. Centralizes the
-     * session/scheduler boilerplate every query method here previously repeated.
+     * than a synchronous throw), and closes the session afterward. Delegates to the shared
+     * {@link Neo4jReadTemplate} so this session/scheduler boilerplate has exactly one
+     * implementation repo-wide.
      */
     private <T> Mono<T> runRead(Function<Session, T> work) {
-        return Mono.fromCallable(() -> {
-            try (Session session = driver.session()) {
-                return work.apply(session);
-            }
-        }).subscribeOn(Schedulers.boundedElastic());
+        return Neo4jReadTemplate.read(driver, work);
     }
 
     private void addNode(Map<String, GraphNode> acc, Node node) {

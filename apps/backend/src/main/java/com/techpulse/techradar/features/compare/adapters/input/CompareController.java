@@ -3,7 +3,7 @@ package com.techpulse.techradar.features.compare.adapters.input;
 import com.techpulse.techradar.features.compare.application.CompareSearchUseCase;
 import com.techpulse.techradar.features.compare.application.GenerateLlmSummaryUseCase;
 import com.techpulse.techradar.features.compare.domain.TechComparison;
-import com.techpulse.techradar.features.radar.domain.MonthlyCount;
+import com.techpulse.techradar.features.compare.domain.TechComparisonSeries;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -12,10 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Compare API controller. {@code /compare/search} returns per-technology monthly series
@@ -37,7 +34,7 @@ public class CompareController {
             @RequestParam(defaultValue = "12") int months
     ) {
         return compareSearchUseCase.execute(keywords, months)
-                .map(rows -> ResponseEntity.ok(ApiResponse.success(toCompareItems(rows), "Comparison completed")))
+                .map(series -> ResponseEntity.ok(ApiResponse.success(toCompareItems(series), "Comparison completed")))
                 .onErrorResume(ex -> Mono.just(
                         ResponseEntity.badRequest().body(
                                 ApiResponse.error(ex.getMessage(), "COMPARISON_ERROR")
@@ -45,19 +42,16 @@ public class CompareController {
                 ));
     }
 
-    /** Group monthly rows by technology, carrying the latest yoy/mom/growth rates. */
-    private List<CompareDtos.CompareItem> toCompareItems(List<MonthlyCount> rows) {
-        Map<String, CompareDtos.CompareItem> byTech = new LinkedHashMap<>();
-        for (MonthlyCount row : rows) {
-            CompareDtos.CompareItem item = byTech.computeIfAbsent(row.name(),
-                    k -> new CompareDtos.CompareItem(row.name(), 0.0, 0.0, 0.0, new ArrayList<>()));
-            item.getMonthly().add(new CompareDtos.MonthlyPoint(row.month(), row.year(), row.activity(), row.articleCount()));
-            // rows are ordered ascending, so the last assignment reflects the most recent month.
-            item.setYoyRate(row.yoyRate());
-            item.setMomRate(row.momRate());
-            item.setGrowthRate(row.growthRate());
-        }
-        return new ArrayList<>(byTech.values());
+    /** Thin translation from the use case's grouped domain series to the client-facing DTO. */
+    private List<CompareDtos.CompareItem> toCompareItems(List<TechComparisonSeries> series) {
+        return series.stream()
+                .map(s -> new CompareDtos.CompareItem(
+                        s.name(), s.yoyRate(), s.momRate(), s.growthRate(),
+                        s.monthly().stream()
+                                .map(m -> new CompareDtos.MonthlyPoint(m.month(), m.year(), m.activity(), m.articleCount()))
+                                .toList()
+                ))
+                .toList();
     }
 
     @Operation(summary = "Generate LLM summary for technology comparison")

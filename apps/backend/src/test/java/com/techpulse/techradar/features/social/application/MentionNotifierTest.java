@@ -2,12 +2,10 @@ package com.techpulse.techradar.features.social.application;
 
 import com.techpulse.techradar.features.auth.domain.User;
 import com.techpulse.techradar.features.auth.ports.UserRepository;
-import com.techpulse.techradar.features.notification.application.NotificationService;
-import com.techpulse.techradar.features.notification.domain.Notification;
+import com.techpulse.techradar.features.notification.application.ActivityNotifier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
@@ -31,7 +29,7 @@ class MentionNotifierTest {
     @Mock
     private UserRepository userRepository;
     @Mock
-    private NotificationService notificationService;
+    private ActivityNotifier activityNotifier;
 
     private MentionNotifier notifier;
 
@@ -39,7 +37,7 @@ class MentionNotifierTest {
 
     @BeforeEach
     void setUp() {
-        notifier = new MentionNotifier(userRepository, notificationService);
+        notifier = new MentionNotifier(userRepository, activityNotifier);
     }
 
     @Test
@@ -54,111 +52,99 @@ class MentionNotifierTest {
     void notify_noOpsForNullOrEmptyList() {
         StepVerifier.create(notifier.notify(actorId, null, "bài viết", "/feed")).verifyComplete();
         StepVerifier.create(notifier.notify(actorId, List.of(), "bài viết", "/feed")).verifyComplete();
-        verifyNoInteractions(userRepository, notificationService);
+        verifyNoInteractions(userRepository, activityNotifier);
     }
 
     @Test
     void notify_noOpsWithNoInteractionsWhenOnlyMentionIsSelf() {
         StepVerifier.create(notifier.notify(actorId, List.of(actorId.toString()), "bài viết", "/feed")).verifyComplete();
-        verifyNoInteractions(userRepository, notificationService);
+        verifyNoInteractions(userRepository, activityNotifier);
     }
 
     @Test
     void notify_sendsOneNotificationWithTypeTitleAndLink() {
         UUID targetId = UUID.randomUUID();
-        when(userRepository.findById(actorId.toString()))
-                .thenReturn(Mono.just(User.builder().id(actorId).fullName("Nguyễn Văn A").build()));
         when(userRepository.findById(targetId.toString())).thenReturn(Mono.just(User.builder().id(targetId).build()));
-        when(notificationService.save(any())).thenReturn(Mono.just(Notification.builder().build()));
+        when(activityNotifier.notify(actorId, targetId, "POST_MENTION", "đã nhắc đến bạn trong một bài viết", "/feed"))
+                .thenReturn(Mono.empty());
 
         StepVerifier.create(notifier.notify(actorId, List.of(targetId.toString()), "bài viết", "/feed")).verifyComplete();
 
-        ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
-        verify(notificationService).save(captor.capture());
-        assertThat(captor.getValue().getUserId()).isEqualTo(targetId);
-        assertThat(captor.getValue().getType()).isEqualTo("POST_MENTION");
-        assertThat(captor.getValue().getTitle()).contains("Nguyễn Văn A");
-        assertThat(captor.getValue().getLink()).isEqualTo("/feed");
+        verify(activityNotifier).notify(actorId, targetId, "POST_MENTION", "đã nhắc đến bạn trong một bài viết", "/feed");
     }
 
     @Test
     void notify_dedupesRepeatedTargetIds() {
         UUID targetId = UUID.randomUUID();
-        when(userRepository.findById(actorId.toString()))
-                .thenReturn(Mono.just(User.builder().id(actorId).fullName("Actor").build()));
         when(userRepository.findById(targetId.toString())).thenReturn(Mono.just(User.builder().id(targetId).build()));
-        when(notificationService.save(any())).thenReturn(Mono.just(Notification.builder().build()));
+        when(activityNotifier.notify(actorId, targetId, "POST_MENTION", "đã nhắc đến bạn trong một bài viết", "/feed"))
+                .thenReturn(Mono.empty());
 
         notifier.notify(actorId, List.of(targetId.toString(), targetId.toString()), "bài viết", "/feed").block();
 
-        verify(notificationService, times(1)).save(any());
+        verify(activityNotifier, times(1)).notify(any(), any(), any(), any(), any());
     }
 
     @Test
     void notify_removesSelfButStillNotifiesOtherTargets() {
         UUID targetId = UUID.randomUUID();
-        when(userRepository.findById(actorId.toString()))
-                .thenReturn(Mono.just(User.builder().id(actorId).fullName("Actor").build()));
         when(userRepository.findById(targetId.toString())).thenReturn(Mono.just(User.builder().id(targetId).build()));
-        when(notificationService.save(any())).thenReturn(Mono.just(Notification.builder().build()));
+        when(activityNotifier.notify(actorId, targetId, "POST_MENTION", "đã nhắc đến bạn trong một bài viết", "/feed"))
+                .thenReturn(Mono.empty());
 
         notifier.notify(actorId, List.of(actorId.toString(), targetId.toString()), "bài viết", "/feed").block();
 
-        ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
-        verify(notificationService, times(1)).save(captor.capture());
-        assertThat(captor.getValue().getUserId()).isEqualTo(targetId);
+        verify(activityNotifier, times(1)).notify(actorId, targetId, "POST_MENTION", "đã nhắc đến bạn trong một bài viết", "/feed");
     }
 
     @Test
     void notify_skipsAnUnknownOrDeletedTargetIdSilently() {
         UUID knownId = UUID.randomUUID();
         UUID unknownId = UUID.randomUUID();
-        when(userRepository.findById(actorId.toString()))
-                .thenReturn(Mono.just(User.builder().id(actorId).fullName("Actor").build()));
         when(userRepository.findById(knownId.toString())).thenReturn(Mono.just(User.builder().id(knownId).build()));
         when(userRepository.findById(unknownId.toString())).thenReturn(Mono.empty());
-        when(notificationService.save(any())).thenReturn(Mono.just(Notification.builder().build()));
+        when(activityNotifier.notify(actorId, knownId, "POST_MENTION", "đã nhắc đến bạn trong một bài viết", "/feed"))
+                .thenReturn(Mono.empty());
 
         StepVerifier.create(notifier.notify(actorId, List.of(knownId.toString(), unknownId.toString()), "bài viết", "/feed"))
                 .verifyComplete();
 
-        verify(notificationService, times(1)).save(any());
+        verify(activityNotifier, times(1)).notify(any(), any(), any(), any(), any());
     }
 
     @Test
     void notify_skipsAMalformedTargetIdWithoutFailingTheOtherTargets() {
         UUID knownId = UUID.randomUUID();
-        when(userRepository.findById(actorId.toString()))
-                .thenReturn(Mono.just(User.builder().id(actorId).fullName("Actor").build()));
         when(userRepository.findById(knownId.toString())).thenReturn(Mono.just(User.builder().id(knownId).build()));
-        when(notificationService.save(any())).thenReturn(Mono.just(Notification.builder().build()));
+        when(activityNotifier.notify(actorId, knownId, "POST_MENTION", "đã nhắc đến bạn trong một bài viết", "/feed"))
+                .thenReturn(Mono.empty());
 
         StepVerifier.create(notifier.notify(actorId, List.of(knownId.toString(), "not-a-uuid"), "bài viết", "/feed"))
                 .verifyComplete();
 
-        verify(notificationService, times(1)).save(any());
+        verify(activityNotifier, times(1)).notify(any(), any(), any(), any(), any());
     }
 
     @Test
     void notify_isBestEffort_swallowsNotificationSaveFailure() {
         UUID targetId = UUID.randomUUID();
-        when(userRepository.findById(actorId.toString()))
-                .thenReturn(Mono.just(User.builder().id(actorId).fullName("Actor").build()));
         when(userRepository.findById(targetId.toString())).thenReturn(Mono.just(User.builder().id(targetId).build()));
-        when(notificationService.save(any())).thenReturn(Mono.error(new RuntimeException("boom")));
+        when(activityNotifier.notify(actorId, targetId, "POST_MENTION", "đã nhắc đến bạn trong một bài viết", "/feed"))
+                .thenReturn(Mono.error(new RuntimeException("boom")));
 
         StepVerifier.create(notifier.notify(actorId, List.of(targetId.toString()), "bài viết", "/feed"))
                 .verifyComplete();
     }
 
     @Test
-    void notify_isBestEffort_swallowsActorLookupFailure() {
-        when(userRepository.findById(actorId.toString())).thenReturn(Mono.error(new RuntimeException("boom")));
+    void notify_isBestEffort_swallowsTargetLookupFailure() {
+        UUID targetId = UUID.randomUUID();
+        when(userRepository.findById(targetId.toString())).thenReturn(Mono.error(new RuntimeException("boom")));
 
-        StepVerifier.create(notifier.notify(actorId, List.of(UUID.randomUUID().toString()), "bài viết", "/feed"))
+        StepVerifier.create(notifier.notify(actorId, List.of(targetId.toString()), "bài viết", "/feed"))
                 .verifyComplete();
 
-        verify(notificationService, never()).save(any());
+        verify(activityNotifier, never()).notify(any(), any(), any(), any(), any());
     }
 
     private static List<String> idList(int size) {

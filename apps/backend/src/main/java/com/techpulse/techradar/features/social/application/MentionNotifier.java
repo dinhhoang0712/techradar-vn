@@ -1,8 +1,7 @@
 package com.techpulse.techradar.features.social.application;
 
 import com.techpulse.techradar.features.auth.ports.UserRepository;
-import com.techpulse.techradar.features.notification.application.NotificationService;
-import com.techpulse.techradar.features.notification.domain.Notification;
+import com.techpulse.techradar.features.notification.application.ActivityNotifier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -31,7 +30,7 @@ public class MentionNotifier {
     public static final int MAX_MENTIONS = 10;
 
     private final UserRepository userRepository;
-    private final NotificationService notificationService;
+    private final ActivityNotifier activityNotifier;
 
     public static boolean tooMany(List<String> mentionedUserIds) {
         return mentionedUserIds != null && mentionedUserIds.size() > MAX_MENTIONS;
@@ -49,9 +48,8 @@ public class MentionNotifier {
             return Mono.empty();
         }
 
-        return userRepository.findById(actorId.toString())
-                .flatMapMany(actor -> Flux.fromIterable(targets)
-                        .flatMap(targetId -> notifyOne(actor.getFullName(), targetId, contentLabel, link)))
+        return Flux.fromIterable(targets)
+                .flatMap(targetId -> notifyOne(actorId, targetId, contentLabel, link))
                 .then()
                 .onErrorResume(e -> {
                     log.warn("Could not send mention notifications", e);
@@ -59,16 +57,11 @@ public class MentionNotifier {
                 });
     }
 
-    private Mono<Void> notifyOne(String actorName, String targetId, String contentLabel, String link) {
+    private Mono<Void> notifyOne(UUID actorId, String targetId, String contentLabel, String link) {
         return Mono.defer(() -> userRepository.findById(targetId)
-                        .flatMap(target -> notificationService.save(Notification.builder()
-                                .userId(UUID.fromString(targetId))
-                                .type("POST_MENTION")
-                                .title(actorName + " đã nhắc đến bạn trong một " + contentLabel)
-                                .link(link)
-                                .read(false)
-                                .build())))
-                .then()
+                        .flatMap(target -> activityNotifier.notify(
+                                actorId, UUID.fromString(targetId), "POST_MENTION",
+                                "đã nhắc đến bạn trong một " + contentLabel, link)))
                 .onErrorResume(e -> {
                     // Unknown/deleted/malformed user id from the client's picker — skip silently,
                     // don't fail the post/comment the user already composed.

@@ -1,11 +1,10 @@
 package com.techpulse.techradar.features.roadmap.application;
 
-import com.techpulse.techradar.features.kafka.KafkaTopicConstants;
-import com.techpulse.techradar.features.kafka.producer.KafkaProducerService;
 import com.techpulse.techradar.features.notification.domain.TrendSubscriber;
 import com.techpulse.techradar.features.notification.event.RoadmapAlertEvent;
 import com.techpulse.techradar.features.notification.ports.NotificationRepository;
 import com.techpulse.techradar.features.roadmap.domain.RoadmapResult;
+import com.techpulse.techradar.features.roadmap.ports.AlertPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,8 +22,6 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -41,13 +38,13 @@ class RoadmapAlertServiceTest {
     private GetCareerRoadmapUseCase getCareerRoadmapUseCase;
 
     @Mock
-    private KafkaProducerService kafkaProducer;
+    private AlertPublisher alertPublisher;
 
     private RoadmapAlertService service;
 
     @BeforeEach
     void setUp() {
-        service = new RoadmapAlertService(notificationRepository, getCareerRoadmapUseCase, kafkaProducer);
+        service = new RoadmapAlertService(notificationRepository, getCareerRoadmapUseCase, alertPublisher);
         ReflectionTestUtils.setField(service, "trendThreshold", THRESHOLD);
     }
 
@@ -71,7 +68,7 @@ class RoadmapAlertServiceTest {
         StepVerifier.create(service.runOnce()).expectNext(1L).verifyComplete();
 
         ArgumentCaptor<RoadmapAlertEvent> captor = ArgumentCaptor.forClass(RoadmapAlertEvent.class);
-        verify(kafkaProducer).send(eq(KafkaTopicConstants.ROADMAP_ALERTS), captor.capture());
+        verify(alertPublisher).publish(captor.capture());
         RoadmapAlertEvent event = captor.getValue();
         assertThat(event.getUserId()).isEqualTo(candidate.userId().toString());
         assertThat(event.getEmail()).isEqualTo(candidate.email());
@@ -90,7 +87,7 @@ class RoadmapAlertServiceTest {
 
         StepVerifier.create(service.runOnce()).expectNext(0L).verifyComplete();
 
-        verify(kafkaProducer, never()).send(anyString(), any());
+        verify(alertPublisher, never()).publish(any());
     }
 
     @Test
@@ -102,7 +99,7 @@ class RoadmapAlertServiceTest {
 
         StepVerifier.create(service.runOnce()).expectNext(0L).verifyComplete();
 
-        verify(kafkaProducer, never()).send(anyString(), any());
+        verify(alertPublisher, never()).publish(any());
     }
 
     @Test

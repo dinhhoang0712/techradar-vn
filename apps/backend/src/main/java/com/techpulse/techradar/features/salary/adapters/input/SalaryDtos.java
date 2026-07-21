@@ -34,14 +34,9 @@ public class SalaryDtos {
                     .maxSalaryMVnd(insight.maxVnd())
                     .p25SalaryMVnd(insight.p25Vnd())
                     .p75SalaryMVnd(insight.p75Vnd())
-                    .salaryRange(formatRange(insight.p25Vnd(), insight.p75Vnd()))
+                    .salaryRange(insight.salaryRangeLabel())
                     .topCoTechs(insight.topCoTechs())
                     .build();
-        }
-
-        private static String formatRange(double p25, double p75) {
-            if (p25 <= 0 && p75 <= 0) return "N/A";
-            return String.format("%.0f - %.0f triệu VND", p25, p75);
         }
     }
 }

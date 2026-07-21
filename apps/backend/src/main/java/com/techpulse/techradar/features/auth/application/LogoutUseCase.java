@@ -1,6 +1,6 @@
 package com.techpulse.techradar.features.auth.application;
 
-import com.techpulse.techradar.config.JwtTokenProvider;
+import com.techpulse.techradar.features.auth.ports.TokenValidator;
 import com.techpulse.techradar.shared.redis.TokenBlacklistService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,7 +20,7 @@ import java.time.Duration;
 public class LogoutUseCase {
 
     private final TokenBlacklistService blacklist;
-    private final JwtTokenProvider jwtTokenProvider;
+    private final TokenValidator tokenValidator;
 
     @Value("${app.redis.token-blacklist-ttl:604800}")
     private long maxTtlSeconds;
@@ -34,7 +34,7 @@ public class LogoutUseCase {
 
     private Duration remainingTtl(String token) {
         try {
-            long expiryMs = jwtTokenProvider.getExpirationTime(token);
+            long expiryMs = tokenValidator.expirationTimeMillis(token);
             long remainingMs = expiryMs - System.currentTimeMillis();
             long seconds = Math.max(1, Math.min(remainingMs / 1000, maxTtlSeconds));
             return Duration.ofSeconds(seconds);

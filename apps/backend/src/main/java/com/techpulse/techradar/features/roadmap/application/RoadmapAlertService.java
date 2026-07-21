@@ -1,11 +1,11 @@
 package com.techpulse.techradar.features.roadmap.application;
 
-import com.techpulse.techradar.features.kafka.KafkaTopicConstants;
-import com.techpulse.techradar.features.kafka.producer.KafkaProducerService;
 import com.techpulse.techradar.features.notification.domain.TrendSubscriber;
 import com.techpulse.techradar.features.notification.event.RoadmapAlertEvent;
 import com.techpulse.techradar.features.notification.ports.NotificationRepository;
 import com.techpulse.techradar.features.roadmap.domain.RoadmapResult;
+import com.techpulse.techradar.features.roadmap.domain.SkillRecommendation;
+import com.techpulse.techradar.features.roadmap.ports.AlertPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,7 +33,7 @@ public class RoadmapAlertService {
 
     private final NotificationRepository notificationRepository;
     private final GetCareerRoadmapUseCase getCareerRoadmapUseCase;
-    private final KafkaProducerService kafkaProducer;
+    private final AlertPublisher alertPublisher;
 
     @Value("${app.notifications.trend-threshold:30}")
     private double trendThreshold;
@@ -58,38 +58,27 @@ public class RoadmapAlertService {
                 });
     }
 
-    private Optional<Map<String, Object>> topHotSkill(RoadmapResult roadmap) {
+    private Optional<SkillRecommendation> topHotSkill(RoadmapResult roadmap) {
         List<Map<String, Object>> nextSkills = roadmap.nextSkills();
         if (nextSkills == null || nextSkills.isEmpty()) {
             return Optional.empty();
         }
-        Map<String, Object> top = nextSkills.get(0);
-        return !techName(top).isBlank() && growthRate(top) >= trendThreshold
-                ? Optional.of(top)
-                : Optional.empty();
+        SkillRecommendation top = SkillRecommendation.fromMap(nextSkills.get(0));
+        boolean isHot = top.techName() != null && !top.techName().isBlank() && top.growthRate() >= trendThreshold;
+        return isHot ? Optional.of(top) : Optional.empty();
     }
 
-    private boolean publish(TrendSubscriber candidate, Map<String, Object> skill) {
+    private boolean publish(TrendSubscriber candidate, SkillRecommendation skill) {
         RoadmapAlertEvent event = new RoadmapAlertEvent(
                 candidate.userId().toString(), candidate.email(),
                 candidate.notifyInapp(), candidate.notifyEmail(),
-                techName(skill), growthRate(skill));
+                skill.techName(), skill.growthRate());
         try {
-            kafkaProducer.send(KafkaTopicConstants.ROADMAP_ALERTS, event);
+            alertPublisher.publish(event);
             return true;
         } catch (Exception e) {
             log.warn("Could not publish roadmap alert for user {} (Kafka unavailable?)", candidate.userId(), e);
             return false;
         }
-    }
-
-    private static String techName(Map<String, Object> skill) {
-        Object v = skill.get("tech_name");
-        return v == null ? "" : String.valueOf(v);
-    }
-
-    private static double growthRate(Map<String, Object> skill) {
-        Object v = skill.get("growth_rate");
-        return v instanceof Number n ? n.doubleValue() : 0.0;
     }
 }

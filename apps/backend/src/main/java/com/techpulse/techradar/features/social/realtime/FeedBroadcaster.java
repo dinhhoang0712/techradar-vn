@@ -2,22 +2,19 @@ package com.techpulse.techradar.features.social.realtime;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.techpulse.techradar.features.social.domain.FeedPost;
+import com.techpulse.techradar.features.social.domain.FeedScope;
 import com.techpulse.techradar.features.social.ports.FollowRepository;
+import com.techpulse.techradar.shared.redis.RedisFanout;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.connection.ReactiveSubscription;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
-import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.data.redis.listener.ReactiveRedisMessageListenerContainer;
-import org.springframework.data.redis.serializer.RedisSerializationContext;
-import org.springframework.data.redis.serializer.RedisSerializer;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
-import java.util.List;
 import java.util.UUID;
 
 /**
@@ -36,8 +33,6 @@ import java.util.UUID;
 public class FeedBroadcaster {
 
     private static final String CHANNEL = "live:feed";
-    private static final RedisSerializationContext.SerializationPair<String> STRING_PAIR =
-            RedisSerializationContext.SerializationPair.fromSerializer(RedisSerializer.string());
 
     private final ReactiveRedisMessageListenerContainer redisListenerContainer;
     private final ReactiveStringRedisTemplate redisTemplate;
@@ -48,15 +43,7 @@ public class FeedBroadcaster {
 
     @PostConstruct
     void subscribeToRedis() {
-        redisListenerContainer.receive(List.of(ChannelTopic.of(CHANNEL)), STRING_PAIR, STRING_PAIR)
-                .map(ReactiveSubscription.Message::getMessage)
-                .flatMap(json -> Mono.fromCallable(() -> objectMapper.readValue(json, FeedEvent.class))
-                        .onErrorResume(e -> {
-                            log.warn("Could not parse live feed event from Redis", e);
-                            return Mono.empty();
-                        }))
-                .doOnNext(sink::tryEmitNext)
-                .subscribe();
+        RedisFanout.subscribe(redisListenerContainer, objectMapper, CHANNEL, FeedEvent.class, sink::tryEmitNext);
     }
 
     /**
@@ -70,7 +57,7 @@ public class FeedBroadcaster {
     }
 
     Mono<Boolean> shouldDeliver(FeedEvent event, UUID viewerId, String scope) {
-        if ("explore".equals(scope) || event.type() != FeedEvent.Type.POST_CREATED) {
+        if (FeedScope.fromParam(scope) == FeedScope.EXPLORE || event.type() != FeedEvent.Type.POST_CREATED) {
             return Mono.just(true);
         }
         if (viewerId.equals(event.authorId())) {
@@ -92,13 +79,6 @@ public class FeedBroadcaster {
     }
 
     private void publish(FeedEvent event) {
-        try {
-            String json = objectMapper.writeValueAsString(event);
-            redisTemplate.convertAndSend(CHANNEL, json)
-                    .doOnError(e -> log.warn("Failed to publish live feed event for post {}", event.postId(), e))
-                    .subscribe();
-        } catch (Exception e) {
-            log.warn("Failed to serialize live feed event for post {}", event.postId(), e);
-        }
+        RedisFanout.publish(redisTemplate, objectMapper, CHANNEL, event);
     }
 }

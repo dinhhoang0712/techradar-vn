@@ -23,7 +23,4 @@ public interface UserRepository {
      * @return the number of rows deleted (0 when the user did not exist).
      */
     Mono<Long> deleteById(String userId);
-
-    /** Cheap {@code COUNT(*)} — unlike {@link #findAll()} this never pulls row data. */
-    Mono<Long> countAll();
 }

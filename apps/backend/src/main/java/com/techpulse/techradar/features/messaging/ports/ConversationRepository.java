@@ -18,12 +18,6 @@ public interface ConversationRepository {
     /** A user's conversations, each with its last message + unread count, most recent first. */
     Flux<ConversationRow> findAllForUser(UUID userId, int limit, int offset);
 
-    Mono<Long> countConversations();
-
-    Mono<Long> countMessages();
-
-    Mono<Long> countMessagesSince(java.time.LocalDateTime since);
-
     record ConversationRow(
             UUID id,
             UUID otherUserId,

@@ -1,8 +1,6 @@
 package com.techpulse.techradar.features.social.application;
 
-import com.techpulse.techradar.features.auth.ports.UserRepository;
-import com.techpulse.techradar.features.notification.application.NotificationService;
-import com.techpulse.techradar.features.notification.domain.Notification;
+import com.techpulse.techradar.features.notification.application.ActivityNotifier;
 import com.techpulse.techradar.features.social.ports.FollowRepository;
 import com.techpulse.techradar.shared.exception.BadRequestException;
 import com.techpulse.techradar.shared.exception.ErrorCode;
@@ -19,8 +17,7 @@ import java.util.UUID;
 public class ToggleFollowUseCase {
 
     private final FollowRepository followRepository;
-    private final NotificationService notificationService;
-    private final UserRepository userRepository;
+    private final ActivityNotifier activityNotifier;
 
     public Mono<Void> follow(String followerId, String followeeId) {
         if (followerId.equals(followeeId)) {
@@ -45,14 +42,8 @@ public class ToggleFollowUseCase {
     }
 
     private Mono<Void> notifyFollow(String followerId, String followeeId) {
-        return userRepository.findById(followerId)
-                .flatMap(follower -> notificationService.save(Notification.builder()
-                        .userId(UUID.fromString(followeeId))
-                        .type("NEW_FOLLOWER")
-                        .title(follower.getFullName() + " đã bắt đầu theo dõi bạn")
-                        .link("/users/" + followerId)
-                        .read(false)
-                        .build()))
-                .then();
+        return activityNotifier.notify(
+                UUID.fromString(followerId), UUID.fromString(followeeId),
+                "NEW_FOLLOWER", "đã bắt đầu theo dõi bạn", "/users/" + followerId);
     }
 }

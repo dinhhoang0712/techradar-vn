@@ -5,6 +5,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.techpulse.techradar.features.kafka.model.CompanyInfo;
 import com.techpulse.techradar.features.kafka.model.Entities;
 import com.techpulse.techradar.features.kafka.model.ExtractedJob;
+import com.techpulse.techradar.features.kafka.producer.KafkaProducerService;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -12,7 +13,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.kafka.core.KafkaTemplate;
 
 import java.util.List;
 
@@ -24,24 +24,24 @@ import static org.mockito.Mockito.when;
 
 /**
  * Covers the fix where CompanyInfo.size/field used to be hardcoded to "" regardless of what the
- * crawler sent — see JobData.size/field and KafkaExtractorService.buildExtractedJob.
+ * crawler sent — see JobData.size/field and JobExtractorService.buildExtractedJob.
  */
 @ExtendWith(MockitoExtension.class)
-class KafkaExtractorServiceTest {
+class JobExtractorServiceTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
     @Mock
-    private KafkaTemplate<String, String> kafkaTemplate;
+    private KafkaProducerService kafkaProducer;
 
     @Mock
     private EntityExtractionService extractionService;
 
-    private KafkaExtractorService service;
+    private JobExtractorService service;
 
     @BeforeEach
     void setUp() {
-        service = new KafkaExtractorService(objectMapper, kafkaTemplate, extractionService);
+        service = new JobExtractorService(objectMapper, kafkaProducer, extractionService);
         when(extractionService.extractEntities(any(), any()))
                 .thenReturn(new Entities(List.of(), List.of(), List.of(), List.of(), List.of(), List.of()));
     }
@@ -70,17 +70,17 @@ class KafkaExtractorServiceTest {
                 """).formatted(extraCompanyFields);
     }
 
-    private ExtractedJob consumeAndCapturePublishedJob(String json) throws Exception {
+    private ExtractedJob consumeAndCapturePublishedJob(String json) {
         ConsumerRecord<String, String> record = new ConsumerRecord<>("raw_jobs", 0, 0, "key", json);
         service.consumeRawJob(record);
 
-        ArgumentCaptor<String> payloadCaptor = ArgumentCaptor.forClass(String.class);
-        verify(kafkaTemplate).send(eq(KafkaTopicConstants.EXTRACTED_JOBS), any(), payloadCaptor.capture());
-        return objectMapper.readValue(payloadCaptor.getValue(), ExtractedJob.class);
+        ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(kafkaProducer).send(eq(KafkaTopicConstants.EXTRACTED_JOBS), any(), payloadCaptor.capture());
+        return (ExtractedJob) payloadCaptor.getValue();
     }
 
     @Test
-    void consumeRawJob_populatesCompanyInfoSizeAndFieldWhenTheCrawlerSentThem() throws Exception {
+    void consumeRawJob_populatesCompanyInfoSizeAndFieldWhenTheCrawlerSentThem() {
         ExtractedJob extracted = consumeAndCapturePublishedJob(
                 rawJobJson(", \"size\": \"100-500\", \"field\": \"Fintech\""));
 
@@ -90,7 +90,7 @@ class KafkaExtractorServiceTest {
     }
 
     @Test
-    void consumeRawJob_defaultsToEmptyStringsWhenTheCrawlerDidNotSendSizeOrField() throws Exception {
+    void consumeRawJob_defaultsToEmptyStringsWhenTheCrawlerDidNotSendSizeOrField() {
         ExtractedJob extracted = consumeAndCapturePublishedJob(rawJobJson(""));
 
         CompanyInfo company = extracted.getData().getCompany();

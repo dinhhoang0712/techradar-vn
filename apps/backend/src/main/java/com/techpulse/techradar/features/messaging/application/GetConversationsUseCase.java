@@ -3,6 +3,7 @@ package com.techpulse.techradar.features.messaging.application;
 import com.techpulse.techradar.features.messaging.domain.ConversationSummary;
 import com.techpulse.techradar.features.messaging.domain.UserRef;
 import com.techpulse.techradar.features.messaging.ports.ConversationRepository;
+import com.techpulse.techradar.shared.paging.PageRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
@@ -20,10 +21,9 @@ public class GetConversationsUseCase {
     private final ConversationRepository conversationRepository;
 
     public Flux<ConversationSummary> execute(String userId, int page, int size) {
-        int effectiveSize = size <= 0 ? DEFAULT_SIZE : Math.min(size, MAX_SIZE);
-        int offset = Math.max(page, 0) * effectiveSize;
+        PageRequest pageRequest = PageRequest.of(page, size, DEFAULT_SIZE, MAX_SIZE);
 
-        return conversationRepository.findAllForUser(UUID.fromString(userId), effectiveSize, offset)
+        return conversationRepository.findAllForUser(UUID.fromString(userId), pageRequest.size(), pageRequest.offset())
                 .map(row -> new ConversationSummary(
                         row.id().toString(),
                         new UserRef(row.otherUserId().toString(), row.otherUserName(), row.otherUserAvatarUrl()),

@@ -6,7 +6,6 @@ import com.techpulse.techradar.features.job.application.GetJobMatchesUseCase;
 import com.techpulse.techradar.features.roadmap.domain.SimulationResult;
 import com.techpulse.techradar.features.salary.application.GetTechSalaryDetailUseCase;
 import com.techpulse.techradar.features.salary.domain.SalaryInsight;
-import com.techpulse.techradar.features.user.domain.UserProfiles;
 import com.techpulse.techradar.features.user.ports.UserProfileRepository;
 import com.techpulse.techradar.shared.exception.NotFoundException;
 import com.techpulse.techradar.shared.redis.ReactiveRedisCache;
@@ -52,9 +51,7 @@ public class SimulateCareerMoveUseCase {
             return Mono.error(new IllegalArgumentException("technology is required"));
         }
 
-        return userProfileRepository.findByUserId(userId)
-                .map(UserProfiles::technologiesOrEmpty)
-                .defaultIfEmpty(List.of())
+        return userProfileRepository.technologiesOf(userId)
                 .flatMap(currentSkills -> redisCache.getOrLoadMono(
                         "cache:simulate:" + userId + ":" + tech.toLowerCase(Locale.ROOT),
                         Duration.ofSeconds(cacheTtlSeconds),

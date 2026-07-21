@@ -3,6 +3,7 @@ package com.techpulse.techradar.features.social.application;
 import com.techpulse.techradar.features.social.domain.PostComment;
 import com.techpulse.techradar.features.social.domain.UserSummary;
 import com.techpulse.techradar.features.social.ports.CommentRepository;
+import com.techpulse.techradar.shared.paging.PageRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
@@ -19,10 +20,9 @@ public class GetCommentsUseCase {
     private final CommentRepository commentRepository;
 
     public Flux<PostComment> execute(String postId, int page, int size) {
-        int effectiveSize = size <= 0 ? DEFAULT_SIZE : Math.min(size, MAX_SIZE);
-        int offset = Math.max(page, 0) * effectiveSize;
+        PageRequest pageRequest = PageRequest.of(page, size, DEFAULT_SIZE, MAX_SIZE);
 
-        return commentRepository.findByPost(UUID.fromString(postId), effectiveSize, offset)
+        return commentRepository.findByPost(UUID.fromString(postId), pageRequest.size(), pageRequest.offset())
                 .map(row -> new PostComment(
                         row.id().toString(),
                         new UserSummary(row.authorId().toString(), row.authorName(), row.authorAvatarUrl()),

@@ -3,6 +3,7 @@ package com.techpulse.techradar.features.user.adapters.output;
 import com.techpulse.techradar.features.user.domain.NotificationRecipient;
 import com.techpulse.techradar.features.user.domain.UserProfile;
 import com.techpulse.techradar.features.user.ports.UserProfileRepository;
+import com.techpulse.techradar.shared.util.UuidUtils;
 import io.r2dbc.spi.Row;
 import lombok.RequiredArgsConstructor;
 import org.springframework.r2dbc.core.DatabaseClient;
@@ -26,6 +27,12 @@ public class PostgresUserProfileRepository implements UserProfileRepository {
 
     @Override
     public Mono<UserProfile> findByUserId(String userId) {
+        // A malformed id can never match a row, so treat it the same as a valid-but-unknown one
+        // (Mono.empty(), per .one()'s no-rows contract below) instead of letting
+        // UUID.fromString blow up synchronously outside the reactive chain.
+        if (!UuidUtils.isValid(userId)) {
+            return Mono.empty();
+        }
         return dbClient.sql(
                 "SELECT user_id, job_role, technologies, location, bio, avatar_url, notify_inapp, notify_email " +
                 "FROM user_profile WHERE user_id = :user_id"

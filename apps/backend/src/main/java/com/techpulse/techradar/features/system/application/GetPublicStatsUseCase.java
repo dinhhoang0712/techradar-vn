@@ -1,7 +1,7 @@
 package com.techpulse.techradar.features.system.application;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.techpulse.techradar.features.auth.ports.UserRepository;
+import com.techpulse.techradar.features.auth.ports.UserStatsRepository;
 import com.techpulse.techradar.features.company.application.GetCompaniesUseCase;
 import com.techpulse.techradar.features.job.ports.JobRepository;
 import com.techpulse.techradar.features.system.domain.PublicStats;
@@ -28,7 +28,7 @@ public class GetPublicStatsUseCase {
 
     private final GetCompaniesUseCase getCompaniesUseCase;
     private final JobRepository jobRepository;
-    private final UserRepository userRepository;
+    private final UserStatsRepository userStatsRepository;
     private final ReactiveRedisCache redisCache;
 
     @Value("${app.redis.public-stats-cache-ttl:1800}")
@@ -41,7 +41,7 @@ public class GetPublicStatsUseCase {
                 Mono.zip(
                         getCompaniesUseCase.all().count(),
                         jobRepository.countJobs(),
-                        userRepository.countAll()
+                        userStatsRepository.countAll()
                 ).map(t -> new PublicStats(t.getT1(), t.getT2(), t.getT3())),
                 TYPE
         );

@@ -1,7 +1,7 @@
 package com.techpulse.techradar.features.auth.application;
 
-import com.techpulse.techradar.config.JwtTokenProvider;
 import com.techpulse.techradar.features.auth.adapters.input.LoginResponse;
+import com.techpulse.techradar.features.auth.ports.TokenValidator;
 import com.techpulse.techradar.features.auth.ports.UserRepository;
 import com.techpulse.techradar.shared.exception.InvalidCredentialsException;
 import com.techpulse.techradar.shared.redis.TokenBlacklistService;
@@ -19,7 +19,7 @@ import reactor.core.publisher.Mono;
 public class RefreshTokenUseCase {
 
     private final UserRepository userRepository;
-    private final JwtTokenProvider jwtTokenProvider;
+    private final TokenValidator tokenValidator;
     private final TokenBlacklistService tokenBlacklist;
     private final TokenIssuer tokenIssuer;
 
@@ -30,13 +30,13 @@ public class RefreshTokenUseCase {
                         return Mono.error(new InvalidCredentialsException("Refresh token has been revoked"));
                     }
                     return Mono.fromCallable(() -> {
-                        if (!jwtTokenProvider.isTokenValid(refreshToken)) {
+                        if (!tokenValidator.isValid(refreshToken)) {
                             throw new InvalidCredentialsException("Invalid or expired refresh token");
                         }
-                        if (!jwtTokenProvider.isRefreshToken(refreshToken)) {
+                        if (!tokenValidator.isRefreshToken(refreshToken)) {
                             throw new InvalidCredentialsException("Token is not a refresh token");
                         }
-                        return jwtTokenProvider.getUserIdFromToken(refreshToken);
+                        return tokenValidator.extractUserId(refreshToken);
                     });
                 })
                 .flatMap(userId ->

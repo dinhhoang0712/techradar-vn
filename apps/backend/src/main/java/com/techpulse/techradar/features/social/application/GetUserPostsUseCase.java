@@ -2,6 +2,7 @@ package com.techpulse.techradar.features.social.application;
 
 import com.techpulse.techradar.features.social.domain.FeedPost;
 import com.techpulse.techradar.features.social.ports.PostRepository;
+import com.techpulse.techradar.shared.paging.PageRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
@@ -19,10 +20,10 @@ public class GetUserPostsUseCase {
     private final PostRepository postRepository;
 
     public Flux<FeedPost> execute(String targetUserId, String viewerId, int page, int size) {
-        int effectiveSize = size <= 0 ? DEFAULT_SIZE : Math.min(size, MAX_SIZE);
-        int offset = Math.max(page, 0) * effectiveSize;
+        PageRequest pageRequest = PageRequest.of(page, size, DEFAULT_SIZE, MAX_SIZE);
 
-        return postRepository.findByUser(UUID.fromString(targetUserId), UUID.fromString(viewerId), effectiveSize, offset)
+        return postRepository.findByUser(UUID.fromString(targetUserId), UUID.fromString(viewerId),
+                        pageRequest.size(), pageRequest.offset())
                 .map(FeedMapper::toFeedPost);
     }
 }

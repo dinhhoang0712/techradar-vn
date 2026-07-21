@@ -46,12 +46,7 @@ public class AuthController {
             @Valid @RequestBody LoginRequest request
     ) {
         return loginUseCase.execute(request)
-                .map(response -> ResponseEntity.ok((Object) response))
-                .onErrorResume(ex -> Mono.just(
-                        ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
-                                (Object) ApiResponse.error(ex.getMessage(), "UNAUTHORIZED")
-                        )
-                ));
+                .map(response -> ResponseEntity.ok((Object) response));
     }
 
     @Operation(summary = "Register new user")
@@ -60,12 +55,7 @@ public class AuthController {
             @Valid @RequestBody RegisterRequest request
     ) {
         return registerUseCase.execute(request)
-                .map(response -> ResponseEntity.status(HttpStatus.CREATED).body((Object) response))
-                .onErrorResume(ex -> Mono.just(
-                        ResponseEntity.status(HttpStatus.CONFLICT).body(
-                                (Object) ApiResponse.error(ex.getMessage(), "CONFLICT")
-                        )
-                ));
+                .map(response -> ResponseEntity.status(HttpStatus.CREATED).body((Object) response));
     }
 
     @Operation(summary = "Refresh access token using refresh token")
@@ -74,12 +64,7 @@ public class AuthController {
             @Valid @RequestBody RefreshRequest request
     ) {
         return refreshTokenUseCase.execute(request.getRefreshToken())
-                .map(response -> ResponseEntity.ok((Object) response))
-                .onErrorResume(ex -> Mono.just(
-                        ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
-                                (Object) ApiResponse.error(ex.getMessage(), "UNAUTHORIZED")
-                        )
-                ));
+                .map(response -> ResponseEntity.ok((Object) response));
     }
 
     @Operation(summary = "Log out — blacklists the refresh token so it cannot be reused")

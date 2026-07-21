@@ -3,7 +3,6 @@ package com.techpulse.techradar.features.salary.application;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.techpulse.techradar.features.salary.domain.SalaryInsight;
 import com.techpulse.techradar.features.salary.domain.SalaryParser;
-import com.techpulse.techradar.features.salary.domain.SalaryStats;
 import com.techpulse.techradar.features.salary.ports.SalaryRepository;
 import com.techpulse.techradar.shared.redis.ReactiveRedisCache;
 import lombok.RequiredArgsConstructor;
@@ -59,25 +58,9 @@ public class GetSalaryInsightsUseCase {
 
                     if (midpoints.isEmpty()) return null;
 
-                    SalaryStats.Stats stats = SalaryStats.compute(midpoints);
-                    return new SalaryInsight(
-                            raw.techName(),
-                            raw.totalJobs(),
-                            midpoints.size(),
-                            round(stats.median()),
-                            round(stats.avg()),
-                            round(stats.min()),
-                            round(stats.max()),
-                            round(stats.p25()),
-                            round(stats.p75()),
-                            List.of()
-                    );
+                    return SalaryInsight.fromMidpoints(raw.techName(), raw.totalJobs(), midpoints, List.of());
                 })
                 .filter(i -> i != null)
                 .sort((a, b) -> Double.compare(b.medianVnd(), a.medianVnd()));
-    }
-
-    private static double round(double v) {
-        return Math.round(v * 10.0) / 10.0;
     }
 }

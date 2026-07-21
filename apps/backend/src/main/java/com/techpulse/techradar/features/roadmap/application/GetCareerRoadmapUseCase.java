@@ -7,7 +7,7 @@ import com.techpulse.techradar.features.graph.domain.GraphNode;
 import com.techpulse.techradar.features.job.application.GetJobMatchesUseCase;
 import com.techpulse.techradar.features.job.domain.JobMatch;
 import com.techpulse.techradar.features.roadmap.domain.RoadmapResult;
-import com.techpulse.techradar.features.user.domain.UserProfiles;
+import com.techpulse.techradar.features.roadmap.domain.SkillRecommendation;
 import com.techpulse.techradar.features.user.ports.UserProfileRepository;
 import com.techpulse.techradar.shared.redis.ReactiveRedisCache;
 import lombok.RequiredArgsConstructor;
@@ -50,9 +50,7 @@ public class GetCareerRoadmapUseCase {
     private long cacheTtlSeconds;
 
     public Mono<RoadmapResult> execute(String userId) {
-        return userProfileRepository.findByUserId(userId)
-                .map(UserProfiles::technologiesOrEmpty)
-                .defaultIfEmpty(List.of())
+        return userProfileRepository.technologiesOf(userId)
                 .flatMap(technologies -> technologies.isEmpty()
                         ? Mono.just(RoadmapResult.empty(technologies))
                         : redisCache.getOrLoadMono(
@@ -105,11 +103,10 @@ public class GetCareerRoadmapUseCase {
     }
 
     private Mono<Map<String, Object>> attachPath(String sourceTech, Map<String, Object> skill) {
-        Object techNameObj = skill.get("tech_name");
-        if (techNameObj == null || String.valueOf(techNameObj).equalsIgnoreCase(sourceTech)) {
+        String techName = SkillRecommendation.fromMap(skill).techName();
+        if (techName == null || techName.equalsIgnoreCase(sourceTech)) {
             return Mono.just(skill);
         }
-        String techName = String.valueOf(techNameObj);
         return roadAnalysisUseCase.execute(sourceTech, techName)
                 .map(graphData -> {
                     if (!graphData.isFound() || graphData.getNodes().isEmpty()) {
@@ -131,10 +128,10 @@ public class GetCareerRoadmapUseCase {
 
     /** Cheap in-memory cross-reference: how many of the (already fetched) job matches are missing this tech. */
     private Map<String, Object> withJobMatchCount(Map<String, Object> recommendation, List<JobMatch> jobMatches) {
-        Object techName = recommendation.get("tech_name");
+        String techName = SkillRecommendation.fromMap(recommendation).techName();
         long needingIt = techName == null ? 0 : jobMatches.stream()
                 .filter(m -> m.missingSkills() != null)
-                .filter(m -> m.missingSkills().stream().anyMatch(skill -> skill.equalsIgnoreCase(String.valueOf(techName))))
+                .filter(m -> m.missingSkills().stream().anyMatch(skill -> skill.equalsIgnoreCase(techName)))
                 .count();
         Map<String, Object> enriched = new LinkedHashMap<>(recommendation);
         enriched.put("job_matches_needing_it", needingIt);

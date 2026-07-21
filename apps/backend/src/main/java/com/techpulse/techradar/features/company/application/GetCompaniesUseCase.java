@@ -3,6 +3,7 @@ package com.techpulse.techradar.features.company.application;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.techpulse.techradar.features.company.domain.CompanyProfile;
 import com.techpulse.techradar.features.company.ports.CompanyRepository;
+import com.techpulse.techradar.shared.paging.PageRequest;
 import com.techpulse.techradar.shared.redis.ReactiveRedisCache;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -43,23 +44,18 @@ public class GetCompaniesUseCase {
         );
     }
 
-    public Flux<CompanyProfile> execute(int page, int size) {
-        return execute(null, page, size);
-    }
-
     /**
      * @param q optional case-insensitive filter, applied to the already-cached list (no new Cypher
      *          query) — matches either the company name or any of its tech stack entries.
      */
     public Flux<CompanyProfile> execute(String q, int page, int size) {
-        int effectivePage = Math.max(page, 0);
-        int effectiveSize = size <= 0 ? DEFAULT_SIZE : Math.min(size, MAX_SIZE);
+        PageRequest pageRequest = PageRequest.of(page, size, DEFAULT_SIZE, MAX_SIZE);
         Flux<CompanyProfile> source = (q == null || q.isBlank())
                 ? all()
                 : all().filter(c -> matches(c, q.toLowerCase(Locale.ROOT)));
         return source
-                .skip((long) effectivePage * effectiveSize)
-                .take(effectiveSize);
+                .skip(pageRequest.offset())
+                .take(pageRequest.size());
     }
 
     private static boolean matches(CompanyProfile c, String lowerCaseQuery) {

@@ -2,14 +2,13 @@ package com.techpulse.techradar.features.kafka;
 
 import com.techpulse.techradar.features.kafka.model.ExtractedArticle;
 import com.techpulse.techradar.features.kafka.model.ExtractedJob;
+import com.techpulse.techradar.shared.util.IdHashUtils;
 import org.neo4j.driver.Driver;
 import org.neo4j.driver.Record;
 import org.neo4j.driver.Session;
 import org.neo4j.driver.Values;
 import org.springframework.stereotype.Component;
-import org.springframework.util.DigestUtils;
 
-import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 /**
@@ -202,10 +201,7 @@ public class Neo4jExtractionWriter {
     }
 
     private String generateId(String sourceUrl) {
-        if (sourceUrl == null) {
-            sourceUrl = "";
-        }
-        return DigestUtils.md5DigestAsHex(sourceUrl.getBytes(StandardCharsets.UTF_8));
+        return IdHashUtils.md5(sourceUrl);
     }
 
     private String slugify(String value) {

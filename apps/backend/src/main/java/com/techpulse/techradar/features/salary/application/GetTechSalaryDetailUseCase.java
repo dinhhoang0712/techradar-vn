@@ -3,7 +3,6 @@ package com.techpulse.techradar.features.salary.application;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.techpulse.techradar.features.salary.domain.SalaryInsight;
 import com.techpulse.techradar.features.salary.domain.SalaryParser;
-import com.techpulse.techradar.features.salary.domain.SalaryStats;
 import com.techpulse.techradar.features.salary.ports.SalaryRepository;
 import com.techpulse.techradar.shared.exception.NotFoundException;
 import com.techpulse.techradar.shared.redis.ReactiveRedisCache;
@@ -63,29 +62,7 @@ public class GetTechSalaryDetailUseCase {
                             .limit(8)
                             .toList();
 
-                    if (midpoints.isEmpty()) {
-                        return Mono.just(new SalaryInsight(
-                                raw.techName(), raw.totalJobs(), 0,
-                                0, 0, 0, 0, 0, 0, coTechs));
-                    }
-
-                    SalaryStats.Stats stats = SalaryStats.compute(midpoints);
-                    return Mono.just(new SalaryInsight(
-                            raw.techName(),
-                            raw.totalJobs(),
-                            midpoints.size(),
-                            round(stats.median()),
-                            round(stats.avg()),
-                            round(stats.min()),
-                            round(stats.max()),
-                            round(stats.p25()),
-                            round(stats.p75()),
-                            coTechs
-                    ));
+                    return Mono.just(SalaryInsight.fromMidpoints(raw.techName(), raw.totalJobs(), midpoints, coTechs));
                 });
-    }
-
-    private static double round(double v) {
-        return Math.round(v * 10.0) / 10.0;
     }
 }

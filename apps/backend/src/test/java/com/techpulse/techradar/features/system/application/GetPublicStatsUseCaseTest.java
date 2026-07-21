@@ -1,6 +1,6 @@
 package com.techpulse.techradar.features.system.application;
 
-import com.techpulse.techradar.features.auth.ports.UserRepository;
+import com.techpulse.techradar.features.auth.ports.UserStatsRepository;
 import com.techpulse.techradar.features.company.application.GetCompaniesUseCase;
 import com.techpulse.techradar.features.company.domain.CompanyProfile;
 import com.techpulse.techradar.features.job.ports.JobRepository;
@@ -36,7 +36,7 @@ class GetPublicStatsUseCaseTest {
     private JobRepository jobRepository;
 
     @Mock
-    private UserRepository userRepository;
+    private UserStatsRepository userStatsRepository;
 
     @Mock
     private ReactiveRedisCache redisCache;
@@ -45,7 +45,7 @@ class GetPublicStatsUseCaseTest {
 
     @BeforeEach
     void setUp() {
-        useCase = new GetPublicStatsUseCase(getCompaniesUseCase, jobRepository, userRepository, redisCache);
+        useCase = new GetPublicStatsUseCase(getCompaniesUseCase, jobRepository, userStatsRepository, redisCache);
     }
 
     private void stubCacheAsPassThrough() {
@@ -63,7 +63,7 @@ class GetPublicStatsUseCaseTest {
         when(getCompaniesUseCase.all()).thenReturn(Flux.fromIterable(
                 List.of(profile("1"), profile("2"), profile("3"))));
         when(jobRepository.countJobs()).thenReturn(Mono.just(42L));
-        when(userRepository.countAll()).thenReturn(Mono.just(7L));
+        when(userStatsRepository.countAll()).thenReturn(Mono.just(7L));
 
         StepVerifier.create(useCase.execute())
                 .assertNext(stats -> {
@@ -84,7 +84,7 @@ class GetPublicStatsUseCaseTest {
         when(getCompaniesUseCase.all()).thenReturn(Flux.fromIterable(
                 List.of(profile("1"), profile("2"))));
         when(jobRepository.countJobs()).thenReturn(Mono.just(0L));
-        when(userRepository.countAll()).thenReturn(Mono.just(0L));
+        when(userStatsRepository.countAll()).thenReturn(Mono.just(0L));
 
         StepVerifier.create(useCase.execute())
                 .assertNext(stats -> assertThat(stats.companies()).isEqualTo(2L))
@@ -107,6 +107,6 @@ class GetPublicStatsUseCaseTest {
 
         verify(getCompaniesUseCase, never()).all();
         verify(jobRepository, never()).countJobs();
-        verify(userRepository, never()).countAll();
+        verify(userStatsRepository, never()).countAll();
     }
 }

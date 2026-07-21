@@ -2,21 +2,16 @@ package com.techpulse.techradar.features.messaging.realtime;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.techpulse.techradar.features.messaging.domain.DirectMessage;
+import com.techpulse.techradar.shared.redis.RedisFanout;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.connection.ReactiveSubscription;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
-import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.data.redis.listener.ReactiveRedisMessageListenerContainer;
-import org.springframework.data.redis.serializer.RedisSerializationContext;
-import org.springframework.data.redis.serializer.RedisSerializer;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -38,8 +33,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class MessageBroadcaster {
 
     private static final String CHANNEL = "live:messages";
-    private static final RedisSerializationContext.SerializationPair<String> STRING_PAIR =
-            RedisSerializationContext.SerializationPair.fromSerializer(RedisSerializer.string());
 
     private final Map<String, UserChannel> channels = new ConcurrentHashMap<>();
     private final ReactiveRedisMessageListenerContainer redisListenerContainer;
@@ -56,15 +49,8 @@ public class MessageBroadcaster {
 
     @PostConstruct
     void subscribeToRedis() {
-        redisListenerContainer.receive(List.of(ChannelTopic.of(CHANNEL)), STRING_PAIR, STRING_PAIR)
-                .map(ReactiveSubscription.Message::getMessage)
-                .flatMap(json -> Mono.fromCallable(() -> objectMapper.readValue(json, LiveMessageEvent.class))
-                        .onErrorResume(e -> {
-                            log.warn("Could not parse live message event from Redis", e);
-                            return Mono.empty();
-                        }))
-                .doOnNext(event -> deliverLocally(event.userId(), event.message()))
-                .subscribe();
+        RedisFanout.subscribe(redisListenerContainer, objectMapper, CHANNEL, LiveMessageEvent.class,
+                event -> deliverLocally(event.userId(), event.message()));
     }
 
     /** Subscribes the given user to their own live message stream (call once per SSE connection). */
@@ -81,14 +67,7 @@ public class MessageBroadcaster {
 
     /** Publishes a message to a user's live stream, across all backend instances. */
     public void publish(String userId, DirectMessage message) {
-        try {
-            String json = objectMapper.writeValueAsString(new LiveMessageEvent(userId, message));
-            redisTemplate.convertAndSend(CHANNEL, json)
-                    .doOnError(e -> log.warn("Failed to publish live message to Redis for user {}", userId, e))
-                    .subscribe();
-        } catch (Exception e) {
-            log.warn("Failed to serialize live message for user {}", userId, e);
-        }
+        RedisFanout.publish(redisTemplate, objectMapper, CHANNEL, new LiveMessageEvent(userId, message));
     }
 
     private void deliverLocally(String userId, DirectMessage message) {

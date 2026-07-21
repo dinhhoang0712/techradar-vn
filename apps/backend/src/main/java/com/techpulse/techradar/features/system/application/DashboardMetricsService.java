@@ -3,7 +3,7 @@ package com.techpulse.techradar.features.system.application;
 import com.techpulse.techradar.features.job.ports.JobRepository;
 import com.techpulse.techradar.features.kafka.KafkaNeo4jWriterService;
 import com.techpulse.techradar.features.kafka.KafkaSyncStatus;
-import com.techpulse.techradar.features.messaging.ports.ConversationRepository;
+import com.techpulse.techradar.features.messaging.ports.MessagingStatsRepository;
 import com.techpulse.techradar.features.notification.ports.NotificationRepository;
 import com.techpulse.techradar.features.social.ports.CommentRepository;
 import com.techpulse.techradar.features.social.ports.FollowRepository;
@@ -40,7 +40,7 @@ public class DashboardMetricsService {
     private final FollowRepository followRepository;
     private final ReportRepository reportRepository;
     private final JobRepository jobRepository;
-    private final ConversationRepository conversationRepository;
+    private final MessagingStatsRepository messagingStatsRepository;
     private final NotificationRepository notificationRepository;
     private final KafkaNeo4jWriterService kafkaNeo4jWriterService;
 
@@ -107,9 +107,9 @@ public class DashboardMetricsService {
     public Mono<MessagingStats> messagingVolume() {
         LocalDateTime todayStart = LocalDate.now().atStartOfDay();
         return Mono.zip(
-                conversationRepository.countConversations(),
-                conversationRepository.countMessages(),
-                conversationRepository.countMessagesSince(todayStart),
+                messagingStatsRepository.countConversations(),
+                messagingStatsRepository.countMessages(),
+                messagingStatsRepository.countMessagesSince(todayStart),
                 notificationRepository.countGroupedByType()
                         .map(tc -> new NotificationTypeCount(tc.type(), tc.count()))
                         .collectList()

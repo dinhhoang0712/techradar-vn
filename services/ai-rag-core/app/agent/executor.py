@@ -2,6 +2,7 @@
 AI Agent Executor — LangChain tool-calling agent.
 Nhận câu hỏi của user, tự quyết định gọi tool nào, tổng hợp câu trả lời cuối cùng.
 """
+
 import logging
 
 from langchain.agents import AgentExecutor, create_tool_calling_agent
@@ -29,11 +30,13 @@ Nguyên tắc:
 
 def _build_executor() -> AgentExecutor:
     llm = get_llm()
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", _SYSTEM_PROMPT),
-        ("human", "{input}"),
-        MessagesPlaceholder("agent_scratchpad"),
-    ])
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", _SYSTEM_PROMPT),
+            ("human", "{input}"),
+            MessagesPlaceholder("agent_scratchpad"),
+        ]
+    )
     agent = create_tool_calling_agent(llm, ALL_TOOLS, prompt)
     return AgentExecutor(
         agent=agent,
@@ -59,13 +62,15 @@ async def run_agent(query: str) -> dict:
 
     steps = []
     for action, observation in result.get("intermediate_steps", []):
-        steps.append({
-            "tool":   action.tool,
-            "input":  str(action.tool_input),
-            "output": str(observation)[:600],
-        })
+        steps.append(
+            {
+                "tool": action.tool,
+                "input": str(action.tool_input),
+                "output": str(observation)[:600],
+            }
+        )
 
     return {
         "answer": result.get("output", ""),
-        "steps":  steps,
+        "steps": steps,
     }

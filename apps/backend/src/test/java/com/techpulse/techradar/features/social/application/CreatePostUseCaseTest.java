@@ -1,6 +1,5 @@
 package com.techpulse.techradar.features.social.application;
 
-import com.techpulse.techradar.features.social.adapters.input.SocialDtos;
 import com.techpulse.techradar.features.social.ports.CompanyLookupPort;
 import com.techpulse.techradar.features.social.ports.PostRepository;
 import com.techpulse.techradar.features.social.realtime.FeedBroadcaster;
@@ -91,7 +90,7 @@ class CreatePostUseCaseTest {
 
     @Test
     void execute_persistsValidatedImagesAfterInsertingThePost() {
-        List<SocialDtos.ImageInput> images = List.of(new SocialDtos.ImageInput("image/png", "abc"));
+        List<ImageInput> images = List.of(new ImageInput("image/png", "abc"));
         List<PostImageService.PreparedImage> prepared = List.of(new PostImageService.PreparedImage("image/png", new byte[]{1, 2, 3}));
         when(postImageService.validate(images)).thenReturn(prepared);
 
@@ -102,7 +101,7 @@ class CreatePostUseCaseTest {
 
     @Test
     void execute_rejectsInvalidImagesBeforeInsertingThePost() {
-        List<SocialDtos.ImageInput> images = List.of(new SocialDtos.ImageInput("image/png", "not-valid-base64"));
+        List<ImageInput> images = List.of(new ImageInput("image/png", "not-valid-base64"));
         when(postImageService.validate(images))
                 .thenThrow(new BadRequestException(ErrorCode.INVALID_IMAGE, "Image empty or too large (max 3MB)"));
 

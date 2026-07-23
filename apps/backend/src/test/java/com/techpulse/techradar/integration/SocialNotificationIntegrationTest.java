@@ -1,7 +1,6 @@
 package com.techpulse.techradar.integration;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.http.MediaType;
 
 import java.util.Map;
@@ -10,7 +9,6 @@ import java.util.Map;
  * Messaging + social actions (comment/like/follow) each notify the right recipient exactly once,
  * in-process, no Kafka involved.
  */
-@EnabledIfEnvironmentVariable(named = "POSTGRES_HOST", matches = ".+")
 class SocialNotificationIntegrationTest extends IntegrationTestSupport {
 
     @Test

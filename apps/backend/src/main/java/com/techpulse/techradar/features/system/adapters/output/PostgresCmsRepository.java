@@ -46,13 +46,16 @@ public class PostgresCmsRepository implements CmsRepository {
         c.setId(id);
         c.setCreatedAt(now);
         c.setUpdatedAt(now);
+        if (c.getStatus() == null) {
+            c.setStatus("Pending");
+        }
 
         DatabaseClient.GenericExecuteSpec spec = dbClient.sql(
                 "INSERT INTO cms_content (id, title, type, content_date, status, created_at, updated_at) " +
                 "VALUES (:id, :title, :type, :content_date, :status, :created_at, :updated_at)")
                 .bind("id", id)
                 .bind("title", c.getTitle())
-                .bind("status", c.getStatus() != null ? c.getStatus() : "Pending")
+                .bind("status", c.getStatus())
                 .bind("created_at", now)
                 .bind("updated_at", now);
         spec = bindNullable(spec, "type", c.getType());
@@ -65,13 +68,16 @@ public class PostgresCmsRepository implements CmsRepository {
     public Mono<CmsContent> update(CmsContent c) {
         LocalDateTime now = LocalDateTime.now();
         c.setUpdatedAt(now);
+        if (c.getStatus() == null) {
+            c.setStatus("Pending");
+        }
 
         DatabaseClient.GenericExecuteSpec spec = dbClient.sql(
                 "UPDATE cms_content SET title = :title, type = :type, content_date = :content_date, " +
                 "status = :status, updated_at = :updated_at WHERE id = :id")
                 .bind("id", c.getId())
                 .bind("title", c.getTitle())
-                .bind("status", c.getStatus() != null ? c.getStatus() : "Pending")
+                .bind("status", c.getStatus())
                 .bind("updated_at", now);
         spec = bindNullable(spec, "type", c.getType());
         spec = bindNullableDate(spec, "content_date", c.getContentDate());

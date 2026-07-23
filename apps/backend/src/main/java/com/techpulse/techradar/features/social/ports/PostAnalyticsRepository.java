@@ -8,8 +8,8 @@ import java.util.UUID;
 
 /**
  * Aggregate post/like counts for the admin dashboard — split out of {@link PostRepository} so the
- * feed-facing port isn't also the analytics port; {@code DashboardMetricsService} is the only
- * caller and has no business reading/writing individual posts.
+ * feed-facing port isn't also the analytics port; {@code SocialEngagementMetricsService} is the
+ * only caller and has no business reading/writing individual posts.
  */
 public interface PostAnalyticsRepository {
 

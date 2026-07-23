@@ -10,6 +10,7 @@ POST /internal/ai/moderation-suggestion
   Gợi ý hành động kiểm duyệt (REMOVE/DISMISS) cho một báo cáo nội dung, kèm lý do
   và độ tin cậy. Chỉ là gợi ý — admin vẫn phải bấm áp dụng thủ công ở phía backend.
 """
+
 import json
 import logging
 import re
@@ -17,8 +18,10 @@ import re
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.schemas import (
-    LlmSummaryRequest, LlmSummaryResponse,
-    ModerationSuggestionRequest, ModerationSuggestionResponse,
+    LlmSummaryRequest,
+    LlmSummaryResponse,
+    ModerationSuggestionRequest,
+    ModerationSuggestionResponse,
 )
 from app.api.security import require_internal_auth
 from app.core.generator import generate
@@ -66,7 +69,7 @@ async def llm_summary(req: LlmSummaryRequest) -> LlmSummaryResponse:
     try:
         summary = await generate(_build_messages(req))
     except Exception as e:
-        raise HTTPException(status_code=503, detail=f"LLM summary failed: {e}")
+        raise HTTPException(status_code=503, detail=f"LLM summary failed: {e}") from e
     return LlmSummaryResponse(summary=summary.strip())
 
 
@@ -80,8 +83,8 @@ def _build_moderation_messages(req: ModerationSuggestionRequest) -> list[dict]:
     )
     user = (
         f"Loại nội dung: {req.target_type}\n"
-        f"Nội dung bị báo cáo: \"{req.target_content}\"\n"
-        f"Lý do người dùng báo cáo: \"{req.report_reason}\"\n\n"
+        f'Nội dung bị báo cáo: "{req.target_content}"\n'
+        f'Lý do người dùng báo cáo: "{req.report_reason}"\n\n'
         "Nội dung này có vi phạm chính sách và nên bị xoá (REMOVE), hay báo cáo nên được bỏ qua (DISMISS)?"
     )
     return [
@@ -101,7 +104,7 @@ async def moderation_suggestion(req: ModerationSuggestionRequest) -> ModerationS
     try:
         raw = await generate(_build_moderation_messages(req))
     except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Moderation suggestion failed: {e}")
+        raise HTTPException(status_code=503, detail=f"Moderation suggestion failed: {e}") from e
 
     action = "DISMISS"
     reason = "Không thể phân tích phản hồi AI, cần admin xem xét thủ công."

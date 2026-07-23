@@ -14,6 +14,9 @@ public interface ActivityLogRepository {
 
     Mono<Void> recordSearch(String keyword);
 
+    /** Logged once per AI-proxy call (forecast, summarize, interview, career, report, ...). */
+    Mono<Void> recordAiRequest();
+
     Mono<Long> countToday(String type);
 
     /** Visits grouped by month: {@code [{month: "YYYY-MM", count: n}, ...]} (last 12 months). */

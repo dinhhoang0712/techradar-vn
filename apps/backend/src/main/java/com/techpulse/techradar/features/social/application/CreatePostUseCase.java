@@ -1,6 +1,5 @@
 package com.techpulse.techradar.features.social.application;
 
-import com.techpulse.techradar.features.social.adapters.input.SocialDtos;
 import com.techpulse.techradar.features.social.ports.CompanyLookupPort;
 import com.techpulse.techradar.features.social.ports.PostRepository;
 import com.techpulse.techradar.features.social.realtime.FeedBroadcaster;
@@ -31,7 +30,7 @@ public class CreatePostUseCase {
     private final MentionNotifier mentionNotifier;
     private final FeedBroadcaster feedBroadcaster;
 
-    public Mono<String> execute(String userId, String content, List<SocialDtos.ImageInput> images,
+    public Mono<String> execute(String userId, String content, List<ImageInput> images,
                                  String taggedCompanyId, List<String> mentionedUserIds) {
         String trimmed;
         try {

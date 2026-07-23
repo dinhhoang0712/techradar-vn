@@ -44,10 +44,7 @@ def main(
     conn = psycopg2.connect(postgres_dsn, cursor_factory=psycopg2.extras.RealDictCursor)
     try:
         with conn.cursor() as cur:
-            cur.execute(
-                "SELECT alias_normalized, canonical_name FROM dp_tech_alias_map "
-                "ORDER BY alias_normalized"
-            )
+            cur.execute("SELECT alias_normalized, canonical_name FROM dp_tech_alias_map ORDER BY alias_normalized")
             rows = cur.fetchall()
     finally:
         conn.close()

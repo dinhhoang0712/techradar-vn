@@ -2,7 +2,7 @@ import json
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
@@ -30,7 +30,7 @@ async def chat(
     try:
         return await handle_chat(request, db)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/stream")
@@ -43,6 +43,7 @@ async def chat_stream(
       - event: token   data: <text chunk>
       - event: done    data: <JSON metadata: answer, session_id, sources, entities, job_titles, query>
     """
+
     async def event_gen():
         try:
             async for ev in handle_chat_stream(request, db):
@@ -61,8 +62,22 @@ async def list_session_messages(
     session_id: uuid.UUID,
     db: AsyncSession = Depends(get_session),
 ) -> list[ChatMessageItem]:
-    """Trả lịch sử message của 1 session theo thứ tự thời gian (id tăng dần)."""
-    stmt = select(ChatMessage).where(ChatMessage.session_id == session_id).order_by(ChatMessage.created_at.asc())
+    """
+    Trả lịch sử message của 1 session theo thứ tự thời gian.
+
+    user_msg và assistant_msg của cùng 1 lượt chat được commit trong cùng 1
+    transaction (chat_service.handle_chat) nên Postgres gán cho chúng cùng
+    một giá trị created_at (now() cố định trong 1 transaction) — sắp xếp chỉ
+    theo created_at không đảm bảo user đứng trước assistant. Dùng role làm
+    tiebreaker (user luôn được lưu trước assistant trong 1 lượt) để giữ đúng
+    thứ tự hội thoại.
+    """
+    role_order = case((ChatMessage.role == "user", 0), else_=1)
+    stmt = (
+        select(ChatMessage)
+        .where(ChatMessage.session_id == session_id)
+        .order_by(ChatMessage.created_at.asc(), role_order.asc())
+    )
     result = await db.execute(stmt)
     rows = result.scalars().all()
     return [ChatMessageItem(id=m.id, role=m.role, content=m.content) for m in rows]

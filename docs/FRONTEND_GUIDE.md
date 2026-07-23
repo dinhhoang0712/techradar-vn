@@ -25,10 +25,12 @@
 Frontend TechRadar VN là Single Page Application (SPA) được xây dựng với:
 
 - **React 19** với các tính năng modern (concurrent rendering, automatic batching)
+- **TypeScript** (strict, `allowJs: false`) — toàn bộ `src/` là `.ts`/`.tsx`, không còn file JS nào
 - **Vite 7** cho fast development và optimized builds
 - **React Router DOM 7** cho client-side routing
 - **Recharts 3** cho data visualization
-- **D3.js 7** và react-force-graph-2d cho graph visualization
+- **react-force-graph-2d** (dùng d3-force nội bộ) cho graph visualization — không có dependency
+  `d3` trực tiếp
 
 ### Mục tiêu thiết kế
 
@@ -50,8 +52,7 @@ Frontend TechRadar VN là Single Page Application (SPA) được xây dựng v�
 | Vite | 7.3.1 | Build tool & dev server |
 | React Router DOM | 7.13.1 | Client-side routing |
 | Recharts | 3.7.0 | Chart library |
-| D3.js | 7.9.0 | Data visualization |
-| react-force-graph-2d | 1.29.1 | Force-directed graph |
+| react-force-graph-2d | 1.29.1 | Force-directed graph (dùng d3-force nội bộ) |
 | react-select | 5.10.2 | Select component |
 | html2canvas | 1.4.1 | Screenshot export |
 
@@ -60,7 +61,7 @@ Frontend TechRadar VN là Single Page Application (SPA) được xây dựng v�
 | Package | Version | Purpose |
 |---------|---------|---------|
 | @vitejs/plugin-react | 5.1.1 | Vite React plugin |
-| TypeScript | 5.x | Type checking (optional) |
+| TypeScript | 6.0.3 | **Bắt buộc** — `strict: true`, `allowJs: false` (không phải "optional") |
 | ESLint | 9.39.1 | Linting |
 | Vitest | 4.1.9 | Testing framework |
 | Testing Library | 16.x | Component testing |
@@ -71,77 +72,84 @@ Frontend TechRadar VN là Single Page Application (SPA) được xây dựng v�
 
 ```
 apps/web/src/
-├── main.jsx                      # Application entry point
+├── main.tsx                      # Application entry point
 ├── index.css                     # Global styles
-├── App.jsx                       # Root component + route table
+├── App.tsx                       # Root component + route table
 ├── App.css                       # App styles
 │
-├── api/                          # API client layer (real file names)
-│   ├── apiClient.js               # HTTP client — bearer token, auto-refresh on 401
-│   ├── authService.js, userService.js
-│   ├── radarService.js, compareService.js, graphService.js, chatService.js, clusterService.js
-│   ├── careerService.js, reportService.js, summarizeService.js, salaryService.js
-│   ├── companyService.js          # NEW — Company Explorer
-│   ├── jobService.js               # NEW — Job Matching
-│   ├── messagingService.js         # NEW — direct messages (incl. manual SSE fetch/parse)
-│   ├── socialService.js            # NEW — feed/posts/follow/comments
-│   ├── interviewService.js         # NEW — AI mock interview
-│   └── agentService.js             # NEW — one-shot Agent-mode chat
+├── api/                          # API client layer — flat named exports per file, KHÔNG phải
+│   │                              namespace object (vd. authService.ts exports loginUser/
+│   │                              registerUser/refreshToken/getCurrentUser trực tiếp)
+│   ├── authService.ts, userService.ts, adminService.ts, statsService.ts
+│   ├── trendService.ts           # KHÔNG phải "radarService" — getRadarTop4/getRadarTop10/
+│   │                              getRadarSearch/streamRadar (SSE)
+│   ├── compareService.ts, graphService.ts, chatService.ts, clusterService.ts
+│   ├── careerService.ts, reportService.ts, summarizeService.ts, salaryService.ts
+│   ├── forecastService.ts, recommendService.ts, notificationService.ts
+│   ├── companyService.ts, jobService.ts
+│   ├── messagingService.ts       # direct messages (incl. manual SSE fetch/parse)
+│   ├── socialService.ts          # feed/posts/follow/comments
+│   ├── interviewService.ts, agentService.ts
+├── utils/
+│   └── apiClient.ts              # HTTP client — MỘT function `apiClient()`, không phải class
+│                                  # `ApiClient`; token lưu localStorage key access_token/
+│                                  # refresh_token (snake_case, không phải accessToken/camelCase)
 │
 ├── components/                   # Reusable components
 │   ├── layout/
-│   │   ├── Header.jsx            # top nav — gained Bảng tin/Tin nhắn/Công ty/Phỏng vấn thử
-│   │   ├── AdminSidebar.jsx
-│   │   └── Footer.jsx
+│   │   ├── Header.tsx
+│   │   ├── AdminSidebar.tsx
+│   │   └── Footer.tsx
 │   ├── notifications/
-│   │   ├── NotificationBell.jsx
-│   │   └── NotificationPanel.jsx
-│   ├── social/                    # NEW
-│   │   └── PostCard.jsx            # shared like/comment/delete card (Feed + PublicProfile)
+│   │   └── NotificationBell.tsx
+│   ├── social/
+│   │   └── PostCard.tsx          # shared like/comment/delete card (Feed + PublicProfile)
 │   └── common/
-│       ├── Avatar.jsx              # NEW — shared avatar-or-fallback-icon
-│       ├── Modal.jsx               # confirm dialogs
-│       └── ToastProvider.jsx / toastContext.js
+│       ├── Avatar.tsx, Modal.tsx
+│       └── toastContext.tsx
 │
-├── contexts/                     # React contexts
-│   ├── AppContext.jsx / appContextStore.js         # auth/app state
-│   └── MessagingContext.jsx / messagingStore.js    # NEW — app-wide SSE connection
+├── contexts/                     # React contexts — appContextStore.tsx KHÔNG chứa auth
+│   │                              (login/logout/token) — chỉ giữ maintenance/feature-flag state
+│   │                              (isWebMaintenance/isChatEnabled/isGraphEnabled từ GET /status)
+│   ├── appContextStore.tsx
+│   └── messagingStore.tsx        # app-wide SSE connection
 │
 ├── pages/                        # Page components
-│   ├── auth/                     # Auth pages (no shared layout)
-│   │   ├── LoginPage.jsx
-│   │   └── RegisterPage.jsx
-│   ├── TrendDashboard.jsx        # Tech radar dashboard
-│   ├── GraphExplorer.jsx         # Explore / Road Analysis / Browse Filters (NEW tab)
-│   ├── ChatbotPage.jsx           # RAG chat + Agent mode toggle (NEW)
-│   ├── ClusterDashboard.jsx      # Clustering visualization
-│   ├── ComparePage.jsx           # Technology comparison
-│   ├── SalaryPage.jsx            # Salary analytics
-│   ├── CompanyExplorer.jsx       # NEW — company directory + similar-company panel
-│   ├── CareerPage.jsx            # Career path assistant + job-match card (NEW)
-│   ├── InterviewPage.jsx         # NEW — AI mock interview (turn-based, /interview)
-│   ├── ReportPage.jsx            # Trend reports
-│   ├── FeedPage.jsx              # NEW — social feed
-│   ├── MessagesPage.jsx          # NEW — direct messaging (SSE)
-│   ├── PublicProfilePage.jsx     # NEW — /users/:id (follow + message entry point)
-│   ├── UserProfile.jsx           # Own profile
-│   ├── MaintenancePage.jsx       # Maintenance mode
+│   ├── auth/
+│   │   ├── LoginPage.tsx         # gồm cả forgot/reset-password (modal), không có trang riêng
+│   │   └── RegisterPage.tsx
+│   ├── TrendDashboard.tsx        # Tech radar dashboard
+│   ├── GraphExplorer.tsx         # Explore / Road Analysis / Browse Filters / Graph Analytics
+│   ├── ChatbotPage.tsx           # RAG chat + Agent mode toggle
+│   ├── ClusterDashboard.tsx      # Clustering visualization
+│   ├── ComparePage.tsx           # Technology comparison
+│   ├── SalaryPage.tsx            # Salary analytics
+│   ├── CompanyExplorer.tsx       # company directory + similar-company panel
+│   ├── CareerPage.tsx            # Career path assistant + job-match card
+│   ├── InterviewPage.tsx         # AI mock interview (turn-based, /interview)
+│   ├── ReportPage.tsx            # Trend reports
+│   ├── FeedPage.tsx              # social feed
+│   ├── MessagesPage.tsx          # direct messaging (SSE)
+│   ├── NotificationsPage.tsx
+│   ├── PublicProfilePage.tsx     # /users/:id (follow + message entry point)
+│   ├── UserProfile.tsx           # Own profile
+│   ├── MaintenancePage.tsx       # Maintenance mode
+│   ├── ForbiddenPage.tsx         # 403
+│   ├── NotFoundPage.tsx          # 404 — route "*" trỏ vào đây, KHÔNG redirect về /dashboard
 │   └── admin/                    # Admin pages (AdminLayout)
-│       ├── AdminDashboard.jsx
-│       ├── AdminUsers.jsx
-│       ├── AdminCMS.jsx
-│       └── AdminSettings.jsx
+│       ├── AdminDashboard.tsx
+│       ├── AdminAutomation.tsx   # manual job triggers
+│       ├── AdminModeration.tsx, AdminReports.tsx, AdminClusters.tsx
+│       ├── AdminUsers.tsx, AdminCMS.tsx, AdminSettings.tsx
 │
 ├── layouts/                      # Page layouts
-│   ├── UserLayout.jsx            # wraps Header/Footer + <MessagingProvider> for all user pages
-│   └── AdminLayout.jsx           # Admin layout
+│   ├── UserLayout.tsx            # wraps Header/Footer + <MessagingProvider> for all user pages
+│   └── AdminLayout.tsx           # Admin layout
 │
-├── utils/                        # Utility functions
-│   ├── formatters.js             # Data formatting
-│   └── validators.js             # Form validation
+├── hooks/                        # Custom hooks
+├── types/                        # Shared TS types
 │
-└── data/                         # Static data
-    └── mockData.js               # Development mock data
+└── utils/                        # Utility functions (formatters, validators, apiClient — xem trên)
 ```
 
 > **Auth gating:** không có route-level guard (`<PrivateRoute>`) trong cây route — mọi trang dưới
@@ -255,96 +263,39 @@ const TrendDashboard = () => {
 
 ## 5. State Management
 
-> Tên context thật trong code là **`AppContext`** (`contexts/AppContext.jsx` +
-> `appContextStore.js`), không phải `AuthContext` — ví dụ dưới đây minh hoạ ý tưởng (auth state
-> qua React Context + localStorage), không phải copy nguyên văn từ source.
+### 5.1 Auth state — không có `AuthContext`/`useAuth`
 
-### 5.1 Auth Context
+**Không có Context nào cho auth.** `AppContext` (`contexts/appContextStore.ts` +
+`contexts/AppContext.tsx`) chỉ giữ **maintenance/feature-flag state**
+(`isWebMaintenance`, `isAppMaintenance`, `isChatEnabled`, `isGraphEnabled`), fetch từ `GET
+/status` mỗi 30s khi tab visible — hoàn toàn không liên quan login/logout/user/token:
 
-```jsx
-// contexts/AuthContext.jsx
-import { createContext, useContext, useState, useEffect } from 'react';
+```ts
+// contexts/appContextStore.ts
+export interface AppSettings {
+    isWebMaintenance: boolean;
+    isAppMaintenance: boolean;
+    isChatEnabled: boolean;
+    isGraphEnabled: boolean;
+}
 
-const AuthContext = createContext(null);
+export interface AppContextValue {
+    settings: AppSettings;
+    updateSettings: (updates: Partial<AppSettings>) => void;
+}
 
-export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [token, setToken] = useState(localStorage.getItem('accessToken'));
-
-  useEffect(() => {
-    // Check token validity on mount
-    if (token) {
-      fetchUserProfile()
-        .then(profile => {
-          setUser(profile);
-          setLoading(false);
-        })
-        .catch(() => {
-          logout();
-          setLoading(false);
-        });
-    } else {
-      setLoading(false);
-    }
-  }, [token]);
-
-  const login = async (email, password) => {
-    const response = await api.auth.login({ email, password });
-    setToken(response.accessToken);
-    localStorage.setItem('accessToken', response.accessToken);
-    localStorage.setItem('refreshToken', response.refreshToken);
-    setUser({ id: response.userId, email: response.email, role: response.role });
-    return response;
-  };
-
-  const logout = () => {
-    setToken(null);
-    setUser(null);
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-  };
-
-  const refreshAccessToken = async () => {
-    const refreshToken = localStorage.getItem('refreshToken');
-    if (!refreshToken) {
-      logout();
-      return;
-    }
-
-    try {
-      const response = await api.auth.refresh({ refreshToken });
-      setToken(response.accessToken);
-      localStorage.setItem('accessToken', response.accessToken);
-      localStorage.setItem('refreshToken', response.refreshToken);
-      return response.accessToken;
-    } catch (error) {
-      logout();
-      throw error;
-    }
-  };
-
-  const value = {
-    user,
-    token,
-    loading,
-    login,
-    logout,
-    refreshAccessToken,
-    isAuthenticated: !!user,
-  };
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-};
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
-  }
-  return context;
-};
+export const AppContext = createContext<AppContextValue | undefined>(undefined);
+export const useAppContext = (): AppContextValue | undefined => useContext(AppContext);
 ```
+
+Auth token đọc trực tiếp từ `localStorage` (`access_token`/`refresh_token`, snake_case —
+KHÔNG phải `accessToken`/`refreshToken`) bởi `utils/apiClient.ts` cho mỗi request, và bởi từng
+component cần biết trạng thái đăng nhập (vd. `Header.tsx` đọc
+`localStorage.getItem('access_token')` trực tiếp). Cần thông tin user hiện tại thì gọi
+`getCurrentUser()` (`api/authService.ts`) tại chỗ, không có global "current user" state được
+share qua Context. `LoginPage.tsx` tự quản lý toàn bộ luồng login/register/forgot/reset qua
+`api/authService.ts` (`loginUser`, `registerUser`, `forgotPassword`, `resetPassword`) và ghi
+token vào `localStorage` sau khi thành công.
 
 ### 5.2 Local State
 
@@ -523,12 +474,18 @@ const App = () => (
 
       <Route path="admin" element={<AdminLayout />}>
         <Route index element={<AdminDashboard />} />
+        <Route path="automation" element={<AdminAutomation />} />   {/* thiếu trong danh sách import trên */}
+        <Route path="moderation" element={<AdminModeration />} />
+        <Route path="reports" element={<AdminReports />} />
+        <Route path="clusters" element={<AdminClusters />} />
         <Route path="users" element={<AdminUsers />} />
         <Route path="cms" element={<AdminCMS />} />
         <Route path="settings" element={<AdminSettings />} />
       </Route>
 
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/403" element={<ForbiddenPage />} />
+      {/* Catch-all thật là NotFoundPage (404), KHÔNG redirect về /dashboard */}
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   </BrowserRouter>
 );
@@ -586,259 +543,94 @@ const NavigationMenu = () => {
 
 ### 7.1 HTTP Client
 
-```jsx
-// api/client.js
-class ApiClient {
-  constructor() {
-    this.baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
-    this.token = localStorage.getItem('accessToken');
-  }
+Không phải class `ApiClient` — thật là MỘT function `apiClient<T>(endpoint, options)`
+(`utils/apiClient.ts`), dùng **path tương đối** (`/api/v1` + endpoint, không đọc
+`VITE_API_URL`/`import.meta.env`) để Vite dev-proxy / Nginx tự forward sang backend, tránh CORS.
+Token key trong `localStorage` là `access_token`/`refresh_token` (snake_case). Có single-flight
+refresh (nhiều request 401 cùng lúc chỉ gọi `/auth/refresh` một lần), và map lỗi kết nối/503
+thành `ApiError` riêng (`SERVER_CONNECTION_FAILED`, `SERVER_MAINTENANCE`) thay vì `Error` chung:
 
-  setToken(token) {
-    this.token = token;
-    if (token) {
-      localStorage.setItem('accessToken', token);
-    } else {
-      localStorage.removeItem('accessToken');
-    }
-  }
+```ts
+// utils/apiClient.ts (rút gọn)
+const API_BASE_URL = '/api/v1';
+let refreshPromise: Promise<boolean> | null = null; // single-flight refresh
 
-  async request(endpoint, options = {}) {
-    const url = `${this.baseURL}/api/v1${endpoint}`;
-    
-    const headers = {
-      'Content-Type': 'application/json',
-      ...options.headers,
+const tryRefreshToken = async (): Promise<boolean> => { /* POST /auth/refresh, single-flight */ };
+
+export const apiClient = async <T = unknown>(
+    endpoint: string,
+    options: RequestInit = {},
+    _retried = false,
+): Promise<T> => {
+    const token = localStorage.getItem('access_token');
+    const headers: Record<string, string> = {
+        'Content-Type': 'application/json', 'Accept': 'application/json',
+        ...(options.headers as Record<string, string> | undefined),
     };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`;
-    }
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, { ...options, headers });
 
-    const config = {
-      ...options,
-      headers,
-    };
-
-    try {
-      const response = await fetch(url, config);
-      
-      if (!response.ok) {
+    if (!response.ok) {
+        if (response.status === 503) throw new ApiError('SERVER_MAINTENANCE', 503);
         if (response.status === 401) {
-          // Token expired, try refresh
-          const newToken = await this.refreshToken();
-          if (newToken) {
-            headers['Authorization'] = `Bearer ${newToken}`;
-            return this.request(endpoint, { ...options, headers });
-          }
-          // Refresh failed, redirect to login
-          window.location.href = '/login';
-          throw new Error('Session expired');
+            if (!_retried && !endpoint.startsWith('/auth/') && await tryRefreshToken()) {
+                return apiClient<T>(endpoint, options, true);
+            }
+            // refresh thất bại → xoá token, toast, redirect /login sau 1.2s
+            throw new ApiError('UNAUTHORIZED', 401);
         }
-        const error = await response.json();
-        throw new Error(error.message || 'Request failed');
-      }
-
-      return await response.json();
-    } catch (error) {
-      throw error;
+        // ... parse message lỗi từ backend, throw ApiError(status)
     }
-  }
-
-  async get(endpoint) {
-    return this.request(endpoint, { method: 'GET' });
-  }
-
-  async post(endpoint, data) {
-    return this.request(endpoint, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async put(endpoint, data) {
-    return this.request(endpoint, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async delete(endpoint) {
-    return this.request(endpoint, { method: 'DELETE' });
-  }
-
-  async refreshToken() {
-    const refreshToken = localStorage.getItem('refreshToken');
-    if (!refreshToken) return null;
-
-    try {
-      const response = await fetch(`${this.baseURL}/api/v1/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
-      });
-
-      if (!response.ok) return null;
-
-      const data = await response.json();
-      this.setToken(data.accessToken);
-      return data.accessToken;
-    } catch (error) {
-      return null;
-    }
-  }
-}
-
-const apiClient = new ApiClient();
-export default apiClient;
+    return await response.json();
+};
 ```
 
 ### 7.2 API Modules
 
-```jsx
-// api/auth.js
-import apiClient from './client';
+**Không có object namespace nào gọi `apiClient.get(...)`/`apiClient.post(...)`** — `apiClient` là
+MỘT function nhận `(endpoint, options)` như `fetch` thật (§7.1). Mỗi service module export các
+function rời (flat named exports), tự truyền `{ method, body: JSON.stringify(...) }`:
 
-export const auth = {
-  login: (email, password) => 
-    apiClient.post('/auth/login', { email, password }),
-  
-  register: (fullName, email, password) => 
-    apiClient.post('/auth/register', { fullName, email, password }),
-  
-  logout: () => 
-    apiClient.post('/auth/logout'),
-  
-  refreshToken: (refreshToken) => 
-    apiClient.post('/auth/refresh', { refreshToken }),
-  
-  forgotPassword: (email) => 
-    apiClient.post('/auth/forgot-password', { email }),
-  
-  resetPassword: (token, newPassword) => 
-    apiClient.post('/auth/reset-password', { token, newPassword }),
-  
-  getProfile: () => 
-    apiClient.get('/auth/me'),
-};
+```ts
+// api/authService.ts (rút gọn, tên thật)
+import { apiClient } from '../utils/apiClient';
 
-// api/radar.js
-export const radar = {
-  getTop4: () => 
-    apiClient.get('/radar/top4'),
-  
-  getTop10: () => 
-    apiClient.get('/radar/top10'),
-  
-  search: (keywords, months = 6) => 
-    apiClient.get(`/radar/search?keywords=${keywords.join(',')}&months=${months}`),
-  
-  exportPng: (limit = 20) => 
-    apiClient.get(`/radar/export-png?limit=${limit}`),
-  
-  exportCsv: (limit = 50) => 
-    apiClient.get(`/radar/export-csv?limit=${limit}`),
-};
+export const loginUser = async (credentials: LoginCredentials): Promise<AuthTokens> =>
+    await apiClient('/auth/login', { method: 'POST', body: JSON.stringify(credentials) });
 
-// api/chat.js
-export const chat = {
-  getHealth: () => 
-    apiClient.get('/chat'),
-  
-  createSession: () => 
-    apiClient.post('/chat/session'),
-  
-  getSessions: () => 
-    apiClient.get('/chat/sessions'),
-  
-  deleteSession: (sessionId) => 
-    apiClient.delete(`/chat/session/${sessionId}`),
-  
-  getMessages: (sessionId) => 
-    apiClient.get(`/chat/session/${sessionId}/messages`),
-  
-  sendMessage: (sessionId, query) => 
-    apiClient.post(`/chat/session/${sessionId}/messages`, { query }),
-};
+export const registerUser = async (userData: RegisterData) =>
+    await apiClient('/auth/register', { method: 'POST', body: JSON.stringify(userData) });
 
-// api/graph.js
-export const graph = {
-  explore: (keywords, depth = 2, location, minSalary) => {
-    const params = new URLSearchParams({
-      keywords: keywords.join(','),
-      depth: depth.toString(),
-    });
-    if (location) params.append('location', location);
-    if (minSalary) params.append('min_salary', minSalary.toString());
-    return apiClient.get(`/graph/explore?${params.toString()}`);
-  },
-  
-  roadAnalysis: (from, to) => 
-    apiClient.get(`/graph/road_analysis?from=${from}&to=${to}`),
-  
-  filter: (filters) => 
-    apiClient.post('/graph/filter', filters),
-};
+export const getCurrentUser = async () => await apiClient('/auth/me', { method: 'GET' });
+// + logoutUser, refreshToken, getSystemStatus, forgotPassword, resetPassword
 
-// api/companyService.js — NEW
-export const companyService = {
-  getCompanies: () => apiClient.get('/companies'),
-  getSimilarCompanies: (companyId, limit) =>
-    apiClient.get(`/companies/${companyId}/similar${limit ? `?limit=${limit}` : ''}`),
-};
-
-// api/jobService.js — NEW
-export const jobService = {
-  getJobMatches: ({ location, minSalary, limit } = {}) => {
+// api/trendService.ts — KHÔNG phải "radarService"/"radar" object
+export const getRadarTop4 = async () => await apiClient('/radar/top4', { method: 'GET' });
+export const getRadarTop10 = async () => await apiClient('/radar/top10', { method: 'GET' });
+export const getRadarSearch = async (keywords: string[] = [], months = 6) => {
     const params = new URLSearchParams();
-    if (location) params.append('location', location);
-    if (minSalary) params.append('min_salary', minSalary);
-    if (limit) params.append('limit', limit);
-    return apiClient.get(`/jobs/matches?${params.toString()}`);
-  },
+    keywords.forEach(kw => params.append('keywords', kw));
+    params.append('months', String(months));
+    return await apiClient(`/radar/search?${params.toString()}`, { method: 'GET' });
 };
-
-// api/socialService.js — NEW
-export const socialService = {
-  getFeed: (page = 0, size = 20) => apiClient.get(`/feed?page=${page}&size=${size}`),
-  createPost: (content) => apiClient.post('/posts', { content }),
-  deletePost: (id) => apiClient.delete(`/posts/${id}`),
-  likePost: (id) => apiClient.post(`/posts/${id}/like`),
-  unlikePost: (id) => apiClient.delete(`/posts/${id}/like`),
-  getComments: (postId, page = 0, size = 20) => apiClient.get(`/posts/${postId}/comments?page=${page}&size=${size}`),
-  addComment: (postId, content) => apiClient.post(`/posts/${postId}/comments`, { content }),
-  getProfileSummary: (userId) => apiClient.get(`/users/${userId}/profile-summary`),
-  getUserPosts: (userId, page = 0, size = 20) => apiClient.get(`/users/${userId}/posts?page=${page}&size=${size}`),
-  followUser: (userId) => apiClient.post(`/users/${userId}/follow`),
-  unfollowUser: (userId) => apiClient.delete(`/users/${userId}/follow`),
-  getSuggestedUsers: (limit = 10) => apiClient.get(`/users/suggested?limit=${limit}`),
-};
-
-// api/messagingService.js — NEW (streamConversations uses raw fetch+ReadableStream,
-// NOT `new EventSource(...)`, because EventSource can't set an Authorization header)
-export const messagingService = {
-  getConversations: () => apiClient.get('/conversations'),
-  getOrCreateConversation: (userId) => apiClient.post(`/conversations/with/${userId}`),
-  getMessages: (conversationId, page = 0, size = 30) =>
-    apiClient.get(`/conversations/${conversationId}/messages?page=${page}&size=${size}`),
-  sendMessage: (conversationId, content) =>
-    apiClient.post(`/conversations/${conversationId}/messages`, { content }),
-  markConversationRead: (conversationId) => apiClient.post(`/conversations/${conversationId}/read`),
-  streamConversations: (onMessage, onError) => { /* fetch + manual SSE line parsing */ },
-};
-
-// api/interviewService.js — NEW (stateless — client re-sends full `history` every turn)
-export const interviewService = {
-  runInterviewTurn: ({ targetRole, targetCompany, history }) =>
-    apiClient.post('/interview', { target_role: targetRole, target_company: targetCompany, history }),
-};
+// GET /radar/stream — SSE, đẩy snapshot top4/top10 mới ngay khi ETL rebuild xong, không cần F5.
+// Dùng utils/sseStream.ts (openSseStream), trả về AbortController để .abort() khi unmount.
+export const streamRadar = (onSnapshot, onError) =>
+    openSseStream('/radar/stream', (data) => onSnapshot(data), onError);
 ```
+
+Các module khác (`companyService.ts`, `jobService.ts`, `socialService.ts`, `messagingService.ts`,
+`interviewService.ts`, ...) theo đúng pattern này — flat function export, gọi `apiClient(endpoint,
+{ method, body })` trực tiếp, KHÔNG qua `.get()/.post()/.delete()`.
+`messagingService.ts`'s `streamConversations` dùng raw `fetch` + đọc `ReadableStream` thủ công
+(không phải `new EventSource(...)`, vì `EventSource` không set được header `Authorization`).
 
 ### 7.3 Using API in Components
 
-```jsx
+```tsx
 import { useState, useEffect } from 'react';
-import { radar } from '../api/radar';
+import { getRadarTop4, getRadarTop10, streamRadar } from '../api/trendService';
 
 const TrendDashboard = () => {
   const [top4, setTop4] = useState([]);
@@ -849,8 +641,8 @@ const TrendDashboard = () => {
     const fetchData = async () => {
       try {
         const [top4Data, top10Data] = await Promise.all([
-          radar.getTop4(),
-          radar.getTop10(),
+          getRadarTop4(),
+          getRadarTop10(),
         ]);
         setTop4(top4Data.data);
         setTop10(top10Data.data);
@@ -862,6 +654,9 @@ const TrendDashboard = () => {
     };
 
     fetchData();
+
+    // Real code also opens an SSE stream here (streamRadar) so a backend rebuild pushes fresh
+    // snapshots without waiting for a manual refresh — abort() on unmount.
   }, []);
 
   if (loading) return <LoadingSpinner />;
@@ -879,10 +674,13 @@ const TrendDashboard = () => {
 
 ## 8. Styling
 
-### 8.1 CSS Modules
+### 8.1 Plain CSS per Component
 
-```jsx
-// TrendDashboard.css
+Không dùng CSS Modules (không có file `*.module.css` nào trong repo) — mỗi component có 1 file
+`.css` cùng tên, import trực tiếp (`import './TrendDashboard.css'`), class name toàn cục:
+
+```css
+/* TrendDashboard.css */
 .trend-dashboard {
   padding: 2rem;
   max-width: 1200px;
@@ -1063,68 +861,47 @@ describe('TechCard', () => {
 
 ### 9.2 Integration Testing
 
-```jsx
-// TrendDashboard.test.jsx
+Real file is `TrendDashboard.test.tsx`, mocks `../api/trendService` (not `../api/radar`) with the
+real export names (`getRadarTop4`/`getRadarTop10`/`getRadarSearch`/`streamRadar`) via
+`vi.mock(...)` + `vi.mocked()`. It also covers behavior this simplified example skips entirely:
+`streamRadar`'s SSE callback firing a live update, and its returned `AbortController.abort()`
+being called on unmount — real-time snapshot push is core to how `TrendDashboard` works (§7.3),
+so the test suite exercises it, not just the one-shot `Promise.all` fetch:
+
+```tsx
+// TrendDashboard.test.tsx
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import TrendDashboard from './TrendDashboard';
-import * as radarApi from '../api/radar';
+import { getRadarTop4, getRadarTop10, getRadarSearch, streamRadar } from '../api/trendService';
 
-vi.mock('../api/radar');
+vi.mock('../api/trendService');
 
 describe('TrendDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  it('displays loading state initially', () => {
-    radarApi.getTop4.mockResolvedValue({ data: [] });
-    radarApi.getTop10.mockResolvedValue({ data: [] });
-    
-    render(
-      <BrowserRouter>
-        <TrendDashboard />
-      </BrowserRouter>
-    );
-    
-    expect(screen.getByText(/loading/i)).toBeInTheDocument();
+    vi.mocked(streamRadar).mockReturnValue(new AbortController());
   });
 
   it('displays tech data after loading', async () => {
-    const mockTop4 = [
-      { name: 'React', growthRate: 42.1, jobCount: 1240 },
-      { name: 'Vue', growthRate: 35.2, jobCount: 890 },
-    ];
-    
-    radarApi.getTop4.mockResolvedValue({ data: mockTop4 });
-    radarApi.getTop10.mockResolvedValue({ data: [] });
-    
-    render(
-      <BrowserRouter>
-        <TrendDashboard />
-      </BrowserRouter>
-    );
-    
-    await waitFor(() => {
-      expect(screen.getByText('React')).toBeInTheDocument();
-      expect(screen.getByText('Vue')).toBeInTheDocument();
-    });
+    vi.mocked(getRadarTop4).mockResolvedValue({ data: [{ name: 'React', growth_rate: 42.1, job_count: 1240 }] } as any);
+    vi.mocked(getRadarTop10).mockResolvedValue({ data: [] } as any);
+
+    render(<BrowserRouter><TrendDashboard /></BrowserRouter>);
+
+    await waitFor(() => expect(screen.getByText('React')).toBeInTheDocument());
   });
 
-  it('displays error message on API failure', async () => {
-    radarApi.getTop4.mockRejectedValue(new Error('API Error'));
-    radarApi.getTop10.mockRejectedValue(new Error('API Error'));
-    
-    render(
-      <BrowserRouter>
-        <TrendDashboard />
-      </BrowserRouter>
-    );
-    
-    await waitFor(() => {
-      expect(screen.getByText(/error/i)).toBeInTheDocument();
-    });
+  it('aborts the SSE stream on unmount', () => {
+    const abortController = new AbortController();
+    const abortSpy = vi.spyOn(abortController, 'abort');
+    vi.mocked(streamRadar).mockReturnValue(abortController);
+
+    const { unmount } = render(<BrowserRouter><TrendDashboard /></BrowserRouter>);
+    unmount();
+
+    expect(abortSpy).toHaveBeenCalled();
   });
 });
 ```
@@ -1246,24 +1023,23 @@ const TechCard = ({ tech, onClick }) => (
 
 ### 2. Prop Validation
 
-```jsx
-// Good - Use PropTypes or TypeScript
-import PropTypes from 'prop-types';
+Không dùng `prop-types` (không có package này trong `package.json`) — validation qua TypeScript
+`interface`/`type` ở compile time, bắt buộc vì `tsconfig.json` bật `strict: true`:
 
-TechCard.propTypes = {
-  tech: PropTypes.shape({
-    name: PropTypes.string.isRequired,
-    category: PropTypes.string.isRequired,
-    growthRate: PropTypes.number.isRequired,
-    jobCount: PropTypes.number.isRequired,
-  }).isRequired,
-  onClick: PropTypes.func.isRequired,
-};
+```tsx
+interface Tech {
+  name: string;
+  category: string;
+  growthRate: number;
+  jobCount: number;
+}
 
-// Bad - No validation
-const TechCard = ({ tech, onClick }) => {
-  // No prop validation
-};
+interface TechCardProps {
+  tech: Tech;
+  onClick: (tech: Tech) => void;
+}
+
+const TechCard = ({ tech, onClick }: TechCardProps) => { /* ... */ };
 ```
 
 ### 3. Error Boundaries

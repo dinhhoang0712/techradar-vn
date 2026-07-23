@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # .env nằm ở project root (2 cấp trên file này)
@@ -24,7 +25,7 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     openai_api_key: str = ""
     groq_api_key: str = ""
-    llm_provider: str = "openai"   # "openai" | "gemini" | "groq"
+    llm_provider: str = "openai"  # "openai" | "gemini" | "groq"
 
     # PostgreSQL
     postgres_host: str = "localhost"

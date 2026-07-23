@@ -19,15 +19,15 @@ entity_techs đã có sẵn (nếu có).
 
 Chạy: mỗi đêm, trước gold_pg_etl (cấu hình trong scheduler).
 """
+
 from __future__ import annotations
 
 import re
 
-from loguru import logger
-
-from common.db import get_pg_conn, get_neo4j_driver, log_pipeline_run
+from common.db import get_neo4j_driver, get_pg_conn, log_pipeline_run
 from common.tech_keywords import extract_tech
 from config import Settings
+from loguru import logger
 
 BATCH_SIZE = 500
 
@@ -83,7 +83,7 @@ def _slugify(value: str) -> str:
 
 def _chunks(items: list, size: int):
     for i in range(0, len(items), size):
-        yield items[i:i + size]
+        yield items[i : i + size]
 
 
 def run(settings: Settings) -> int:
@@ -107,24 +107,26 @@ def run(settings: Settings) -> int:
             techs |= set(extract_tech(f"{article['title'] or ''} {article['content'] or ''}"))
 
             orgs = []
-            for org_name in (article["entity_orgs"] or []):
+            for org_name in article["entity_orgs"] or []:
                 org_name = (org_name or "").strip()
                 if org_name:
                     orgs.append({"id": _slugify(org_name), "name": org_name})
 
             locs = [loc.strip() for loc in (article["entity_locs"] or []) if loc and loc.strip()]
 
-            rows.append({
-                "id": article["id"],
-                "title": article["title"],
-                "content": article["content"],
-                "source_url": article["source_url"],
-                "source_platform": article["source_platform"],
-                "published_date": published_date,
-                "techs": sorted(techs),
-                "orgs": orgs,
-                "locs": locs,
-            })
+            rows.append(
+                {
+                    "id": article["id"],
+                    "title": article["title"],
+                    "content": article["content"],
+                    "source_url": article["source_url"],
+                    "source_platform": article["source_platform"],
+                    "published_date": published_date,
+                    "techs": sorted(techs),
+                    "orgs": orgs,
+                    "locs": locs,
+                }
+            )
 
         driver = get_neo4j_driver(settings)
         with driver.session() as session:
@@ -136,15 +138,13 @@ def run(settings: Settings) -> int:
         driver.close()
 
         logger.info("Neo4j Article Sync: upserted {} articles", len(rows))
-        log_pipeline_run(pg_conn, "neo4j_article_sync", "success",
-                         rows_affected=len(rows), run_id=run_id)
+        log_pipeline_run(pg_conn, "neo4j_article_sync", "success", rows_affected=len(rows), run_id=run_id)
         return len(rows)
 
     except Exception as exc:
         logger.exception("Neo4j Article Sync failed")
         try:
-            log_pipeline_run(pg_conn, "neo4j_article_sync", "failed",
-                             error_msg=str(exc), run_id=run_id)
+            log_pipeline_run(pg_conn, "neo4j_article_sync", "failed", error_msg=str(exc), run_id=run_id)
         except Exception:
             pass
         raise

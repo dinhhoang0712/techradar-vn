@@ -4,6 +4,7 @@ Cộng đồng lập trình viên Việt Nam lớn nhất.
 Lấy bài viết kỹ thuật qua Viblo REST API (không cần Selenium).
 Đẩy vào Kafka topic raw_articles.
 """
+
 import json
 import logging
 import os
@@ -11,7 +12,6 @@ import time
 from datetime import datetime
 
 import requests
-
 from kafka_producer import CrawlerKafkaProducer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -23,10 +23,26 @@ VIBLO_API = "https://viblo.asia/api"
 
 # Các tag/category tech phổ biến trên Viblo
 TAGS = [
-    "python", "golang", "java", "javascript", "typescript",
-    "docker", "kubernetes", "aws", "devops", "machine-learning",
-    "ai", "backend", "frontend", "database", "microservices",
-    "react", "nodejs", "laravel", "spring-boot", "fastapi",
+    "python",
+    "golang",
+    "java",
+    "javascript",
+    "typescript",
+    "docker",
+    "kubernetes",
+    "aws",
+    "devops",
+    "machine-learning",
+    "ai",
+    "backend",
+    "frontend",
+    "database",
+    "microservices",
+    "react",
+    "nodejs",
+    "laravel",
+    "spring-boot",
+    "fastapi",
 ]
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data", "raw", "viblo")
@@ -41,7 +57,7 @@ HEADERS = {
 def _load_urls(path: str) -> set:
     if os.path.exists(path):
         with open(path, encoding="utf-8") as f:
-            return {l.strip() for l in f if l.strip()}
+            return {line.strip() for line in f if line.strip()}
     return set()
 
 
@@ -80,6 +96,7 @@ def _fetch_post_content(slug: str) -> str:
         content = data.get("content", "") or data.get("content_html", "")
         # Strip basic HTML tags for plain text
         import re
+
         content = re.sub(r"<[^>]+>", " ", content)
         content = re.sub(r"\s+", " ", content).strip()
         return content
@@ -155,8 +172,10 @@ def main():
 
                 if kafka_enabled:
                     kafka.send_article(
-                        title=art["title"], content=content,
-                        source_url=art["source_url"], source_platform=SOURCE_PLATFORM,
+                        title=art["title"],
+                        content=content,
+                        source_url=art["source_url"],
+                        source_platform=SOURCE_PLATFORM,
                         publish_date=art["publish_date"],
                     )
 
@@ -168,8 +187,7 @@ def main():
     kafka.close()
 
     with open(output_file, "w", encoding="utf-8") as f:
-        json.dump({"source_platform": SOURCE_PLATFORM, "post_detail": articles}, f,
-                  ensure_ascii=False, indent=2)
+        json.dump({"source_platform": SOURCE_PLATFORM, "post_detail": articles}, f, ensure_ascii=False, indent=2)
 
     logger.info("Viblo done: %d articles", total)
 

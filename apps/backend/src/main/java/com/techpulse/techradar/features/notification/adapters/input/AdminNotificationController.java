@@ -29,7 +29,7 @@ public class AdminNotificationController {
 
     @Operation(summary = "Send a notification to one user, or broadcast to all active users when userId is omitted")
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('notification:manage')")
     public Mono<ResponseEntity<ApiResponse<Map<String, Object>>>> send(@RequestBody SendNotificationRequest request) {
         boolean isBroadcast = request.getUserId() == null || request.getUserId().isBlank();
         return sendAdminNotificationUseCase.execute(request.getTitle(), request.getBody(), request.getLink(), request.getUserId())

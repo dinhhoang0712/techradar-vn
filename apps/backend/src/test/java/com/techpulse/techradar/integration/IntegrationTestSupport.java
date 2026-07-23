@@ -1,20 +1,27 @@
 package com.techpulse.techradar.integration;
 
-import com.techpulse.techradar.features.chat.adapters.input.dto.ChatHealthResponse;
-import com.techpulse.techradar.features.chat.adapters.input.dto.ChatResponse;
+import com.techpulse.techradar.features.chat.domain.ChatHealthResponse;
+import com.techpulse.techradar.features.chat.domain.ChatResponse;
 import com.techpulse.techradar.features.chat.ports.ChatPort;
 import com.techpulse.techradar.features.clustering.ports.ClusteringServicePort;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.neo4j.driver.Driver;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.r2dbc.core.DatabaseClient;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.Neo4jContainer;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.utility.DockerImageName;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -27,18 +34,73 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 /**
- * Shared harness for the full-stack API integration tests: real Postgres (+Flyway/R2DBC) and
- * Neo4j, started externally via the docker CLI and wired through the POSTGRES and NEO4J env vars
- * the app already reads. The Python clustering/RAG ports are mocked. Every subclass gets the same
- * {@code @SpringBootTest} configuration so Spring's test context cache boots it once and reuses it
- * across all of them, regardless of how many domain classes extend this.
+ * Shared harness for the full-stack API integration tests: real Postgres (+Flyway/R2DBC), Neo4j
+ * and Redis, each a Testcontainers-managed Docker container - no more hand-starting them via the
+ * docker CLI or exporting POSTGRES_HOST/NEO4J_URI/REDIS_HOST first. Every run starts from a fresh
+ * container, so the old "rerunning against a still-populated Postgres gives a spurious 409 on
+ * register" problem can no longer happen. The Python clustering/RAG ports are still mocked.
+ *
+ * <p>Containers are started once via the static initializer below (the "singleton container"
+ * pattern) rather than through {@code @Testcontainers}/{@code @Container}, whose per-test-class
+ * stop-after-class behavior would tear them down again after the first concrete subclass finishes
+ * - these fields are shared by every concrete {@code *IntegrationTest}, same as the
+ * {@code @SpringBootTest} context Spring's test-context cache boots once and reuses across all of
+ * them. Testcontainers' Ryuk reaper stops them when the JVM exits, so no explicit stop() is needed.
  *
  * <p>Not named {@code *Test} on purpose so Surefire's default include pattern doesn't try to run
  * this abstract class directly.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@EnabledIfEnvironmentVariable(named = "POSTGRES_HOST", matches = ".+")  // needs external Postgres + Neo4j (see scratchpad/run_it.sh)
+// All integration tests hit the server from the same loopback address, and this class's helpers
+// register/login dozens of times across the full suite — well past the real auth-rate-limit
+// thresholds. Raise them here so the limiter (exercised on its own in AuthRateLimiterServiceTest)
+// doesn't turn into spurious 429s in tests that have nothing to do with rate limiting.
+@TestPropertySource(properties = {
+        "app.redis.auth-rate-limit.login.max-requests=100000",
+        "app.redis.auth-rate-limit.register.max-requests=100000",
+        "app.redis.auth-rate-limit.forgot-password.max-requests=100000"
+})
 abstract class IntegrationTestSupport {
+
+    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine")
+            .withDatabaseName("techradar")
+            .withUsername("postgres")
+            .withPassword("postgres");
+
+    static final Neo4jContainer<?> NEO4J = new Neo4jContainer<>("neo4j:5")
+            .withAdminPassword("password");
+
+    static final GenericContainer<?> REDIS = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
+            .withExposedPorts(6379);
+
+    static {
+        POSTGRES.start();
+        NEO4J.start();
+        REDIS.start();
+    }
+
+    @DynamicPropertySource
+    static void containerProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.r2dbc.url", () -> "r2dbc:postgresql://" + POSTGRES.getHost() + ":"
+                + POSTGRES.getMappedPort(5432) + "/" + POSTGRES.getDatabaseName());
+        registry.add("spring.r2dbc.username", POSTGRES::getUsername);
+        registry.add("spring.r2dbc.password", POSTGRES::getPassword);
+        // Flyway migrates over a plain JDBC connection (see application.yml), separate from the
+        // R2DBC connection the app uses at runtime.
+        registry.add("spring.flyway.url", POSTGRES::getJdbcUrl);
+        registry.add("spring.flyway.user", POSTGRES::getUsername);
+        registry.add("spring.flyway.password", POSTGRES::getPassword);
+
+        // Neo4jConfig builds its Driver bean straight from these app.neo4j.* properties instead of
+        // Spring Boot's own Neo4j auto-configuration, so a @ServiceConnection (which only wires
+        // spring.neo4j.*) wouldn't reach it - this explicit override is required instead.
+        registry.add("app.neo4j.uri", NEO4J::getBoltUrl);
+        registry.add("app.neo4j.username", () -> "neo4j");
+        registry.add("app.neo4j.password", NEO4J::getAdminPassword);
+
+        registry.add("spring.data.redis.host", REDIS::getHost);
+        registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
+    }
 
     @LocalServerPort
     int port;
@@ -50,6 +112,12 @@ abstract class IntegrationTestSupport {
 
     @Autowired
     DatabaseClient db;
+
+    @Autowired
+    ReactiveStringRedisTemplate redisTemplate;
+
+    /** Mirrors {@code GetCompaniesUseCase.CACHE_KEY} — that field isn't public, and this is test-only. */
+    private static final String COMPANY_CACHE_KEY = "cache:company:all";
 
     @MockitoBean
     ClusteringServicePort clusteringPort;
@@ -166,6 +234,7 @@ abstract class IntegrationTestSupport {
                     "CREATE (j)-[:POSTED_BY]->(c)",
                     Map.of("id", companyId, "name", name, "location", location, "techName", "Rust-" + companyId));
         }
+        evictCompanyCache();
     }
 
     /** Same as {@link #seedCompany(String, String, String)}, also setting c.industry/c.size. */
@@ -181,6 +250,15 @@ abstract class IntegrationTestSupport {
                     Map.of("id", companyId, "name", name, "location", location,
                             "industry", industry, "size", size, "techName", "Rust-" + companyId));
         }
+        evictCompanyCache();
+    }
+
+    /** GetCompaniesUseCase.all() caches the Neo4j company list in Redis for 30 min — a test that
+     *  seeds a new company directly into Neo4j (bypassing the ingestion pipeline that would
+     *  normally invalidate this cache) must evict it too, or a cache populated by an earlier test
+     *  in the same run silently hides the just-seeded company. */
+    private void evictCompanyCache() {
+        redisTemplate.opsForValue().delete(COMPANY_CACHE_KEY).block();
     }
 
     /** Article-[:MENTIONS]->Company edge, for GET /companies/{id}/mentions. Requires the company

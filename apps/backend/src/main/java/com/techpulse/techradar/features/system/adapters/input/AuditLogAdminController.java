@@ -39,7 +39,7 @@ public class AuditLogAdminController {
 
     @Operation(summary = "List audit log entries, newest first")
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('audit:view')")
     public Mono<ResponseEntity<ApiResponse<List<AuditLogView>>>> list(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size

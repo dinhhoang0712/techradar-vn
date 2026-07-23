@@ -1,0 +1,218 @@
+/* Base card/layout rules duplicated from AdminSettings.css (this codebase has no shared base
+   admin CSS file — one-file-per-page is the established convention). */
+.admin-automation {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    max-width: 800px;
+}
+
+.settings-header {
+    margin-bottom: 10px;
+}
+.settings-header h2 {
+    margin: 0;
+    color: var(--text);
+    font-size: 1.8rem;
+}
+.settings-header p {
+    color: var(--text-2);
+    margin: 5px 0 0 0;
+}
+
+.admin-settings-loading {
+    color: var(--text-2);
+    text-align: center;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.settings-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: border-color var(--t);
+}
+
+@media (max-width: 640px) {
+    .settings-card {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+}
+
+.setting-info h3 {
+    margin: 0 0 8px 0;
+    color: var(--text);
+}
+.setting-info p {
+    margin: 0;
+    color: var(--text-2);
+    font-size: 0.95rem;
+}
+
+.cluster-pipeline-card .setting-info { flex: 1; }
+
+.cluster-pipeline-progress {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.cluster-pipeline-steps {
+    display: flex;
+    gap: 4px;
+}
+
+.cluster-pipeline-step {
+    height: 6px;
+    flex: 1;
+    border-radius: 99px;
+    background: var(--border);
+    transition: background var(--t);
+}
+.cluster-pipeline-step.done { background: var(--primary); }
+.cluster-pipeline-step.active {
+    background: var(--gradient-brand);
+    animation: automation-step-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes automation-step-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.cluster-pipeline-error {
+    color: var(--danger-light);
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+.data-platform-jobs-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+}
+
+.data-platform-jobs-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.data-platform-job-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 0;
+}
+.data-platform-job-row .setting-info { flex: 1; }
+.data-platform-job-row .setting-info h4 {
+    margin: 0 0 6px 0;
+    color: var(--text);
+    font-size: 1rem;
+}
+.data-platform-job-row .setting-info p {
+    margin: 0 0 4px 0;
+}
+
+.data-platform-job-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    flex-shrink: 0;
+}
+.data-platform-job-actions .btn { margin-top: 2px; }
+
+.job-history-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--text-3);
+    font-size: 0.8rem;
+    text-decoration: underline;
+    cursor: pointer;
+    transition: color var(--t);
+}
+.job-history-btn:hover { color: var(--primary); }
+
+/* Pipeline sequence rail: number badge per job, connected by a vertical line so the real
+   run order (article_sync → job_sync → embed_trigger → enricher → tech_dedup) reads at a
+   glance instead of looking like 5 unrelated buttons. */
+.data-platform-job-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex-shrink: 0;
+    align-self: stretch;
+}
+
+.data-platform-job-dot {
+    width: 28px;
+    height: 28px;
+    min-height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.78rem;
+    font-weight: 700;
+    background: var(--surface-2);
+    border: 2px solid var(--border);
+    color: var(--text-3);
+    transition: border-color var(--t), color var(--t), background var(--t);
+}
+
+.data-platform-job-dot--success {
+    border-color: #00d68f;
+    color: #00d68f;
+    background: rgba(0, 214, 143, 0.1);
+}
+
+.data-platform-job-dot--failed {
+    border-color: var(--danger);
+    color: var(--danger-light);
+    background: var(--danger-glow);
+}
+
+.data-platform-job-dot--running {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: var(--primary-glow);
+    animation: automation-step-pulse 1.2s ease-in-out infinite;
+}
+
+.data-platform-job-line {
+    width: 2px;
+    flex: 1;
+    min-height: 20px;
+    background: var(--border);
+    margin: 4px 0;
+}
+
+.data-platform-job-hint {
+    margin: 4px 0 0 !important;
+    font-size: 0.8rem !important;
+    color: #ffc94d !important;
+}
+
+@media (max-width: 640px) {
+    .data-platform-job-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    .data-platform-job-step { flex-direction: row; }
+    .data-platform-job-line { display: none; }
+    .data-platform-job-actions { align-items: flex-start; }
+}

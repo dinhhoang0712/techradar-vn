@@ -2,8 +2,8 @@ package com.techpulse.techradar.features.chat.adapters.output;
 
 import com.techpulse.techradar.features.chat.domain.ChatMessage;
 import com.techpulse.techradar.features.chat.domain.ChatSession;
-import com.techpulse.techradar.features.chat.adapters.input.dto.ChatMessageItem;
-import com.techpulse.techradar.features.chat.adapters.input.dto.ChatSessionItem;
+import com.techpulse.techradar.features.chat.domain.ChatMessageItem;
+import com.techpulse.techradar.features.chat.domain.ChatSessionItem;
 import com.techpulse.techradar.features.chat.ports.ChatRepository;
 import io.r2dbc.spi.Row;
 import lombok.RequiredArgsConstructor;

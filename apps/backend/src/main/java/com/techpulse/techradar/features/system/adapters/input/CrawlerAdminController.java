@@ -3,6 +3,7 @@ package com.techpulse.techradar.features.system.adapters.input;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.techpulse.techradar.shared.dto.ApiResponse;
+import com.techpulse.techradar.shared.redis.RedisLock;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -48,9 +49,9 @@ public class CrawlerAdminController {
 
     @Operation(summary = "Trigger an immediate crawl run instead of waiting for the crawler's own schedule")
     @PostMapping("/trigger")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('crawler:manage')")
     public Mono<ResponseEntity<ApiResponse<Map<String, Object>>>> trigger() {
-        return redisTemplate.opsForValue().setIfAbsent(LOCK_KEY, "1", Duration.ofSeconds(10))
+        return RedisLock.tryAcquire(redisTemplate, LOCK_KEY, Duration.ofSeconds(10))
                 .flatMap(acquired -> {
                     if (!acquired) {
                         return Mono.just(ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(
@@ -70,7 +71,7 @@ public class CrawlerAdminController {
 
     @Operation(summary = "Get the last known crawl run status")
     @GetMapping("/status")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('crawler:manage')")
     public Mono<ResponseEntity<ApiResponse<Map<String, Object>>>> status() {
         return readStatus().map(status -> ResponseEntity.ok(ApiResponse.success(status)));
     }

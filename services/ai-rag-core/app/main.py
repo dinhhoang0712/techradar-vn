@@ -6,14 +6,14 @@ from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
-from app.api.routes_chat import router as chat_router
-from app.api.routes_embed import router as embed_router
-from app.api.routes_health import router as health_router
-from app.api.routes_internal import router as internal_router
 from app.api.routes_agent import router as agent_router
 from app.api.routes_career import router as career_router
+from app.api.routes_chat import router as chat_router
 from app.api.routes_company_insight import router as company_insight_router
+from app.api.routes_embed import router as embed_router
 from app.api.routes_forecast import router as forecast_router
+from app.api.routes_health import router as health_router
+from app.api.routes_internal import router as internal_router
 from app.api.routes_interview import router as interview_router
 from app.api.routes_recommend import router as recommend_router
 from app.api.routes_report import router as report_router

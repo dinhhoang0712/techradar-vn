@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import gold.tech_dedup as tech_dedup
 
-
 # ---------------------------------------------------------------------------
 # Fakes — Postgres (giống pattern FakeConn/FakeCursor của test_silver_processor.py)
 # ---------------------------------------------------------------------------
+
 
 class FakeCursor:
     def __init__(self, fetchall_result=None):
@@ -44,6 +44,7 @@ class FakeConn:
 # Fakes — Neo4j driver/session (chỉ interface tối thiểu tech_dedup.py dùng)
 # ---------------------------------------------------------------------------
 
+
 class FakeNeo4jSession:
     def __init__(self, driver):
         self._driver = driver
@@ -77,11 +78,14 @@ class FakeNeo4jDriver:
 # _load_alias_map
 # ---------------------------------------------------------------------------
 
+
 def test_load_alias_map_builds_dict_from_rows():
-    conn = FakeConn(fetchall_result=[
-        {"alias_normalized": "golang", "canonical_name": "Go"},
-        {"alias_normalized": "ml", "canonical_name": "Machine Learning"},
-    ])
+    conn = FakeConn(
+        fetchall_result=[
+            {"alias_normalized": "golang", "canonical_name": "Go"},
+            {"alias_normalized": "ml", "canonical_name": "Machine Learning"},
+        ]
+    )
 
     result = tech_dedup._load_alias_map(conn)
 
@@ -96,6 +100,7 @@ def test_load_alias_map_empty_when_no_rows():
 # ---------------------------------------------------------------------------
 # _save_new_aliases / _save_review_queue
 # ---------------------------------------------------------------------------
+
 
 def test_save_new_aliases_inserts_each_entry_and_commits():
     conn = FakeConn()
@@ -118,9 +123,12 @@ def test_save_new_aliases_noop_when_empty():
 def test_save_review_queue_inserts_each_entry():
     conn = FakeConn()
 
-    tech_dedup._save_review_queue(conn, [
-        {"name_a": "Postgres", "name_b": "PostgreSQL", "reasoning": "có thể cùng 1 thứ"},
-    ])
+    tech_dedup._save_review_queue(
+        conn,
+        [
+            {"name_a": "Postgres", "name_b": "PostgreSQL", "reasoning": "có thể cùng 1 thứ"},
+        ],
+    )
 
     assert conn.commit_count == 1
     query, params = conn.cursors[-1].executed[-1]
@@ -132,10 +140,16 @@ def test_save_review_queue_inserts_each_entry():
 # _fetch_technology_names
 # ---------------------------------------------------------------------------
 
+
 def test_fetch_technology_names_dedups_and_sorts():
-    driver = FakeNeo4jDriver(next_records=[
-        {"name": "Go"}, {"name": "React"}, {"name": "Go"}, {"name": None},
-    ])
+    driver = FakeNeo4jDriver(
+        next_records=[
+            {"name": "Go"},
+            {"name": "React"},
+            {"name": "Go"},
+            {"name": None},
+        ]
+    )
 
     names = tech_dedup._fetch_technology_names(driver)
 
@@ -145,6 +159,7 @@ def test_fetch_technology_names_dedups_and_sorts():
 # ---------------------------------------------------------------------------
 # _merge_duplicate_node
 # ---------------------------------------------------------------------------
+
 
 def test_merge_duplicate_node_returns_true_and_redirects_known_relationship_types():
     driver = FakeNeo4jDriver(next_records=[{"c": 1}])  # existence check: node cả 2 đều tồn tại
@@ -175,6 +190,7 @@ def test_merge_duplicate_node_returns_false_when_nothing_matched():
 # _parse_llm_response
 # ---------------------------------------------------------------------------
 
+
 def test_parse_llm_response_plain_json():
     raw = '{"groups": [{"names": ["K8s", "Kubernetes"], "canonical": "Kubernetes", "confidence": "high"}]}'
 
@@ -189,4 +205,4 @@ def test_parse_llm_response_strips_markdown_fence():
 
 
 def test_parse_llm_response_missing_groups_key_returns_empty_list():
-    assert tech_dedup._parse_llm_response('{}') == []
+    assert tech_dedup._parse_llm_response("{}") == []

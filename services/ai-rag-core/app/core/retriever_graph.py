@@ -1,16 +1,16 @@
 import asyncio
 
 from app.core.entity_extractor import extract_query_entities
-from app.db.neo4j_client import run_query
 from app.db.graph_queries import (
-    JOBS_BY_TECH_AND_TITLE,
-    JOBS_BY_TECH,
-    JOBS_BY_TITLE,
+    COMPANIES_USING_TECH,
     JOBS_BY_COMPANY,
     JOBS_BY_LOCATION,
-    COMPANIES_USING_TECH,
+    JOBS_BY_TECH,
+    JOBS_BY_TECH_AND_TITLE,
+    JOBS_BY_TITLE,
     TECH_RELATED,
 )
+from app.db.neo4j_client import run_query
 
 # ---------------------------------------------------------------------------
 # Query-time alias normalization
@@ -94,45 +94,65 @@ async def graph_search(query: str) -> dict:
     tech_entities = _normalize_tech_entities(extracted["technologies"])
     job_title_kws = extracted["job_titles"]
     company_names = extracted["companies"]
-    locations     = extracted["locations"]
+    locations = extracted["locations"]
 
     if not tech_entities and not job_title_kws and not company_names and not locations:
         return {"entities": [], "job_titles": [], "jobs": [], "companies": [], "related_tech": []}
 
-    names_lower    = [e.lower() for e in tech_entities]
-    titles_lower   = [t.lower() for t in job_title_kws]
+    names_lower = [e.lower() for e in tech_entities]
+    titles_lower = [t.lower() for t in job_title_kws]
     companies_lower = [c.lower() for c in company_names]
-    locations_lower = [l.lower() for l in locations]
+    locations_lower = [loc.lower() for loc in locations]
 
     # --- Job khớp CẢ title lẫn tech (ưu tiên cao nhất) ---
-    jobs_by_tech_and_title = await run_query(
-        JOBS_BY_TECH_AND_TITLE,
-        {"keywords": titles_lower, "names": names_lower},
-    ) if names_lower and titles_lower else []
+    jobs_by_tech_and_title = (
+        await run_query(
+            JOBS_BY_TECH_AND_TITLE,
+            {"keywords": titles_lower, "names": names_lower},
+        )
+        if names_lower and titles_lower
+        else []
+    )
 
     # --- Job theo tech/skill (REQUIRES relationship) ---
-    jobs_by_tech = await run_query(
-        JOBS_BY_TECH,
-        {"names": names_lower},
-    ) if names_lower else []
+    jobs_by_tech = (
+        await run_query(
+            JOBS_BY_TECH,
+            {"names": names_lower},
+        )
+        if names_lower
+        else []
+    )
 
     # --- Job theo title keyword (CONTAINS matching) ---
-    jobs_by_title = await run_query(
-        JOBS_BY_TITLE,
-        {"keywords": titles_lower},
-    ) if titles_lower else []
+    jobs_by_title = (
+        await run_query(
+            JOBS_BY_TITLE,
+            {"keywords": titles_lower},
+        )
+        if titles_lower
+        else []
+    )
 
     # --- Job theo tên công ty (NER ORG) ---
-    jobs_by_company = await run_query(
-        JOBS_BY_COMPANY,
-        {"company_names": companies_lower},
-    ) if companies_lower else []
+    jobs_by_company = (
+        await run_query(
+            JOBS_BY_COMPANY,
+            {"company_names": companies_lower},
+        )
+        if companies_lower
+        else []
+    )
 
     # --- Job theo địa điểm (NER LOC) ---
-    jobs_by_location = await run_query(
-        JOBS_BY_LOCATION,
-        {"locations": locations_lower},
-    ) if locations_lower else []
+    jobs_by_location = (
+        await run_query(
+            JOBS_BY_LOCATION,
+            {"locations": locations_lower},
+        )
+        if locations_lower
+        else []
+    )
 
     # Gộp tất cả nguồn: ưu tiên kết quả khớp cả title lẫn tech
     seen = set()
@@ -156,11 +176,11 @@ async def graph_search(query: str) -> dict:
     )
 
     return {
-        "entities":     tech_entities,
-        "job_titles":   job_title_kws,
+        "entities": tech_entities,
+        "job_titles": job_title_kws,
         "ner_companies": company_names,
         "ner_locations": locations,
-        "jobs":          jobs,
-        "companies":     companies,
-        "related_tech":  related,
+        "jobs": jobs,
+        "companies": companies,
+        "related_tech": related,
     }

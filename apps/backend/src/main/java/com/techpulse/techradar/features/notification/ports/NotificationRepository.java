@@ -1,5 +1,6 @@
 package com.techpulse.techradar.features.notification.ports;
 
+import com.techpulse.techradar.features.notification.domain.JobMatchSubscriber;
 import com.techpulse.techradar.features.notification.domain.Notification;
 import com.techpulse.techradar.features.notification.domain.TrendSubscriber;
 import reactor.core.publisher.Flux;
@@ -22,11 +23,17 @@ public interface NotificationRepository {
 
     Mono<Long> countUnread(String userId);
 
+    /** Unread count filtered to one notification {@code type} (e.g. ADMIN_JOB_REPEATED_FAILURE). */
+    Mono<Long> countUnreadByType(String userId, String type);
+
     /** Users whose profile lists {@code technology} and who want at least one channel. */
     Flux<TrendSubscriber> findTrendSubscribers(String technology);
 
-    /** Users whose profile technologies overlap any of {@code technologies}, wanting at least one channel. */
-    Flux<TrendSubscriber> findJobMatchSubscribers(List<String> technologies);
+    /**
+     * Users whose profile technologies or target skills overlap any of {@code technologies},
+     * wanting at least one channel — {@code matchesCurrentSkills} distinguishes which.
+     */
+    Flux<JobMatchSubscriber> findJobMatchSubscribers(List<String> technologies);
 
     /** Users with at least one profile technology, wanting at least one channel — weekly roadmap-alert scan candidates. */
     Flux<TrendSubscriber> findRoadmapCandidates();

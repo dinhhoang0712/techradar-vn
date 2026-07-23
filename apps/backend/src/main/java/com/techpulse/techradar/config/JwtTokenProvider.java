@@ -55,11 +55,13 @@ public class JwtTokenProvider {
         return Keys.hmacShaKeyFor(jwtSecret.getBytes());
     }
 
-    public String generateToken(String userId, String email, String role) {
+    public String generateToken(String userId, String email, String role, List<String> permissions, String securityStamp) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("sub", userId);
         claims.put("email", email);
         claims.put("role", role);
+        claims.put("permissions", permissions);
+        claims.put("stamp", securityStamp);
         claims.put("token_type", TokenType.ACCESS.claimValue());
         return createToken(claims, userId, jwtExpiration);
     }
@@ -94,6 +96,16 @@ public class JwtTokenProvider {
 
     public String getRoleFromToken(String token) {
         return (String) getClaimsFromToken(token).get("role");
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<String> getPermissionsFromToken(String token) {
+        Object claim = getClaimsFromToken(token).get("permissions");
+        return claim instanceof List ? (List<String>) claim : List.of();
+    }
+
+    public String getStampFromToken(String token) {
+        return (String) getClaimsFromToken(token).get("stamp");
     }
 
     public String getTokenTypeFromToken(String token) {

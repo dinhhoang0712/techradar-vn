@@ -145,6 +145,9 @@ clustering:
     # gói hdbscan) — thiết kế riêng cho density-based clustering, phù hợp hơn
     # silhouette (giả định cụm dạng lồi) khi algorithm="hdbscan".
     primary_metric: "dbcv"
+    # Giá trị cho quy mô production (~250 tech). Với dataset nhỏ hơn (dev/test, hoặc giai đoạn
+    # đầu crawl), grid_search() trong tuner.py tự hạ require_min_clusters theo n_samples thực tế
+    # — không cần sửa file này thủ công.
     require_min_clusters: 12
     require_max_clusters: 28       # tránh quá nhiều cluster nhỏ không có nghĩa
     require_max_noise_ratio: 0.6   # tối đa 60% noise — 250 techs ít hơn nên noise ratio cao hơn

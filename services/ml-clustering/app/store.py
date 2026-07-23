@@ -9,24 +9,23 @@ Artifacts:
 Gọi `get_store()` ở bất kỳ đâu. Nếu MLCLUSTER_SNAPSHOT_TAG=latest,
 store sẽ đọc manifest trên MinIO và tự reload theo TTL khi tag đổi.
 """
+
 from __future__ import annotations
 
 import difflib
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import RLock
 from time import monotonic
 
 import boto3
+import pandas as pd
 from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
-import pandas as pd
-
 from conf.config import DATA_DIR, load_params
-
 
 logger = logging.getLogger(__name__)
 
@@ -194,10 +193,7 @@ class AppStore:
 
         try:
             # --- best_labels: tech_id → cluster_id ---
-            labels_path = (
-                _ensure_minio_file(minio_settings, labels_rel)
-                if minio_settings else DATA_DIR / labels_rel
-            )
+            labels_path = _ensure_minio_file(minio_settings, labels_rel) if minio_settings else DATA_DIR / labels_rel
             if not Path(labels_path).exists():
                 logger.warning(
                     "ML clustering artifacts not found at %s. "
@@ -212,21 +208,21 @@ class AppStore:
             # --- cluster_labels: dict[str, dict] hoặc list[dict] ---
             labels_json = (
                 _ensure_minio_file(minio_settings, cluster_labels_rel)
-                if minio_settings else DATA_DIR / cluster_labels_rel
+                if minio_settings
+                else DATA_DIR / cluster_labels_rel
             )
             with open(labels_json, encoding="utf-8") as f:
                 raw_labels = json.load(f)
 
             # --- technologies snapshot: tech_id → name ---
-            tech_path = (
-                _ensure_minio_file(minio_settings, tech_rel)
-                if minio_settings else DATA_DIR / tech_rel
-            )
+            tech_path = _ensure_minio_file(minio_settings, tech_rel) if minio_settings else DATA_DIR / tech_rel
             df_tech = pd.read_parquet(tech_path)
         except (BotoCoreError, ClientError, FileNotFoundError, OSError) as exc:
             logger.warning(
-                "Could not load ML clustering artifacts (source=%s, tag=%s): %s. "
-                "Starting with empty store.", self.source, self.tag, exc,
+                "Could not load ML clustering artifacts (source=%s, tag=%s): %s. Starting with empty store.",
+                self.source,
+                self.tag,
+                exc,
             )
             self._init_empty()
             return
@@ -238,7 +234,8 @@ class AppStore:
         try:
             near_clusters_path = (
                 _ensure_minio_file(minio_settings, near_clusters_rel)
-                if minio_settings else DATA_DIR / near_clusters_rel
+                if minio_settings
+                else DATA_DIR / near_clusters_rel
             )
             if Path(near_clusters_path).exists():
                 with open(near_clusters_path, encoding="utf-8") as f:
@@ -252,9 +249,7 @@ class AppStore:
 
         # Hỗ trợ cả 2 format: dict{"0": {...}} và list[{cluster_id: 0, ...}]
         if isinstance(raw_labels, dict):
-            self.cluster_labels: dict[int, dict] = {
-                int(k): v for k, v in raw_labels.items()
-            }
+            self.cluster_labels: dict[int, dict] = {int(k): v for k, v in raw_labels.items()}
         else:
             self.cluster_labels = {int(c["cluster_id"]): c for c in raw_labels}
 
@@ -266,8 +261,7 @@ class AppStore:
         self.cluster_overrides: dict[int, dict] = {}
         try:
             overrides_path = (
-                _ensure_minio_file(minio_settings, overrides_rel)
-                if minio_settings else DATA_DIR / overrides_rel
+                _ensure_minio_file(minio_settings, overrides_rel) if minio_settings else DATA_DIR / overrides_rel
             )
             if Path(overrides_path).exists():
                 with open(overrides_path, encoding="utf-8") as f:
@@ -286,9 +280,7 @@ class AppStore:
         self.id_to_name: dict[str, str] = {
             str(tid): str(name) for tid, name in zip(df_tech["tech_id"], df_tech["name"])
         }
-        self.name_lower_to_id: dict[str, str] = {
-            n.lower(): tid for tid, n in self.id_to_name.items()
-        }
+        self.name_lower_to_id: dict[str, str] = {n.lower(): tid for tid, n in self.id_to_name.items()}
 
         # --- Merge: tech_id → cluster_id (chỉ techs đã cluster, bỏ noise=-1) ---
         # membership_probability/outlier_score chỉ có khi model là hdbscan (gói
@@ -315,6 +307,7 @@ class AppStore:
     def _init_empty(self) -> None:
         """Set empty data structures when artifacts are not available."""
         import pandas as _pd
+
         self.labels_df = _pd.DataFrame(columns=["tech_id", "cluster_id"])
         self.cluster_labels: dict[int, dict] = {}
         self.cluster_overrides: dict[int, dict] = {}
@@ -395,15 +388,19 @@ class AppStore:
             raise KeyError(f"Cluster {cluster_id} không tồn tại (tag={self.tag})")
 
         fields = {
-            k: v for k, v in {
-                "label": label, "label_en": label_en,
-                "description": description, "domain": domain,
-            }.items() if v is not None
+            k: v
+            for k, v in {
+                "label": label,
+                "label_en": label_en,
+                "description": description,
+                "domain": domain,
+            }.items()
+            if v is not None
         }
         if not fields:
             raise ValueError("Cần ít nhất 1 trường để cập nhật (label/label_en/description/domain)")
 
-        now = datetime.now(tz=timezone.utc).isoformat()
+        now = datetime.now(tz=UTC).isoformat()
         overrides_rel = f"overrides/{self.tag}/cluster_overrides.json"
         minio_settings = _get_minio_settings()
 
@@ -442,12 +439,14 @@ class AppStore:
         for entry in entries:
             cid = int(entry.get("cluster_id"))
             info = self.cluster_labels.get(cid, {})
-            enriched.append({
-                "cluster_id": cid,
-                "score": entry.get("score"),
-                "label": info.get("label"),
-                "label_en": info.get("label_en"),
-            })
+            enriched.append(
+                {
+                    "cluster_id": cid,
+                    "score": entry.get("score"),
+                    "label": info.get("label"),
+                    "label_en": info.get("label_en"),
+                }
+            )
         return enriched
 
 
@@ -484,3 +483,12 @@ def get_store() -> AppStore:
             logger.info("Reloading ML clustering store: %s -> %s", _STORE.tag, resolved_tag)
             _STORE = AppStore()
         return _STORE
+
+
+def reset_store() -> None:
+    """Force the next get_store() call to rebuild AppStore from disk/MinIO — used right after a
+    pipeline retrain writes fresh artifacts, so serving doesn't wait out the TTL to see them."""
+    global _STORE, _STORE_CHECKED_AT
+    with _STORE_LOCK:
+        _STORE = None
+        _STORE_CHECKED_AT = 0.0

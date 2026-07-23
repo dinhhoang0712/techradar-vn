@@ -12,6 +12,9 @@ public interface CommentRepository {
 
     Flux<CommentRow> findByPost(UUID postId, int limit, int offset);
 
+    /** Every comment authored by this user across all posts, newest first — used by the GDPR data-export endpoint. */
+    Flux<CommentRow> findByUser(UUID userId);
+
     /** For validating/threading a reply target. Empty if the parent comment doesn't exist. */
     Mono<ParentInfo> findParentInfo(UUID commentId);
 

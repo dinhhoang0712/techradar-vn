@@ -43,6 +43,12 @@ public class PostgresActivityLogRepository implements ActivityLogRepository {
     }
 
     @Override
+    public Mono<Void> recordAiRequest() {
+        return dbClient.sql("INSERT INTO activity_log (type) VALUES ('ai_request')")
+                .fetch().rowsUpdated().then();
+    }
+
+    @Override
     public Mono<Long> countToday(String type) {
         return dbClient.sql(
                 "SELECT count(*) AS c FROM activity_log " +

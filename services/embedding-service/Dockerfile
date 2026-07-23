@@ -17,12 +17,16 @@ RUN pip install --no-cache-dir --timeout 600 \
 # Copy application code
 COPY embedding_service.py .
 
-# Create cache directory for model
-RUN mkdir -p /app/.cache
+# Create cache directory for model (models download here at runtime), owned by the non-root user.
+RUN useradd --create-home --uid 1000 appuser \
+    && mkdir -p /app/.cache \
+    && chown -R appuser:appuser /app
 
 # Set environment variables
 ENV TRANSFORMERS_CACHE=/app/.cache
 ENV HF_HOME=/app/.cache
+
+USER appuser
 
 # Run the service
 CMD ["python", "embedding_service.py"]

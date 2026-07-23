@@ -78,83 +78,66 @@ Backend TechRadar VN được xây dựng với:
 ### 2.3 Implementation trong Spring Boot
 
 ```java
-// Input Port (Use Case Interface)
-public interface LoginUseCase {
-    Mono<LoginResponse> login(LoginRequest request);
-}
-
-// Output Port (Repository Interface)
+// Output Port (Repository Interface) — features/auth/ports/UserRepository.java
 public interface UserRepository {
-    Mono<User> findById(UUID id);
+    Mono<User> findByEmail(String email);
     Mono<User> save(User user);
 }
 
-// Application Service
-@Service
-public class LoginService implements LoginUseCase {
+// Use Case (application layer — no separate "input port" interface, the class itself is the
+// entry point other layers call) — features/auth/application/LoginUseCase.java
+@Component
+@RequiredArgsConstructor
+public class LoginUseCase {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final JwtTokenProvider jwtTokenProvider;
-    
-    public LoginService(UserRepository userRepository, 
-                        PasswordEncoder passwordEncoder,
-                        JwtTokenProvider jwtTokenProvider) {
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.jwtTokenProvider = jwtTokenProvider;
-    }
-    
-    @Override
-    public Mono<LoginResponse> login(LoginRequest request) {
+    private final TokenIssuer tokenIssuer;
+
+    public Mono<LoginResponse> execute(LoginRequest request) {
         return userRepository.findByEmail(request.getEmail())
-            .switchIfEmpty(Mono.error(new AuthenticationException("User not found")))
-            .flatMap(user -> {
-                if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
-                    return Mono.error(new AuthenticationException("Invalid password"));
-                }
-                String accessToken = jwtTokenProvider.generateAccessToken(user);
-                String refreshToken = jwtTokenProvider.generateRefreshToken(user);
-                return Mono.just(LoginResponse.from(user, accessToken, refreshToken));
-            });
+                .switchIfEmpty(Mono.error(new InvalidCredentialsException("Invalid email or password")))
+                .flatMap(user -> {
+                    if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+                        return Mono.error(new InvalidCredentialsException("Invalid email or password"));
+                    }
+                    return tokenIssuer.issueFor(user);
+                });
     }
 }
 
-// Input Adapter (REST Controller)
+// Input Adapter (REST Controller) — features/auth/adapters/input/AuthController.java
+// @RequestMapping("/auth") — NOT "/api/v1/auth": spring.webflux.base-path (/api/v1) is stripped
+// before matchers run, so every controller in this codebase maps without the /api/v1 prefix.
 @RestController
-@RequestMapping("/api/v1/auth")
+@RequestMapping("/auth")
+@RequiredArgsConstructor
 public class AuthController {
     private final LoginUseCase loginUseCase;
-    
-    public AuthController(LoginUseCase loginUseCase) {
-        this.loginUseCase = loginUseCase;
-    }
-    
+
     @PostMapping("/login")
-    public Mono<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
-        return loginUseCase.login(request);
+    public Mono<ResponseEntity<ApiResponse<LoginResponse>>> login(@Valid @RequestBody LoginRequest request) {
+        return loginUseCase.execute(request)
+                .map(response -> ResponseEntity.ok(ApiResponse.success(response, "Login successful")));
     }
 }
 
-// Output Adapter (Repository Implementation)
+// Output Adapter (Repository Implementation) — features/auth/adapters/output/PostgresUserRepository.java
+// Plain DatabaseClient + hand-written SQL (no R2dbcEntityTemplate/JPA-style mapping anywhere
+// in this codebase's Postgres repositories).
 @Repository
-public class UserRepositoryImpl implements UserRepository {
-    private final R2dbcEntityTemplate template;
-    
-    public UserRepositoryImpl(R2dbcEntityTemplate template) {
-        this.template = template;
-    }
-    
+@RequiredArgsConstructor
+public class PostgresUserRepository implements UserRepository {
+    private final DatabaseClient dbClient;
+
     @Override
-    public Mono<User> findById(UUID id) {
-        return template.select(User.class)
-            .matching(Query.query(Criteria.where("id").is(id)))
-            .one();
+    public Mono<User> findByEmail(String email) {
+        return dbClient.sql("SELECT * FROM users WHERE email = :email")
+                .bind("email", email)
+                .map(this::mapRow)
+                .one();
     }
-    
-    @Override
-    public Mono<User> save(User user) {
-        return template.insert(user);
-    }
+
+    // save(...) similarly hand-written INSERT/UPDATE — see the real file for the full mapping.
 }
 ```
 
@@ -163,97 +146,85 @@ public class UserRepositoryImpl implements UserRepository {
 ## 3. Cấu trúc dự án
 
 ```
-apps/backend/src/main/java/com/techpulse/
+apps/backend/src/main/java/com/techpulse/techradar/
 ├── TechRadarApplication.java          # Main entry point
-├── features/                           # Feature modules
+├── features/                           # Feature modules — mỗi module: domain/ports/application/
+│   │                                    adapters/{input,output} (flat, KHÔNG có port/in|out
+│   │                                    hay adapter/in/web như một số tài liệu cũ từng mô tả)
 │   ├── auth/                          # Authentication feature
 │   │   ├── domain/
-│   │   │   ├── model/
-│   │   │   │   ├── User.java
-│   │   │   │   ├── Role.java
-│   │   │   │   └── UserProfile.java
-│   │   │   ├── repository/
-│   │   │   │   └── UserRepository.java
-│   │   │   └── service/
-│   │   │       ├── LoginService.java
-│   │   │       ├── RegisterService.java
-│   │   │       └── PasswordResetService.java
-│   │   ├── application/
-│   │   │   ├── port/in/
-│   │   │   │   ├── LoginUseCase.java
-│   │   │   │   └── RegisterUseCase.java
-│   │   │   └── port/out/
-│   │   │       └── UserRepository.java
-│   │   └── adapter/
-│   │       ├── in/web/
-│   │       │   ├── AuthController.java
-│   │       │   └── dto/
-│   │       │       ├── LoginRequest.java
-│   │       │       ├── LoginResponse.java
-│   │       │       └── RegisterRequest.java
-│   │       └── out/persistence/
-│   │           ├── UserRepositoryImpl.java
-│   │           └── mapper/
-│   │               └── UserMapper.java
-│   │   └── AuthModuleConfig.java
+│   │   │   └── User.java              # role/status là String phẳng, không phải enum
+│   │   ├── ports/
+│   │   │   ├── UserRepository.java
+│   │   │   └── RolePermissionRepository.java
+│   │   ├── application/               # Use case CŨNG LÀ input port — không có interface riêng
+│   │   │   ├── LoginUseCase.java
+│   │   │   ├── RegisterUseCase.java
+│   │   │   ├── RefreshTokenUseCase.java
+│   │   │   ├── ResetPasswordUseCase.java
+│   │   │   ├── TokenIssuer.java
+│   │   │   ├── LoginRequest.java / LoginResponse.java   # DTO ở application, không phải adapters
+│   │   │   └── ...
+│   │   └── adapters/
+│   │       ├── input/
+│   │       │   └── AuthController.java
+│   │       └── output/
+│   │           ├── PostgresUserRepository.java
+│   │           └── PostgresRolePermissionRepository.java
 │   │
 │   ├── radar/                         # Tech radar feature
 │   ├── compare/                       # Technology comparison
 │   ├── graph/                         # Knowledge graph explorer + salary/sentiment filter
+│   │                                    + graph analytics (PageRank/Louvain qua Neo4j GDS)
 │   ├── chat/                          # RAG chat
 │   ├── clustering/                    # ML clustering
 │   ├── salary/                        # Salary insights (Neo4j, salary-text parsing)
 │   ├── notification/                  # In-app/email notifications + trend-alert dispatch
-│   ├── company/                       # NEW — Company Explorer (Neo4j)
-│   ├── job/                           # NEW — Job Matching (Neo4j)
-│   ├── messaging/                      # NEW — 1-1 direct messages (Postgres + SSE broadcaster)
-│   ├── social/                         # NEW — posts/follow/like/comment feed (Postgres)
-│   ├── aiproxy/                        # NEW — replaces career/forecast/recommend/report/
-│   │                                    # summarize/agent: one generic forwarder to ai-rag-core
+│   ├── company/                       # Company Explorer (Neo4j)
+│   ├── job/                           # Job Matching (Neo4j)
+│   ├── roadmap/                       # Career Roadmap + "what-if" skill simulation
+│   ├── messaging/                      # 1-1 direct messages (Postgres + SSE broadcaster)
+│   ├── social/                         # posts/follow/like/comment feed (Postgres)
+│   ├── aiproxy/                        # Consolidates career/forecast/recommend/report/
+│   │                                    # summarize/agent/company-insight: one generic forwarder
 │   ├── user/                          # User management
-│   ├── system/                        # System settings
-│   ├── health/                        # Health checks
-│   └── kafka/                         # Kafka event handling
+│   ├── system/                        # Settings, admin dashboard, activity log, CMS, health/status
+│   └── kafka/                         # Kafka event handling (domain/ports/adapters/event)
 │
-├── shared/                            # Shared infrastructure
-│   ├── config/
-│   │   ├── SecurityConfig.java
-│   │   ├── R2dbcConfig.java
-│   │   ├── Neo4jConfig.java
-│   │   ├── RedisConfig.java
-│   │   ├── KafkaConfig.java
-│   │   └── WebFluxConfig.java
-│   ├── security/
-│   │   ├── JwtAuthenticationFilter.java
-│   │   ├── JwtTokenProvider.java
-│   │   └── PasswordEncoder.java
-│   ├── exception/
-│   │   ├── GlobalExceptionHandler.java
-│   │   ├── AuthenticationException.java
-│   │   └── ResourceNotFoundException.java
-│   ├── common/
-│   │   ├── ApiResponse.java
-│   │   ├── PageResponse.java
-│   │   └── Constants.java
-│   └── util/
-│       └── DateUtil.java
+├── config/                            # Cross-cutting Spring config (KHÔNG nằm trong shared/)
+│   ├── JwtTokenProvider.java
+│   ├── SecurityConfig.java
+│   ├── security/                      # JwtReactiveAuthenticationManager, converters
+│   ├── KafkaConfig.java
+│   ├── RedisConfig.java
+│   ├── Neo4jConfig.java
+│   ├── PostgresConfig.java
+│   ├── JacksonConfig.java
+│   ├── SchedulingConfig.java
+│   ├── WebFluxConfig.java
+│   └── ActivityTrackingFilter.java
 │
-└── infrastructure/
-    ├── flyway/
-    │   └── migrations/
-    │       ├── V1__create_users.sql
-    │       ├── V2__create_chat_tables.sql
-    │       ├── V3__create_analytics.sql
-    │       ├── V4__create_cms.sql
-    │       ├── V5__create_system.sql
-    │       ├── V900__seed_admin_user.sql
-    │       └── V901__seed_settings.sql
-    └── kafka/
-        ├── producer/
-        │   └── KafkaEventPublisher.java
-        └── consumer/
-            └── KafkaEventListener.java
+└── shared/                            # Shared infrastructure, không có logic riêng của feature nào
+    ├── client/                        # WebClient factory cho Python services
+    ├── dto/
+    │   └── ApiResponse.java           # class (Lombok @Data @Builder), KHÔNG phải record
+    ├── exception/
+    │   ├── GlobalExceptionHandler.java
+    │   ├── ErrorCode.java
+    │   └── ...
+    ├── http/
+    ├── logging/
+    ├── neo4j/
+    │   └── Neo4jReadTemplate.java     # shared Mono.fromCallable(...).subscribeOn(boundedElastic()) helper
+    ├── paging/
+    ├── redis/                         # ReactiveRedisCache, rate limiters, RedisJsonStatus
+    ├── security/
+    └── util/
 ```
+
+Flyway migrations sống ở `src/main/resources/db/migration/` (không phải
+`infrastructure/flyway/migrations/`), đánh số tuần tự thật `V1__init_schema.sql` … hiện tại tới
+`V27__graph_analytics_permission.sql` — không có version nhảy cóc kiểu `V900`/`V901`.
 
 ---
 
@@ -268,11 +239,14 @@ apps/backend/src/main/java/com/techpulse/
 - Refresh token rotation
 
 **Key Components:**
-- `LoginService`: Authenticate user, generate tokens
-- `RegisterService`: Create new user, hash password
-- `PasswordResetService`: Handle forgot/reset password
-- `JwtTokenProvider`: Generate and validate JWT tokens
-- `JwtAuthenticationFilter`: Filter for JWT authentication
+- `LoginUseCase` / `RegisterUseCase` / `RefreshTokenUseCase` / `ForgotPasswordUseCase` /
+  `ResetPasswordUseCase` (`features/auth/application/`): authenticate, register, rotate refresh
+  token, forgot/reset password flow
+- `TokenIssuer`: issues access + refresh token pair for a `User`
+- `JwtTokenProvider` (`config/JwtTokenProvider.java`, not under `features/auth`): generate/validate
+  JWT, embeds `userId`/`email`/`role`/`permissions`/`securityStamp`
+- `JwtReactiveAuthenticationManager` + `config/security/*`: reactive auth filter chain (no class
+  named `JwtAuthenticationFilter` exists)
 
 **Database Tables:**
 - `users`: User credentials and status
@@ -289,9 +263,11 @@ apps/backend/src/main/java/com/techpulse/
 - Export radar data (PNG, CSV)
 
 **Key Components:**
-- `RadarAnalyticsService`: Compute trend analytics
-- `RadarSearchService`: Search technologies by keywords
-- `RadarExportService`: Export radar visualizations
+- `GetTopTechnologiesUseCase` / `SearchTrendUseCase` (`features/radar/application/`): top-N by
+  growth, keyword search
+- `RadarExporter` (`features/radar/domain/`): PNG/CSV export
+- `RadarAnalyticsEtlService` (`features/radar/etl/`): rebuilds `tech_analytics` from Neo4j
+  (admin-triggered, `AnalyticsAdminController`)
 
 **Data Source:**
 - PostgreSQL `tech_analytics` table (populated by Gold ETL)
@@ -303,14 +279,34 @@ apps/backend/src/main/java/com/techpulse/
 - Graph traversal queries
 - Node and edge filtering
 - Shortest path analysis
+- Graph analytics (PageRank/Louvain community/degree centrality via Neo4j GDS)
 
 **Key Components:**
-- `GraphExplorerService`: Execute Cypher queries
-- `GraphFilterService`: Filter nodes/edges by criteria
-- `GraphPathService`: Find shortest paths
+- `ExploreGraphUseCase` / `FilterGraphUseCase` / `RoadAnalysisUseCase` — thin, validate input,
+  delegate to the `GraphRepository` port
+- `Neo4jGraphRepository` (implements `GraphRepository`) — all reads wrapped via
+  `Neo4jReadTemplate.read(driver, ...)` (`Mono.fromCallable` + `Schedulers.boundedElastic()`
+  around a `Session`, shared by every Neo4j-backed repository in the codebase)
+- `GraphController` — `GET /graph/explore`, `GET /graph/road_analysis`, `POST /graph/filter`
+  (all public, no `@PreAuthorize`)
+- **Graph analytics (NEW)** — `RebuildGraphAnalyticsUseCase` delegates to
+  `Neo4jGraphAnalyticsAdapter` (implements `GraphAnalyticsPort`), which projects `Technology` +
+  `RELATED_TO` into a GDS in-memory graph (`gds.graph.project`, `orientation: 'UNDIRECTED'`,
+  weighted by `co_mention_count`), streams `gds.pageRank.stream`/`gds.louvain.stream`/
+  `gds.degree.stream`, remaps Louvain's arbitrary community ids to a compact 0-5 index (10
+  largest→0-5's actual cap is `MAX_DISPLAY_COMMUNITIES = 6`; everything else collapses to sentinel
+  `99`, "other"), and writes `pagerank_score`/`community_id`/`degree_centrality` back onto
+  `Technology` nodes in one `session.executeWrite(...)` — not wrapped in `Neo4jReadTemplate` (that
+  helper is read-only by contract). `GraphAnalyticsAdminController`
+  (`POST /admin/graph-analytics/rebuild`, `@PreAuthorize("hasAuthority('graph:manage')")`)
+  triggers it. Requires the GDS plugin (`docker-compose.yml` `NEO4J_PLUGINS`) — not installed by
+  default on a fresh clone before this feature, since nothing else in the stack used GDS. No new
+  read endpoint: every existing graph read already serializes `Technology` node properties
+  verbatim (`Neo4jGraphRepository`'s `node.asMap()`), so `GET /graph/explore` returns the new
+  properties for free once a rebuild has run.
 
 **Data Source:**
-- Neo4j Knowledge Graph
+- Neo4j Knowledge Graph (+ Neo4j GDS plugin for the analytics rebuild)
 
 ### 4.4 Chat Feature
 
@@ -321,10 +317,10 @@ apps/backend/src/main/java/com/techpulse/
 - SSE streaming for real-time responses
 
 **Key Components:**
-- `ChatSessionService`: Create and manage sessions
-- `ChatMessageService`: Store and retrieve messages
-- `RagProxyService`: Proxy requests to ai-rag-core `/chat` and `/chat/stream` (SSE) — a
-  **separate** proxy from the `aiproxy` module in §4.16; only chat has its own dedicated proxy.
+- `ChatUseCase` (`features/chat/application/`): create session, send message, fetch history
+- `PythonChatClient` (implements `ChatPort`): proxies to ai-rag-core `/chat` and `/chat/stream`
+  (SSE) — a **separate**, typed proxy from the generic `aiproxy` module in §4.16
+- `PostgresChatRepository` (`features/chat/adapters/output/`): `chat_session`/`chat_message` reads
 
 **Database Tables:**
 - `chat_session` (singular): written by backend — lifecycle (create/list/delete/ownership check)
@@ -340,8 +336,11 @@ apps/backend/src/main/java/com/techpulse/
 - Batch prediction for technologies
 
 **Key Components:**
-- `ClusteringService`: Retrieve cluster information
-- `ClusteringPredictionService`: Predict cluster for technologies
+- `GetClustersUseCase` / `GetClusterUseCase` (`features/clustering/application/`): list/get cluster
+- `PredictClusterUseCase` / `BatchPredictClusterUseCase`: predict cluster for technologies
+- `UpdateClusterLabelUseCase` / `TriggerPipelineUseCase` / `GetPipelineStatusUseCase` /
+  `GetPipelineRunsUseCase`: admin operations (`AdminClusteringController`)
+- `PythonClusteringClient` (implements `ClusteringServicePort`): proxy to ml-clustering
 
 **Data Source:**
 - ml-clustering service (FastAPI)
@@ -355,9 +354,9 @@ apps/backend/src/main/java/com/techpulse/
 - Notification settings
 
 **Key Components:**
-- `UserProfileService`: CRUD user profiles
+- `ProfileService` (`features/user/application/ProfileService.java`): CRUD user profile,
+  technology preferences, notification settings — no separate `PreferenceService` exists
 - `AvatarService`: Handle avatar upload/retrieval
-- `PreferenceService`: Manage user preferences
 
 ### 4.7 System Feature
 
@@ -368,15 +367,19 @@ apps/backend/src/main/java/com/techpulse/
 - Notification management
 
 **Key Components:**
-- `SettingsService`: CRUD application settings
-- `ActivityLogService`: Log user activities
-- `AdminDashboardController` (NEW additions — `hasRole('ADMIN')`): beyond the original `user-count`/`visits`/`monthly-visits`/`top-keywords`, now also:
+- `AdminService`: CRUD application settings (backed by `PostgresSettingsRepository`) — no separate
+  `SettingsService`/`ActivityLogService` classes; activity logging is `PostgresActivityLogRepository`
+  written directly by `ActivityTrackingFilter`
+- `HealthController` / `StatusController` (`features/system/adapters/input/`): `GET /health`
+  (no dependencies, hardcoded status), `GET /status` (feature flags via `AdminService`) — there is
+  no separate `health` feature module, this lives inside `system`
+- `AdminDashboardController` (NEW additions — `hasRole('ADMIN')`): backed by 6 focused `system/application` services instead of one aggregator class (`SiteMetricsService` for user-count/visits/monthly-visits/top-keywords, `SocialEngagementMetricsService`, `JobMarketMetricsService`, `PipelineHealthService`, `MessagingMetricsService`, `LiveMetricsService` — split out of a former single `DashboardMetricsService` god-class that had grown 13 dependencies across 8 unrelated features). Beyond the original `user-count`/`visits`/`monthly-visits`/`top-keywords`, now also:
   - `GET /admin/dashboard/social` → `SocialEngagementStats` (`total_posts`, `posts_today`, `total_comments`, `total_likes`, `total_follows`, `top_posters[]` (`user_id`,`full_name`,`post_count`), `pending_reports`) — reads across `PostRepository`/`CommentRepository`/`FollowRepository`/`ReportRepository`
   - `GET /admin/dashboard/jobs` → `JobMarketStats` (`total_jobs_indexed`, `top_technologies[]` (`name`,`job_count`), `job_match_alerts_sent`) — the last field is `NotificationRepository.countGroupedByType()` filtered to `JOB_MATCH`
   - `GET /admin/dashboard/pipeline` → `KafkaSyncStatus` (`articles_processed/failed`, `jobs_processed/failed`, `last_article_processed_at`, `last_job_processed_at`, `last_failure_at`, `last_failure_message`) — **in-process counters only** (`AtomicLong`/`AtomicReference` fields on `KafkaNeo4jWriterService`), reset to zero on every backend restart, NOT persisted anywhere
   - `GET /admin/dashboard/messaging` → `MessagingStats` (`total_conversations`, `total_messages`, `messages_today`, `notifications_by_type[]` (`type`,`count`))
 - `SocialModerationService` + `AdminSocialController` (NEW, feature `system`, delegates into `features/social` ports) — admin-only moderation over the social feed: list/delete ANY post or comment (bypassing ownership), list/dismiss pending `content_report`s. See §4.15 for the endpoint list.
-- `CacheAdminController` (NEW, `/admin/cache`, `hasRole('ADMIN')`) — `POST /admin/cache/companies/evict` (single key `cache:company:all`), `POST /admin/cache/jobs/evict` (pattern-evicts every `cache:job:match:*` entry via `ReactiveRedisCache.evictByPattern`). Exists because `company`/`job` (§4.12/§4.13) have no ETL/rebuild step to hang a cache invalidation off of, unlike `radar`'s `AnalyticsAdminController`.
+- `CacheAdminController` (NEW, `/admin/cache`, `hasRole('ADMIN')`) — `POST /admin/cache/companies/evict` (single key `cache:company:all`), `POST /admin/cache/jobs/evict` (pattern-evicts every `cache:job:match:*` entry), `POST /admin/cache/roadmap/evict` (pattern-evicts every `cache:roadmap:*` entry — one per user's computed career roadmap) via `ReactiveRedisCache.evictByPattern`. Exists because `company`/`job`/roadmap (§4.12/§4.13) have no ETL/rebuild step to hang a cache invalidation off of, unlike `radar`'s `AnalyticsAdminController`.
 
 **Database Tables:**
 - `settings`: Application settings + feature flags (also read by public `/status`)
@@ -387,16 +390,11 @@ apps/backend/src/main/java/com/techpulse/
 > Notifications are their **own** feature module (`features/notification`), not part of
 > System — see §4.10.
 
-### 4.8 Health Feature
+### 4.8 Health
 
-**Responsibilities:**
-- Health check endpoints
-- Dependency health checks
-- Actuator integration
-
-**Key Components:**
-- `HealthCheckService`: Check all dependencies
-- `StatusService`: Return feature flags
+Không phải một feature module riêng — `HealthController`/`StatusController` sống trong
+`features/system` (xem §4.7). `GET /health` không check dependency nào (trả status hardcoded);
+Spring Boot Actuator (`/actuator/**`) chạy song song, độc lập, không đi qua 2 controller này.
 
 ### 4.9 Kafka Feature
 
@@ -405,15 +403,21 @@ apps/backend/src/main/java/com/techpulse/
 - Event consumption
 - Trend alert notifications
 
+**Package layout (hex-architecture, matches every other feature — this module used to be a flat
+package with no `domain/ports/adapters` split; restructured for DIP/SRP):**
+- `domain/` — `EntityExtractionService` (pure algorithm, no I/O), `KafkaSyncStatus` (record).
+- `ports/` — `TechAliasResolver` (resolve a raw tech name to canonical), `ExtractionWriter` (persist an extracted article/job to the graph).
+- `adapters/input/` — `ArticleExtractorService` (`@KafkaListener` on `raw_articles`), `JobExtractorService` (`@KafkaListener` on `raw_jobs`), `KafkaNeo4jWriterService` (`@KafkaListener` on `extracted_articles`/`extracted_jobs`).
+- `adapters/output/` — `TechAliasCache` (implements `TechAliasResolver`), `Neo4jExtractionWriter` (implements `ExtractionWriter`), `KafkaProducerService` (generic `KafkaTemplate` wrapper used by all 3 input adapters above to publish their output topic).
+- `event/` — the Kafka message-schema DTOs (`RawArticle`/`RawJob`, `ExtractedArticle`/`ExtractedJob` + their nested data classes, `Entities`), snake_case-annotated to match the Python crawler's wire format.
+- `KafkaTopicConstants` stays at the feature root (topic name constants referenced by several OTHER features too — `notification`, `radar`, `roadmap` — so moving it would ripple for no DIP benefit).
+
 **Key Components:**
-- `KafkaEventPublisher`: Publish events to Kafka
-- `KafkaEventListener`: Consume events from Kafka
-- `TrendAlertDispatcher`: Dispatch trend alerts to users
-- `KafkaExtractorService` — consumes `raw_articles`/`raw_jobs`, runs entity extraction (`EntityExtractionService`, keyword/regex-based NER — không phải LLM dù tên biến `entities` gợi ý vậy), publishes `extracted_articles`/`extracted_jobs`.
-- `EntityExtractionService` — `extractTech()`/`extractEntities()` resolve mỗi tên công nghệ tách được qua `TechAliasCache` **trước khi** trả về (vd "Golang" → "Go", "ML" → "Machine Learning") để `KafkaNeo4jWriterService` phía dưới không bao giờ ghi 2 node `:Technology` khác nhau cho cùng 1 công nghệ. Xem [`docs/DATABASE.md`](./DATABASE.md) §4.3 cho bức tranh full (cả phía Python `data-platform`).
+- `ArticleExtractorService` / `JobExtractorService` — split out of a former single `KafkaExtractorService` (article and job pipelines shared nothing but the producer/hash-util dependencies, so each became its own single-responsibility listener). Each consumes its raw topic, runs entity extraction (`EntityExtractionService`, keyword/regex-based NER — không phải LLM dù tên biến `entities` gợi ý vậy), publishes to its extracted topic.
+- `EntityExtractionService` — `extractTech()`/`extractEntities()` resolve mỗi tên công nghệ tách được qua `TechAliasResolver` (impl `TechAliasCache`) **trước khi** trả về (vd "Golang" → "Go", "ML" → "Machine Learning") để `KafkaNeo4jWriterService` phía dưới không bao giờ ghi 2 node `:Technology` khác nhau cho cùng 1 công nghệ. Xem [`docs/DATABASE.md`](./DATABASE.md) §4.3 cho bức tranh full (cả phía Python `data-platform`).
 - `TechAliasCache` — cache in-memory bảng Postgres `dp_tech_alias_map` (`@Scheduled` refresh mỗi `app.tech-alias.refresh-ms`, mặc định 5 phút; `@PostConstruct` load lần đầu). `resolve(rawName)` casefold+trim rồi tra cache, fallback về tên gốc (trimmed) nếu không có alias — không bao giờ throw hay trả null. Đây là bảng Postgres **duy nhất** mà `apps/backend` và `data-platform` cùng ghi/đọc chung (ngoại lệ có chủ đích, vì 2 service có Docker build-context tách biệt nên không share được 1 file cấu hình).
-- `KafkaNeo4jWriterService` — consumes `extracted_articles`/`extracted_jobs`, writes to Neo4j; **NEW**: also publishes `job.match.alerts` the first time a job is genuinely new (checked via a `MATCH` before the `MERGE`, so re-crawled/updated listings don't re-fire), and tracks in-process throughput/error counters exposed via `syncStatus()` (`KafkaSyncStatus` record — see `GET /admin/dashboard/pipeline`, §4.7). Counters reset on restart, not persisted.
-- `JobMatchDispatcher` (NEW) — consumes `job.match.alerts`, fans out to users whose profile technologies overlap the job's, mirroring `TrendAlertDispatcher`. See §4.10.
+- `KafkaNeo4jWriterService` — consumes `extracted_articles`/`extracted_jobs`, delegates the actual Cypher write to `ExtractionWriter` (impl `Neo4jExtractionWriter`); also publishes `job.match.alerts` the first time a job is genuinely new (checked via a `MATCH` before the `MERGE`, so re-crawled/updated listings don't re-fire), and tracks in-process throughput/error counters exposed via `syncStatus()` (`KafkaSyncStatus` — see `GET /admin/dashboard/pipeline`, §4.7, now served by `system/application/PipelineHealthService`). Counters reset on restart, not persisted.
+- `JobMatchDispatcher` (in `notification`, not `kafka`) — consumes `job.match.alerts`, fans out to users whose profile technologies overlap the job's, mirroring `TrendAlertDispatcher`. See §4.10.
 
 ### 4.10 Notification Feature
 
@@ -521,7 +525,7 @@ apps/backend/src/main/java/com/techpulse/
 - `AddCommentUseCase` — validates + inserts, then fires a best-effort `POST_COMMENT` notification (140-char preview) to the post author (skipped on self-comment)
 - `ToggleFollowUseCase` — on a genuinely new follow, fires a best-effort `NEW_FOLLOWER` notification to the followee
 - `ReportContentUseCase` (NEW) — validates non-empty/≤500-char `reason`, inserts into `content_report` via `ON CONFLICT DO NOTHING` (silently a no-op if this user already has a PENDING report on the same target — see V11/V12 unique-index history in [`docs/DATABASE.md`](./DATABASE.md) §3.2); exactly one of `post_id`/`comment_id` is set
-- `PostgresPostRepository` / `PostgresFollowRepository` / `PostgresCommentRepository` / `PostgresReportRepository` (NEW)
+- `PostgresPostRepository` / `PostgresFollowRepository` / `PostgresCommentRepository` / `PostgresReportRepository` (NEW). `PostgresFollowRepository` implements TWO ports: `FollowRepository` (follow/unfollow/isFollowing/counts — the actual follow-relationship graph) and `UserDirectoryRepository` (`findProfileBasics`, `suggested`, `searchByName` — profile lookup/search, used by `GetProfileSummaryUseCase`/`GetSuggestedUsersUseCase`/`SearchUsersUseCase`), split out from a single fat `FollowRepository` interface (ISP fix — profile-search consumers no longer have to depend on follow-mutation methods they never call, and vice versa). One physical class backing two logical ports, same pattern as `PostgresUserRepository implements UserRepository, UserStatsRepository`.
 
 **Admin moderation over this feature lives in the `system` module, not here** — see §4.7-equivalent: `SocialModerationService` + `AdminSocialController` (`/admin/posts`, `/admin/posts/{id}/comments`, `/admin/comments/{id}`, `/admin/reports`, `/admin/reports/{id}/dismiss`) can view/delete ANY post or comment (bypassing the ownership check `DeletePostUseCase` enforces for normal users) and review/dismiss the report queue.
 
@@ -538,13 +542,20 @@ apps/backend/src/main/java/com/techpulse/
 
 **Key Components:**
 - `AiProxyRequestHandler` — shared plumbing; `forwardAsCurrentUser(...)` attaches `user_id` from the JWT when present, `forward(...)` passes the body through unmodified. Both wrap the Python response as `ApiResponse<Map<String,Object>>` (double-wrapped — whatever JSON `ai-rag-core` returns becomes `data` verbatim) and turn ANY upstream error into a generic `503 SERVICE_UNAVAILABLE`.
+- **Rate limiting (NEW)** — `AiProxyRateLimiterService` (Redis INCR+EXPIRE, same mechanism as `AuthRateLimiterService`/`ChatRateLimiterService`), gated inside `AiProxyRequestHandler` itself so every controller gets it for free. `forwardAsCurrentUser(...)` routes are keyed by user id (`ratelimit:aiproxy:user:<id>`); `forward(...)` routes have no user id so they're keyed by client IP (`ratelimit:aiproxy:ip:<ip>`, resolved by each public controller via `ClientIpUtils.resolveClientIp(httpRequest)` and passed in as an extra `forward(...)` parameter). Default 20 req/60s (`app.redis.aiproxy-rate-limit.*`). The gate sits OUTSIDE the upstream-error `onErrorResume`, so a throttled request surfaces as a real `429 RATE_LIMIT_EXCEEDED`, not the generic 503 — get this ordering wrong and the rate limit silently stops working (looks like a 503 instead).
 - `PythonAiProxyClient` (implements `AiProxyPort`) — one generic `WebClient.post()` per call, no per-endpoint typed request/response classes anymore.
-- Thin controllers, one per legacy path: `AgentController` (`POST /agent`), `CareerController` (`POST /career`), `ForecastController` (`GET /forecast`), `InterviewController` (`POST /interview`, NEW), `RecommendController` (`POST /recommend`), `ReportController` (`GET /report`), `SummarizeController` (`POST /chat/summarize`).
+- Thin controllers, one per legacy path: `AgentController` (`POST /agent`), `CareerController` (`POST /career`), `ForecastController` (`GET /forecast`), `InterviewController` (`POST /interview`, NEW), `RecommendController` (`POST /recommend`), `ReportController` (`GET /report`), `SummarizeController` (`POST /chat/summarize`), `CompanyInsightController` (`POST /company-insight`, NEW).
 
-**Known inconsistency worth flagging:** `/forecast`, `/report`, and `/chat/summarize` are public
-(`SecurityConfig.PUBLIC_PATHS`) while `/career`, `/recommend`, `/interview`, and `/agent` require
-auth — this split predates the refactor (the path strings were simply carried over from the
-deleted modules) and was not re-evaluated when consolidating into `aiproxy`.
+**Public vs. authenticated split (`SecurityConfig.PUBLIC_ROUTES`):** the dividing line is which
+`AiProxyRequestHandler` method a controller calls. `forward(...)` passes the body through
+unmodified — general content with no per-user personalization — and those routes are public:
+`/forecast`, `/report`, `/chat/summarize`, `/company-insight`. `forwardAsCurrentUser(...)` attaches
+`user_id` from the JWT — the response is personalized to whoever is signed in — so those routes
+require auth: `/career`, `/recommend`, `/interview`, `/agent`. `/company-insight` was added after
+this principle was already in place but initially left out of `PUBLIC_ROUTES` by oversight; since
+it's rendered on the public `/companies` page (itself public), anonymous visitors got a spurious
+401 that the web client's interceptor treated as a logged-out session — fixed by adding it
+alongside the other `forward()`-only routes.
 
 **Data Source:**
 - `ai-rag-core` (FastAPI) — see [`docs/AI_PLATFORM.md`](./AI_PLATFORM.md)
@@ -706,175 +717,168 @@ public class RedisConfig {
 
 ### 6.1 JWT Authentication
 
-**Token Provider:**
+**Token Provider** (`config/JwtTokenProvider.java`, real code trimmed):
 ```java
 @Component
+@RequiredArgsConstructor
 public class JwtTokenProvider {
-    
-    @Value("${jwt.secret}")
-    private String jwtSecret;
-    
-    @Value("${jwt.access-token-expiration:900000}") // 15 minutes
-    private long accessTokenExpiration;
-    
-    @Value("${jwt.refresh-token-expiration:604800000}") // 7 days
-    private long refreshTokenExpiration;
-    
-    public String generateAccessToken(User user) {
-        return Jwts.builder()
-            .subject(user.getId().toString())
-            .claim("email", user.getEmail())
-            .claim("role", user.getRole().name())
-            .issuedAt(Date.from(Instant.now()))
-            .expiration(Date.from(Instant.now().plusMillis(accessTokenExpiration)))
-            .signWith(getSigningKey())
-            .compact();
+
+    public enum TokenType { ACCESS("access"), REFRESH("refresh"); /* ... */ }
+
+    @Value("${app.jwt.secret}") private String jwtSecret;
+    @Value("${app.jwt.expiration}") private long jwtExpiration;             // default 86400000 (24h)
+    @Value("${app.jwt.refresh-expiration}") private long refreshExpiration; // default 604800000 (7d)
+
+    // Access token: embeds role + full RBAC permission list + security stamp, so authorization
+    // never needs a DB round-trip per request.
+    public String generateToken(String userId, String email, String role,
+                                 List<String> permissions, String securityStamp) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("sub", userId);
+        claims.put("email", email);
+        claims.put("role", role);
+        claims.put("permissions", permissions);
+        claims.put("stamp", securityStamp);
+        claims.put("token_type", TokenType.ACCESS.claimValue());
+        return createToken(claims, userId, jwtExpiration);
     }
-    
-    public String generateRefreshToken(User user) {
-        return Jwts.builder()
-            .subject(user.getId().toString())
-            .issuedAt(Date.from(Instant.now()))
-            .expiration(Date.from(Instant.now().plusMillis(refreshTokenExpiration)))
-            .signWith(getSigningKey())
-            .compact();
-    }
-    
-    public boolean validateToken(String token) {
-        try {
-            Jwts.parser()
-                .verifyWith(getSigningKey())
-                .build()
-                .parseSignedClaims(token);
-            return true;
-        } catch (JwtException | IllegalArgumentException e) {
-            return false;
-        }
-    }
-    
-    public Claims getClaims(String token) {
-        return Jwts.parser()
-            .verifyWith(getSigningKey())
-            .build()
-            .parseSignedClaims(token)
-            .getPayload();
-    }
-    
-    private SecretKey getSigningKey() {
-        byte[] keyBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
-        return new SecretKeySpec(keyBytes, SignatureAlgorithm.HS256.getJcaName());
-    }
+
+    public String generateRefreshToken(String userId) { /* token_type=REFRESH, no permissions claim */ }
+
+    public boolean isTokenValid(String token) { /* try/catch parseSignedClaims */ }
+    public boolean isAccessToken(String token) { /* token_type claim == "access" */ }
+    // + getUserIdFromToken / getEmailFromToken / getRoleFromToken / getPermissionsFromToken /
+    //   getStampFromToken / isTokenExpired
 }
 ```
 
-**Authentication Filter:**
+**Authentication** — không có `WebFilter` tự viết tên `JwtAuthenticationFilter`. Cơ chế thật:
+`config/security/JwtServerAuthenticationConverter` trích Bearer token thành một
+`Authentication` chưa xác thực, rồi `JwtReactiveAuthenticationManager` (implements
+`ReactiveAuthenticationManager`) xác thực nó:
+
 ```java
 @Component
-public class JwtAuthenticationFilter implements WebFilter {
-    
+@RequiredArgsConstructor
+public class JwtReactiveAuthenticationManager implements ReactiveAuthenticationManager {
+
     private final JwtTokenProvider jwtTokenProvider;
-    private final ReactiveStringRedisTemplate redisTemplate;
-    
+    private final SecurityStampService securityStampService;
+
     @Override
-    public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
-        String path = exchange.getRequest().getPath().value();
-        
-        // Skip public paths
-        if (isPublicPath(path)) {
-            return chain.filter(exchange);
-        }
-        
-        String token = extractToken(exchange.getRequest());
-        
-        if (token == null || !jwtTokenProvider.validateToken(token)) {
-            return Mono.error(new AuthenticationException("Invalid or missing token"));
-        }
-        
-        // Check if token is blacklisted (refresh token)
-        Claims claims = jwtTokenProvider.getClaims(token);
-        String userId = claims.getSubject();
-        
-        return redisTemplate.opsForValue().get("blacklist:refresh:" + token)
-            .flatMap(blacklisted -> {
-                if (blacklisted != null) {
-                    return Mono.error(new AuthenticationException("Token has been revoked"));
-                }
-                return chain.filter(exchange);
-            })
-            .switchIfEmpty(chain.filter(exchange));
+    public Mono<Authentication> authenticate(Authentication authentication) {
+        String token = String.valueOf(authentication.getCredentials());
+        return Mono.fromCallable(() -> decode(token))          // isTokenValid + isAccessToken
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(this::verifyStampAndBuildAuthentication);
     }
-    
-    private String extractToken(ServerHttpRequest request) {
-        String bearerToken = request.getHeaders().getFirst("Authorization");
-        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
-            return bearerToken.substring(7);
-        }
-        return null;
+
+    // Rejects the token if users.security_stamp has been bumped since issuance (role/status/
+    // password change by an admin) — this is how a token gets revoked BEFORE it naturally
+    // expires, without a Redis blacklist lookup on every request.
+    private Mono<Authentication> verifyStampAndBuildAuthentication(DecodedToken decoded) {
+        return securityStampService.currentStamp(decoded.userId())
+                .flatMap(currentStamp -> currentStamp.equals(decoded.stamp())
+                        ? Mono.just(buildAuthentication(decoded))
+                        : Mono.error(new BadCredentialsException("Token revoked: security stamp mismatch")))
+                .switchIfEmpty(Mono.fromCallable(() -> buildAuthentication(decoded)));
     }
-    
-    private boolean isPublicPath(String path) {
-        return path.equals("/api/v1/auth/login") ||
-               path.equals("/api/v1/auth/register") ||
-               path.equals("/api/v1/auth/refresh") ||
-               path.equals("/health") ||
-               path.equals("/status");
-    }
+
+    // Authorities: ROLE_<ROLE> + one SimpleGrantedAuthority per RBAC permission code carried in
+    // the token — this is what makes @PreAuthorize("hasAuthority('user:manage')") work.
 }
 ```
 
 ### 6.2 Security Configuration
 
+Thật ra không có danh sách `pathMatchers(...)` rải rác — mọi route public là MỘT nguồn sự thật
+duy nhất, `SecurityConfig.PUBLIC_ROUTES` (`List<PublicRoute>`, mỗi entry có method + pattern),
+dùng chung bởi cả JWT filter (bỏ qua xác thực) lẫn `authorizeExchange` (permitAll) — nên 2 chỗ
+không thể lệch nhau:
+
 ```java
 @Configuration
 @EnableWebFluxSecurity
+@EnableReactiveMethodSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
-    
-    @Value("${jwt.secret}")
-    private String jwtSecret;
-    
+
+    // spring.webflux.base-path (/api/v1) bị strip TRƯỚC khi security filter chạy, nên pattern ở
+    // đây KHÔNG kèm /api/v1.
+    private static final List<PublicRoute> PUBLIC_ROUTES = List.of(
+            PublicRoute.anyMethod("/auth/login"),
+            PublicRoute.anyMethod("/auth/register"),
+            PublicRoute.anyMethod("/auth/refresh"),
+            PublicRoute.anyMethod("/health"), PublicRoute.anyMethod("/status"),
+            PublicRoute.anyMethod("/actuator/**"),
+            PublicRoute.anyMethod("/forecast"), PublicRoute.anyMethod("/report"),
+            PublicRoute.anyMethod("/company-insight"),
+            new PublicRoute(HttpMethod.GET, "/companies/**"),
+            new PublicRoute(HttpMethod.GET, "/posts/*/comments")
+            // ... đầy đủ ở SecurityConfig.java thật, xem §11 API_DOCs_v1.md
+    );
+
     @Bean
-    public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
+    public PasswordEncoder passwordEncoder() { return new BCryptPasswordEncoder(); }
+
+    @Bean
+    public SecurityWebFilterChain springSecurityFilterChain(
+            ServerHttpSecurity http, JwtReactiveAuthenticationManager authenticationManager,
+            JwtServerAuthenticationConverter authenticationConverter,
+            CorsConfigurationSource corsConfigurationSource) {
+
+        AuthenticationWebFilter jwtFilter = new AuthenticationWebFilter(authenticationManager);
+        jwtFilter.setServerAuthenticationConverter(authenticationConverter);
+        jwtFilter.setSecurityContextRepository(NoOpServerSecurityContextRepository.getInstance());
+        jwtFilter.setRequiresAuthenticationMatcher(
+                new NegatedServerWebExchangeMatcher(ServerWebExchangeMatchers.matchers(publicRouteMatchers())));
+
         return http
-            .csrf(ServerHttpSecurity.CsrfSpec::disable)
-            .authorizeExchange(exchanges -> exchanges
-                .pathMatchers("/api/v1/auth/login", "/api/v1/auth/register", 
-                              "/api/v1/auth/refresh", "/api/v1/auth/forgot-password",
-                              "/api/v1/auth/reset-password", "/health", "/status",
-                              "/actuator/**", "/swagger-ui/**", "/v3/api-docs/**")
-                .permitAll()
-                .pathMatchers("/api/v1/admin/**").hasRole("ADMIN")
-                .anyExchange().authenticated()
-            )
-            .addFilterBefore(jwtAuthenticationFilter, SecurityWebFiltersOrder.AUTHENTICATION)
-            .build();
-    }
-    
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
+                .securityContextRepository(NoOpServerSecurityContextRepository.getInstance())
+                .authorizeExchange(a -> a.matchers(publicRouteMatchers()).permitAll().anyExchange().authenticated())
+                .addFilterAt(jwtFilter, SecurityWebFiltersOrder.AUTHENTICATION)
+                .exceptionHandling(ex -> ex.authenticationEntryPoint(new HttpStatusServerEntryPoint(HttpStatus.UNAUTHORIZED)))
+                .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
+                .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
+                .csrf(ServerHttpSecurity.CsrfSpec::disable)
+                .cors(cors -> cors.configurationSource(corsConfigurationSource))
+                .build();
     }
 }
 ```
+
+Không có `hasRole("ADMIN")` khai báo tĩnh trong `SecurityConfig` cho `/admin/**` — mỗi admin
+controller tự gate bằng `@PreAuthorize("hasAuthority('<permission-code>')")` theo permission RBAC
+(xem migration `V24__rbac_permissions.sql`, `AdminPermissionMappingTest`).
 
 ### 6.3 Role-Based Access Control
 
+Permission-based, không phải `hasRole("ADMIN")` tĩnh — mỗi admin controller gate bằng permission
+code riêng của nó (`UserAdminController` thật, `features/user/adapters/input/`):
+
 ```java
 @RestController
-@RequestMapping("/api/v1/admin")
-@PreAuthorize("hasRole('ADMIN')")
-public class AdminController {
-    
-    @GetMapping("/users")
-    public Flux<User> getAllUsers() {
-        return userService.getAllUsers();
-    }
-    
-    @PostMapping("/users")
-    public Mono<User> createUser(@Valid @RequestBody CreateUserRequest request) {
-        return userService.createUser(request);
-    }
+@RequestMapping("/admin/users")
+@RequiredArgsConstructor
+public class UserAdminController {
+
+    @GetMapping
+    @PreAuthorize("hasAuthority('user:manage')")
+    public Flux<UserSummaryResponse> listUsers() { /* ... */ }
+
+    @PostMapping
+    @PreAuthorize("hasAuthority('user:manage')")
+    public Mono<ResponseEntity<ApiResponse<UserSummaryResponse>>> createUser(
+            @Valid @RequestBody CreateUserRequest request) { /* ... */ }
 }
 ```
+
+13 permission code hiện có (`roles`/`permissions`/`role_permissions` bảng Postgres, migration
+`V24`/`V27`): `user:manage`, `notification:manage`, `analytics:manage`, `cms:manage`,
+`crawler:manage`, `cache:manage`, `system:settings`, `datapipeline:manage`, `social:moderate`,
+`audit:view`, `dashboard:view`, `clustering:manage`, `graph:manage` — role `admin` có tất cả, role
+`moderator` chỉ có `social:moderate` + `audit:view`. `AdminPermissionMappingTest` là regression
+guard: mọi method `@PreAuthorize` trên admin controller phải khớp đúng permission code này.
 
 ---
 
@@ -882,156 +886,131 @@ public class AdminController {
 
 ### 7.1 Response Format
 
-**Standard Response:**
+**Standard Response** (`shared/dto/ApiResponse.java` — Lombok `@Data @Builder` class, KHÔNG phải
+`record`, vì cần builder + `@JsonInclude(NON_NULL)` để bỏ field null khỏi JSON):
 ```java
-public record ApiResponse<T>(
-    boolean success,
-    T data,
-    String message,
-    String errorCode,
-    long timestamp
-) {
-    public static <T> ApiResponse<T> success(T data) {
-        return new ApiResponse<>(true, data, null, null, System.currentTimeMillis());
-    }
-    
-    public static <T> ApiResponse<T> success(T data, String message) {
-        return new ApiResponse<>(true, data, message, null, System.currentTimeMillis());
-    }
-    
-    public static <T> ApiResponse<T> error(String message, String errorCode) {
-        return new ApiResponse<>(false, null, message, errorCode, System.currentTimeMillis());
-    }
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class ApiResponse<T> {
+    private boolean success;
+    private T data;
+    private String message;
+    private String errorCode;
+    private List<FieldErrorDetail> errors;   // per-field validation errors; null mọi trường hợp khác
+    private long timestamp;
+
+    public record FieldErrorDetail(String field, String message) {}
+
+    public static <T> ApiResponse<T> success(T data) { /* success=true, timestamp=now */ }
+    public static <T> ApiResponse<T> success(T data, String message) { /* + message */ }
+    public static <T> ApiResponse<T> error(String message, String errorCode) { /* success=false */ }
+    public static <T> ApiResponse<T> error(String message, String errorCode, List<FieldErrorDetail> errors) { }
 }
 ```
 
-**Bare Response (for auth endpoints):**
+**Auth response** (`features/auth/application/LoginResponse.java` — cũng là Lombok class, không
+phải record; `userId`/`role` là `String` phẳng, không phải `UUID`/enum):
 ```java
-public record LoginResponse(
-    String accessToken,
-    String refreshToken,
-    UUID userId,
-    String email,
-    String role,
-    long expiresIn
-) {
-    public static LoginResponse from(User user, String accessToken, String refreshToken) {
-        return new LoginResponse(
-            accessToken,
-            refreshToken,
-            user.getId(),
-            user.getEmail(),
-            user.getRole().name(),
-            900000 // 15 minutes
-        );
-    }
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class LoginResponse {
+    private String accessToken;
+    private String refreshToken;
+    private String userId;
+    private String email;
+    private String role;
+    private long expiresIn;
 }
 ```
 
 ### 7.2 Controller Pattern
 
+Principal là **user id dạng String** (`JwtReactiveAuthenticationManager` set nó làm
+`Authentication.getName()`), KHÔNG phải một `User` object — không có `@AuthenticationPrincipal`
+kèm cast `.cast(User.class)` ở đâu trong codebase. Đọc user id hiện tại luôn qua
+`SecurityUtils.currentUserId(): Mono<String>` (`shared/security/SecurityUtils.java`). Trả về
+`Mono<ResponseEntity<ApiResponse<T>>>`, không phải bare `Mono<ApiResponse<T>>`:
+
 ```java
+// features/user/adapters/input/UserController.java (thật, rút gọn)
 @RestController
-@RequestMapping("/api/v1/user")
+@RequestMapping("/user")
+@RequiredArgsConstructor
 public class UserController {
-    
-    private final UserProfileService userProfileService;
-    
-    public UserController(UserProfileService userProfileService) {
-        this.userProfileService = userProfileService;
-    }
-    
+
+    private final ProfileService profileService;
+
     @GetMapping("/profile")
-    public Mono<ApiResponse<UserProfile>> getProfile(
-            @AuthenticationPrincipal Mono<Authentication> auth) {
-        return auth
-            .map(Authentication::getPrincipal)
-            .cast(User.class)
-            .flatMap(userProfileService::getProfile)
-            .map(ApiResponse::success);
+    public Mono<ResponseEntity<ApiResponse<ProfileResponse>>> getProfile() {
+        return SecurityUtils.currentUserId()
+                .flatMap(profileService::getProfile)
+                .map(profile -> ResponseEntity.ok(ApiResponse.success(profile)));
     }
-    
+
     @PutMapping("/profile")
-    public Mono<ApiResponse<UserProfile>> updateProfile(
-            @AuthenticationPrincipal Mono<Authentication> auth,
+    public Mono<ResponseEntity<ApiResponse<ProfileResponse>>> updateProfile(
             @Valid @RequestBody UpdateProfileRequest request) {
-        return auth
-            .map(Authentication::getPrincipal)
-            .cast(User.class)
-            .flatMap(user -> userProfileService.updateProfile(user.getId(), request))
-            .map(ApiResponse::success);
+        return SecurityUtils.currentUserId()
+                .flatMap(userId -> profileService.updateProfile(userId, request))
+                .map(profile -> ResponseEntity.ok(ApiResponse.success(profile, "Profile updated")));
     }
 }
 ```
 
 ### 7.3 Validation
 
-```java
-public record LoginRequest(
-    @NotBlank(message = "Email is required")
-    @Email(message = "Invalid email format")
-    String email,
-    
-    @NotBlank(message = "Password is required")
-    @Size(min = 6, message = "Password must be at least 6 characters")
-    String password
-) {}
+Request DTO ở `features/auth/application/` là Lombok `@Data @Builder` class (không phải
+`record` — cần `@NoArgsConstructor` để Jackson deserialize + `@Builder` cho test fixture):
 
-public record RegisterRequest(
-    @NotBlank(message = "Full name is required")
-    @Size(min = 2, max = 100, message = "Full name must be between 2 and 100 characters")
-    String fullName,
-    
+```java
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class LoginRequest {
     @NotBlank(message = "Email is required")
-    @Email(message = "Invalid email format")
-    String email,
-    
+    @Email(message = "Email should be valid")
+    private String email;
+
     @NotBlank(message = "Password is required")
-    @Size(min = 8, message = "Password must be at least 8 characters")
-    @Pattern(regexp = "^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%^&+=]).{8,}$",
-             message = "Password must contain at least one digit, one lowercase, one uppercase, and one special character")
-    String password,
-    
-    SubscriptionTier subscriptionTier
-) {}
+    private String password;
+}
 ```
 
 ### 7.4 Error Handling
 
+Không dùng `@ControllerAdvice` + `ServerResponse`/`ServerRequest` (đó là kiểu functional
+`RouterFunction` endpoint — codebase này toàn `@RestController` annotated). Thật là
+`@RestControllerAdvice` trả thẳng `ResponseEntity<ApiResponse<Void>>`, và mọi exception nghiệp vụ
+kế thừa `AppException` (mang sẵn `ErrorCode` → HTTP status, xem `shared/exception/ErrorCode.java`)
+thay vì mỗi loại lỗi một `@ExceptionHandler` liệt kê tay
+(`shared/exception/GlobalExceptionHandler.java`, rút gọn):
+
 ```java
-@ControllerAdvice
+@Slf4j
+@RestControllerAdvice
 public class GlobalExceptionHandler {
-    
-    @ExceptionHandler(AuthenticationException.class)
-    public Mono<ServerResponse> handleAuthenticationException(
-            AuthenticationException ex, ServerRequest request) {
-        return ServerResponse.status(HttpStatus.UNAUTHORIZED)
-            .bodyValue(ApiResponse.error(ex.getMessage(), "AUTH_ERROR"));
+
+    @ExceptionHandler(AppException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAppException(AppException ex) {
+        if (ex.getStatusCode() >= 500) log.error("Application error", ex);
+        return ResponseEntity.status(ex.getStatusCode())
+                .body(ApiResponse.error(ex.getMessage(), ex.getErrorCode()));
     }
-    
-    @ExceptionHandler(ResourceNotFoundException.class)
-    public Mono<ServerResponse> handleNotFoundException(
-            ResourceNotFoundException ex, ServerRequest request) {
-        return ServerResponse.status(HttpStatus.NOT_FOUND)
-            .bodyValue(ApiResponse.error(ex.getMessage(), "NOT_FOUND"));
+
+    @ExceptionHandler(WebExchangeBindException.class)
+    public ResponseEntity<ApiResponse<Void>> handleValidation(WebExchangeBindException ex) {
+        return validationResponse(ex.getBindingResult().getFieldErrors());
     }
-    
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public Mono<ServerResponse> handleValidationException(
-            MethodArgumentNotValidException ex, ServerRequest request) {
-        String message = ex.getBindingResult().getFieldErrors().stream()
-            .map(FieldError::getDefaultMessage)
-            .collect(Collectors.joining(", "));
-        return ServerResponse.status(HttpStatus.BAD_REQUEST)
-            .bodyValue(ApiResponse.error(message, "VALIDATION_ERROR"));
-    }
-    
-    @ExceptionHandler(Exception.class)
-    public Mono<ServerResponse> handleGenericException(
-            Exception ex, ServerRequest request) {
-        return ServerResponse.status(HttpStatus.INTERNAL_SERVER_ERROR)
-            .bodyValue(ApiResponse.error("Internal server error", "INTERNAL_ERROR"));
-    }
+
+    // + AccessDeniedException/AuthorizationDeniedException → 403, ConstraintViolationException,
+    // ServerWebInputException, DataBufferLimitException → 413, và một catch-all Exception.class
+    // cuối cùng cho bug/lỗi thư viện thứ ba chưa map riêng.
 }
 ```
 
@@ -1041,162 +1020,100 @@ public class GlobalExceptionHandler {
 
 ### 8.1 ai-rag-core Integration
 
-**WebClient Configuration:**
+**WebClient**: mọi client Python (`ai-rag-core`, `ml-clustering`) đi qua MỘT factory dùng chung,
+không phải mỗi client tự khai báo `@Bean WebClient` riêng
+(`shared/client/PythonServiceWebClientFactory.java`):
+
 ```java
-@Configuration
-public class AiRagClientConfig {
-    
-    @Value("${python.rag.base-url}")
-    private String ragBaseUrl;
-    
-    @Value("${python.internal.token}")
-    private String internalToken;
-    
-    @Bean
-    public WebClient ragWebClient(WebClient.Builder builder) {
-        return builder
-            .baseUrl(ragBaseUrl)
-            .defaultHeader("X-Internal-Auth", internalToken)
-            .build();
+public final class PythonServiceWebClientFactory {
+    /** internalToken được gửi làm header X-Internal-Auth, bỏ qua nếu null/blank. */
+    public static WebClient build(WebClient.Builder webClientBuilder, String baseUrl, String internalToken) {
+        WebClient.Builder builder = webClientBuilder.baseUrl(baseUrl);
+        if (internalToken != null && !internalToken.isBlank()) {
+            builder = builder.defaultHeader("X-Internal-Auth", internalToken);
+        }
+        return builder.build();
     }
 }
 ```
 
-**Service Integration:**
+**Service Integration** (`features/chat/adapters/output/PythonChatClient.java`, rút gọn — userId
+là `String`, không phải `UUID`, khớp với principal ở §6.1):
 ```java
-@Service
-public class RagProxyService {
-    
-    private final WebClient ragWebClient;
-    
-    public RagProxyService(WebClient ragWebClient) {
-        this.ragWebClient = ragWebClient;
+@Component
+@RequiredArgsConstructor
+public class PythonChatClient implements ChatPort {
+
+    private final WebClient chatWebClient;
+
+    @Override
+    public Mono<ChatResponse> chat(ChatRequest request) {
+        return chatWebClient.post()
+                .uri("/chat")
+                .bodyValue(request)
+                .retrieve()
+                .bodyToMono(ChatResponse.class)
+                .timeout(Duration.ofSeconds(120));
     }
-    
-    public Mono<RagResponse> chat(String query, UUID userId, UUID sessionId) {
-        return ragWebClient.post()
-            .uri("/chat")
-            .bodyValue(Map.of(
-                "query", query,
-                "user_id", userId != null ? userId.toString() : null,
-                "session_id", sessionId.toString()
-            ))
-            .retrieve()
-            .bodyToMono(RagResponse.class)
-            .timeout(Duration.ofSeconds(120))
-            .onErrorMap(WebClientResponseException.class, ex -> {
-                if (ex.getStatusCode() == HttpStatus.SERVICE_UNAVAILABLE) {
-                    return new ServiceUnavailableException("AI service unavailable");
-                }
-                return ex;
-            });
-    }
-    
-    public Flux<String> chatStream(String query, UUID userId, UUID sessionId) {
-        return ragWebClient.post()
-            .uri("/chat/stream")
-            .bodyValue(Map.of(
-                "query", query,
-                "user_id", userId != null ? userId.toString() : null,
-                "session_id", sessionId.toString()
-            ))
-            .retrieve()
-            .bodyToFlux(String.class)
-            .timeout(Duration.ofSeconds(120));
-    }
+
+    // + createSession/getHealth — không có onErrorMap map lỗi HTTP cụ thể nào ở tầng này; lỗi
+    // upstream được xử lý ở GlobalExceptionHandler (§7.4).
 }
 ```
 
-> `RagProxyService` above is specific to `/chat` + `/chat/stream` (typed request/response,
+> `PythonChatClient` above is specific to `/chat` + `/chat/stream` (typed request/response,
 > §4.4). Every OTHER ai-rag-core capability (`/recommend /forecast /career /summarize /report
 > /agent /interview`) goes through the generic, untyped `PythonAiProxyClient`/`AiProxyPort`
 > described in §4.16 — one `WebClient.post()` forwarding a raw `Map<String,Object>`, no
-> per-endpoint DTOs. Don't use `RagProxyService` as a template for adding a new AI endpoint;
+> per-endpoint DTOs. Don't use `PythonChatClient` as a template for adding a new AI endpoint;
 > extend `aiproxy` instead unless the new endpoint genuinely needs typed request/response
 > handling like chat does.
 
 ### 8.2 ml-clustering Integration
 
+`features/clustering/adapters/output/PythonClusteringClient.java` (implements
+`ClusteringServicePort`), rút gọn:
+
 ```java
-@Service
-public class ClusteringProxyService {
-    
+@Component
+@RequiredArgsConstructor
+public class PythonClusteringClient implements ClusteringServicePort {
+
     private final WebClient clusteringWebClient;
-    
-    public ClusteringProxyService(WebClient clusteringWebClient) {
-        this.clusteringWebClient = clusteringWebClient;
-    }
-    
-    public Mono<ClustersResponse> getClusters(boolean isCoherent) {
+
+    @Override
+    public Flux<Map<String, Object>> getClusters(boolean isCoherent) {
         return clusteringWebClient.get()
-            .uri(uriBuilder -> uriBuilder
-                .path("/clustering/clusters")
-                .queryParam("is_coherent", isCoherent)
-                .build())
-            .retrieve()
-            .bodyToMono(ClustersResponse.class)
-            .timeout(Duration.ofSeconds(60));
-    }
-    
-    public Mono<ClusterPredictionResponse> predictBatch(List<String> techNames) {
-        return clusteringWebClient.post()
-            .uri("/clustering/predict/batch")
-            .bodyValue(Map.of("tech_names", techNames))
-            .retrieve()
-            .bodyToMono(ClusterPredictionResponse.class)
-            .timeout(Duration.ofSeconds(60));
-    }
-}
-```
-
-### 8.3 Resilience with Circuit Breaker
-
-```java
-@Configuration
-public class ResilienceConfig {
-    
-    @Bean
-    public CircuitBreakerRegistry circuitBreakerRegistry() {
-        CircuitBreakerConfig config = CircuitBreakerConfig.custom()
-            .failureRateThreshold(50)
-            .waitDurationInOpenState(Duration.ofSeconds(30))
-            .permittedNumberOfCallsInHalfOpenState(5)
-            .slidingWindowType(SlidingWindowType.COUNT_BASED)
-            .slidingWindowSize(10)
-            .build();
-        
-        return CircuitBreakerRegistry.of(config);
-    }
-}
-
-@Service
-public class RagProxyService {
-    
-    private final WebClient ragWebClient;
-    private final CircuitBreaker circuitBreaker;
-    
-    public RagProxyService(WebClient ragWebClient, CircuitBreakerRegistry registry) {
-        this.ragWebClient = ragWebClient;
-        this.circuitBreaker = registry.circuitBreaker("ai-rag-core");
-    }
-    
-    public Mono<RagResponse> chat(String query, UUID userId, UUID sessionId) {
-        return Mono.fromCallable(() -> circuitBreaker.executeSupplier(() -> 
-            ragWebClient.post()
-                .uri("/chat")
-                .bodyValue(Map.of(
-                    "query", query,
-                    "user_id", userId != null ? userId.toString() : null,
-                    "session_id", sessionId.toString()
-                ))
+                .uri(uriBuilder -> uriBuilder.path("/clusters").queryParam("is_coherent", isCoherent).build())
                 .retrieve()
-                .bodyToMono(RagResponse.class)
-                .block(Duration.ofSeconds(120))
-        ))
-        .subscribeOn(Schedulers.boundedElastic());
+                .bodyToFlux(new ParameterizedTypeReference<Map<String, Object>>() {})
+                .timeout(Duration.ofSeconds(60));
+    }
+
+    @Override
+    public Mono<Map<String, Object>> predictBatch(List<String> techNames) {
+        return clusteringWebClient.post()
+                .uri("/predict/batch")
+                .bodyValue(Map.of("tech_names", techNames))
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
+                .timeout(Duration.ofSeconds(60));
     }
 }
 ```
+
+### 8.3 Resilience
+
+**Không có Resilience4j / circuit breaker nào trong codebase** (không có dependency trong
+`pom.xml`, không có class `CircuitBreaker`/`CircuitBreakerRegistry` ở đâu cả) — một tài liệu
+trước đây mô tả sai điều này. Cơ chế chịu lỗi thật, đơn giản hơn nhiều:
+- **Timeout cố định** trên mỗi `WebClient` call (`Duration.ofSeconds(60)`/`120)` tuỳ endpoint) —
+  không retry, không circuit-open state.
+- **`AiProxyRequestHandler`** (`features/aiproxy`) gộp MỌI lỗi từ `ai-rag-core` thành
+  `503 SERVICE_UNAVAILABLE` chung, không phân biệt loại lỗi upstream (xem §4.16).
+- **Rate limiting** (khác circuit breaker — chặn *trước* khi gọi, không phải phản ứng *sau* khi
+  upstream lỗi) qua Redis INCR+EXPIRE: `AuthRateLimiterService`, `ChatRateLimiterService`,
+  `AiProxyRateLimiterService` (`shared/redis/`).
 
 ---
 
@@ -1204,173 +1121,144 @@ public class RagProxyService {
 
 ### 9.1 Unit Testing
 
+Chuẩn thật trong repo: JUnit 5 + Mockito + `StepVerifier` (Reactor), test trực tiếp tầng
+`application` (use case). Khởi tạo class thật bằng `new XxxUseCase(mock1, mock2, ...)` qua
+constructor — KHÔNG dùng `@InjectMocks` (nhiều use case có nhiều constructor param cùng kiểu,
+`@InjectMocks` dễ wire nhầm). `User.role`/`User.status` là `String` phẳng (không có enum
+`Role`/`Status`) — build fixture bằng `.role("user").status("active")`. Rút gọn từ
+`LoginUseCaseTest` (`features/auth/application/`):
+
 ```java
 @ExtendWith(MockitoExtension.class)
-class LoginServiceTest {
-    
-    @Mock
-    private UserRepository userRepository;
-    
-    @Mock
-    private PasswordEncoder passwordEncoder;
-    
-    @Mock
-    private JwtTokenProvider jwtTokenProvider;
-    
-    @InjectMocks
-    private LoginService loginService;
-    
-    @Test
-    void login_success() {
-        // Given
-        LoginRequest request = new LoginRequest("test@example.com", "password123");
-        User user = User.builder()
-            .id(UUID.randomUUID())
-            .email("test@example.com")
-            .passwordHash("$2a$10$encoded")
-            .role(Role.USER)
-            .build();
-        
-        when(userRepository.findByEmail(request.getEmail()))
-            .thenReturn(Mono.just(user));
-        when(passwordEncoder.matches(request.getPassword(), user.getPasswordHash()))
-            .thenReturn(true);
-        when(jwtTokenProvider.generateAccessToken(user))
-            .thenReturn("access-token");
-        when(jwtTokenProvider.generateRefreshToken(user))
-            .thenReturn("refresh-token");
-        
-        // When
-        Mono<LoginResponse> result = loginService.login(request);
-        
-        // Then
-        StepVerifier.create(result)
-            .expectNextMatches(response -> 
-                response.accessToken().equals("access-token") &&
-                response.refreshToken().equals("refresh-token"))
-            .verifyComplete();
-        
-        verify(userRepository).findByEmail(request.getEmail());
-        verify(passwordEncoder).matches(request.getPassword(), user.getPasswordHash());
-        verify(jwtTokenProvider).generateAccessToken(user);
-        verify(jwtTokenProvider).generateRefreshToken(user);
+class LoginUseCaseTest {
+
+    @Mock private UserRepository userRepository;
+    @Mock private PasswordEncoder passwordEncoder;
+    @Mock private TokenIssuer tokenIssuer;
+
+    private LoginUseCase useCase;
+
+    @BeforeEach
+    void setUp() {
+        useCase = new LoginUseCase(userRepository, passwordEncoder, tokenIssuer);
     }
-    
+
+    private User activeUser() {
+        return User.builder()
+                .id(UUID.randomUUID())
+                .email("dev@example.com")
+                .passwordHash("hashed")
+                .role("user")
+                .status("active")
+                .build();
+    }
+
     @Test
-    void login_userNotFound() {
-        // Given
-        LoginRequest request = new LoginRequest("test@example.com", "password123");
-        
-        when(userRepository.findByEmail(request.getEmail()))
-            .thenReturn(Mono.empty());
-        
-        // When
-        Mono<LoginResponse> result = loginService.login(request);
-        
-        // Then
-        StepVerifier.create(result)
-            .expectError(AuthenticationException.class)
-            .verify();
+    void execute_returnsTokens_whenCredentialsValid() {
+        User user = activeUser();
+        LoginResponse response = LoginResponse.builder()
+                .accessToken("access").refreshToken("refresh")
+                .userId(user.getId().toString()).email(user.getEmail()).role(user.getRole())
+                .expiresIn(3600L)
+                .build();
+        when(userRepository.findByEmail("dev@example.com")).thenReturn(Mono.just(user));
+        when(passwordEncoder.matches("correct", "hashed")).thenReturn(true);
+        when(tokenIssuer.issueFor(user)).thenReturn(Mono.just(response));
+
+        StepVerifier.create(useCase.execute(
+                        LoginRequest.builder().email("dev@example.com").password("correct").build()))
+                .expectNext(response)
+                .verifyComplete();
+    }
+
+    @Test
+    void execute_fails_whenEmailNotFound() {
+        when(userRepository.findByEmail(anyString())).thenReturn(Mono.empty());
+
+        StepVerifier.create(useCase.execute(
+                        LoginRequest.builder().email("ghost@example.com").password("x").build()))
+                .expectError(InvalidCredentialsException.class)
+                .verify();
     }
 }
 ```
 
-### 9.2 Integration Testing with Testcontainers
+### 9.2 Integration Testing (Testcontainers — Postgres/Neo4j/Redis thật, tự quản lý)
+
+Mỗi integration test dùng **Postgres/Neo4j/Redis thật chạy trong container Testcontainers** —
+không cần cài/khởi động gì thủ công, không cần Docker Compose hay set env var trước, chỉ cần
+Docker chạy được trên máy:
+
+```bash
+mvn test
+```
+
+`IntegrationTestSupport` khai báo 3 container (`PostgreSQLContainer`, `Neo4jContainer`,
+`GenericContainer` cho Redis) là `static final` + `start()` trong static initializer — **singleton
+container pattern**, không dùng `@Testcontainers`/`@Container` (annotation đó dừng container sau
+mỗi test class, trong khi pattern này cần dùng chung 1 bộ container cho mọi `*IntegrationTest`
+subclass, giống cách Spring cache chung 1 `@SpringBootTest` context). Port/URL thật được wire vào
+Spring qua `@DynamicPropertySource` (`spring.r2dbc.url`, `spring.flyway.url`, `app.neo4j.uri`,
+`spring.data.redis.host/port`). Testcontainers' Ryuk reaper tự dọn container khi JVM thoát, không
+cần gọi `stop()`.
+
+Mỗi test class (`AuthIntegrationTest`, `ChatIntegrationTest`, `CompanyIntegrationTest`,
+`FeedIntegrationTest`, `JobMatchIntegrationTest`, ... — package
+`com.techpulse.techradar.integration`) extends `IntegrationTestSupport`
+(`@SpringBootTest(webEnvironment = RANDOM_PORT)`). `ClusteringServicePort`/`ChatPort` (proxy sang
+Python) được mock qua `@MockitoBean`; chỉ Postgres/Neo4j/Redis là thật. Request đi qua
+`WebTestClient` bind thẳng vào server đang chạy (`WebTestClient.bindToServer()`, không phải
+`bindToController`), nên chạy qua toàn bộ filter chain thật (security, rate limit...).
+`IntegrationTestSupport` có sẵn helper `registerAndLogin`/`adminToken`/`seedGraph`/`seedCompany`
+dùng chung cho mọi subclass:
 
 ```java
-@SpringBootTest
-@Testcontainers
-class UserRepositoryIntegrationTest {
-    
-    @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
-            .withDatabaseName("testdb")
-            .withUsername("test")
-            .withPassword("test");
-    
-    @Container
-    static Neo4jContainer<?> neo4j = new Neo4jContainer<>("neo4j:5")
-            .withAdminPassword("test");
-    
-    @DynamicPropertySource
-    static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.r2dbc.url", () -> 
-            String.format("r2dbc:postgresql://%s:%s/%s", 
-                postgres.getHost(), postgres.getMappedPort(5432), postgres.getDatabaseName()));
-        registry.add("spring.r2dbc.username", postgres::getUsername);
-        registry.add("spring.r2dbc.password", postgres::getPassword);
-        registry.add("neo4j.uri", neo4j::getBoltUrl);
-        registry.add("neo4j.username", () -> "neo4j");
-        registry.add("neo4j.password", () -> "test");
-    }
-    
-    @Autowired
-    private UserRepository userRepository;
-    
+class AuthIntegrationTest extends IntegrationTestSupport {
+
     @Test
-    void saveAndFindUser() {
-        User user = User.builder()
-            .id(UUID.randomUUID())
-            .email("test@example.com")
-            .passwordHash("$2a$10$encoded")
-            .role(Role.USER)
-            .status(Status.ACTIVE)
-            .build();
-        
-        StepVerifier.create(userRepository.save(user))
-            .expectNextCount(1)
-            .verifyComplete();
-        
-        StepVerifier.create(userRepository.findById(user.getId()))
-            .expectNextMatches(saved -> saved.getEmail().equals("test@example.com"))
-            .verifyComplete();
+    void register_thenLogin_returnsAccessToken() {
+        String token = registerAndLogin("dev-" + UUID.randomUUID() + "@example.com");
+        assertThat(token).isNotBlank();
     }
 }
 ```
 
 ### 9.3 WebFlux Controller Testing
 
+Chuẩn thật trong repo: mock các use case, khởi tạo controller trực tiếp qua constructor (`new
+XxxController(mock1, ...)`) — không có `@InjectMocks`, không dùng `WebTestClient` — rồi gọi thẳng
+method của controller và verify `Mono<ResponseEntity<ApiResponse<T>>>` trả về bằng `StepVerifier`.
+Rút gọn từ `RadarControllerTest` (`features/radar/adapters/input/`):
+
 ```java
 @ExtendWith(MockitoExtension.class)
-class AuthControllerTest {
-    
-    @Mock
-    private LoginUseCase loginUseCase;
-    
-    @Mock
-    private RegisterUseCase registerUseCase;
-    
-    @InjectMocks
-    private AuthController authController;
-    
-    private WebTestClient webTestClient;
-    
+class RadarControllerTest {
+
+    @Mock private GetTopTechnologiesUseCase getTopTechnologiesUseCase;
+    @Mock private SearchTrendUseCase searchTrendUseCase;
+    @Mock private RadarExporter radarExporter;
+    @Mock private RadarBroadcaster radarBroadcaster;
+
+    private RadarController controller;
+
     @BeforeEach
     void setUp() {
-        webTestClient = WebTestClient.bindToController(authController)
-            .configureClient()
-            .build();
+        controller = new RadarController(
+                getTopTechnologiesUseCase, searchTrendUseCase, radarExporter, radarBroadcaster);
     }
-    
+
     @Test
-    void login_success() {
-        LoginRequest request = new LoginRequest("test@example.com", "password123");
-        LoginResponse response = new LoginResponse(
-            "access-token", "refresh-token", UUID.randomUUID(), 
-            "test@example.com", "USER", 900000
-        );
-        
-        when(loginUseCase.login(request)).thenReturn(Mono.just(response));
-        
-        webTestClient.post()
-            .uri("/api/v1/auth/login")
-            .bodyValue(request)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(LoginResponse.class)
-            .isEqualTo(response);
-        
-        verify(loginUseCase).login(request);
+    void getTop4_mapsSnapshotsToTop4Items() {
+        when(getTopTechnologiesUseCase.execute(4)).thenReturn(Flux.just(
+                new TechSnapshot("Kotlin", 120, 45.0, 32.0, 40)));
+
+        StepVerifier.create(controller.getTop4())
+                .assertNext(response -> {
+                    ApiResponse<List<RadarDtos.Top4Item>> body = response.getBody();
+                    assertThat(body.getData()).hasSize(1);
+                    assertThat(body.getData().get(0).getIndustry()).isEqualTo("Kotlin");
+                })
+                .verifyComplete();
     }
 }
 ```
@@ -1383,17 +1271,21 @@ class AuthControllerTest {
 
 ```dockerfile
 # apps/backend/Dockerfile
-FROM maven:3.9-eclipse-temurin-21 AS build
+FROM maven:3.9.6-eclipse-temurin-21 AS builder
 WORKDIR /app
 COPY pom.xml .
+RUN mvn dependency:go-offline    # cache layer riêng — chỉ re-run khi pom.xml đổi
+
 COPY src ./src
 RUN mvn clean package -DskipTests
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
-COPY --from=build /app/target/*.jar app.jar
+COPY --from=builder /app/target/*.jar app.jar
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENV APP_ENV=prod
+ENV JAVA_OPTS="-Xmx512m -Xms256m"
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
 ```
 
 ### 10.2 Environment Variables
@@ -1544,4 +1436,3 @@ public class TechRadarApplication {
 - [Spring Data R2DBC](https://docs.spring.io/spring-data/r2dbc/reference/)
 - [Neo4j Java Driver](https://neo4j.com/docs/java-manual/current/)
 - [Reactive Programming with Project Reactor](https://projectreactor.io/docs)
-- [Testcontainers Documentation](https://www.testcontainers.org/)

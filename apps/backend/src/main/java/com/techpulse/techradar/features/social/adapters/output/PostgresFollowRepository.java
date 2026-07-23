@@ -1,6 +1,7 @@
 package com.techpulse.techradar.features.social.adapters.output;
 
 import com.techpulse.techradar.features.social.ports.FollowRepository;
+import com.techpulse.techradar.features.social.ports.UserDirectoryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
@@ -11,7 +12,7 @@ import java.util.UUID;
 
 @Repository
 @RequiredArgsConstructor
-public class PostgresFollowRepository implements FollowRepository {
+public class PostgresFollowRepository implements FollowRepository, UserDirectoryRepository {
 
     private final DatabaseClient dbClient;
 

@@ -1,7 +1,7 @@
 package com.techpulse.techradar.features.social.application;
 
 import com.techpulse.techradar.features.social.domain.UserSummary;
-import com.techpulse.techradar.features.social.ports.FollowRepository;
+import com.techpulse.techradar.features.social.ports.UserDirectoryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,7 +24,7 @@ import static org.mockito.Mockito.when;
 class SearchUsersUseCaseTest {
 
     @Mock
-    private FollowRepository followRepository;
+    private UserDirectoryRepository userDirectoryRepository;
 
     private SearchUsersUseCase useCase;
 
@@ -32,21 +32,21 @@ class SearchUsersUseCaseTest {
 
     @BeforeEach
     void setUp() {
-        useCase = new SearchUsersUseCase(followRepository);
+        useCase = new SearchUsersUseCase(userDirectoryRepository);
     }
 
     @Test
     void execute_returnsEmptyWithoutQueryingForANullOrBlankQuery() {
         StepVerifier.create(useCase.execute(viewerId.toString(), null, 8)).verifyComplete();
         StepVerifier.create(useCase.execute(viewerId.toString(), "   ", 8)).verifyComplete();
-        verifyNoInteractions(followRepository);
+        verifyNoInteractions(userDirectoryRepository);
     }
 
     @Test
     void execute_trimsTheQueryAndMapsRowsToUserSummary() {
         UUID userId = UUID.randomUUID();
-        when(followRepository.searchByName(eq(viewerId), eq("an"), anyInt()))
-                .thenReturn(Flux.just(new FollowRepository.UserSummaryRow(userId, "Nguyễn Văn An", "url")));
+        when(userDirectoryRepository.searchByName(eq(viewerId), eq("an"), anyInt()))
+                .thenReturn(Flux.just(new UserDirectoryRepository.UserSummaryRow(userId, "Nguyễn Văn An", "url")));
 
         StepVerifier.create(useCase.execute(viewerId.toString(), "  an  ", 8))
                 .expectNext(new UserSummary(userId.toString(), "Nguyễn Văn An", "url"))
@@ -55,16 +55,16 @@ class SearchUsersUseCaseTest {
 
     @Test
     void execute_defaultsLimitWhenNonPositive() {
-        when(followRepository.searchByName(any(), any(), eq(8))).thenReturn(Flux.empty());
+        when(userDirectoryRepository.searchByName(any(), any(), eq(8))).thenReturn(Flux.empty());
         useCase.execute(viewerId.toString(), "an", 0).blockLast();
-        verify(followRepository).searchByName(viewerId, "an", 8);
+        verify(userDirectoryRepository).searchByName(viewerId, "an", 8);
     }
 
     @Test
     void execute_clampsLimitToTheMax() {
-        when(followRepository.searchByName(any(), any(), eq(25))).thenReturn(Flux.empty());
+        when(userDirectoryRepository.searchByName(any(), any(), eq(25))).thenReturn(Flux.empty());
         useCase.execute(viewerId.toString(), "an", 999).blockLast();
-        verify(followRepository).searchByName(viewerId, "an", 25);
-        verify(followRepository, never()).searchByName(viewerId, "an", 999);
+        verify(userDirectoryRepository).searchByName(viewerId, "an", 25);
+        verify(userDirectoryRepository, never()).searchByName(viewerId, "an", 999);
     }
 }

@@ -14,17 +14,19 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import warnings
+
 import mlflow
 from datasets import Dataset
-import warnings
+
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-from ragas import evaluate
-from ragas.metrics._faithfulness import faithfulness as faithfulness_metric
-from ragas.metrics._answer_relevance import answer_relevancy as answer_relevancy_metric
-from ragas.llms import LangchainLLMWrapper
-from ragas.embeddings import LangchainEmbeddingsWrapper
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from ragas import evaluate
+from ragas.embeddings import LangchainEmbeddingsWrapper
+from ragas.llms import LangchainLLMWrapper
+from ragas.metrics._answer_relevance import answer_relevancy as answer_relevancy_metric
+from ragas.metrics._faithfulness import faithfulness as faithfulness_metric
 
 from app.config import get_settings
 from app.core.pipeline import answer as rag_answer
@@ -45,6 +47,7 @@ TEST_QUERIES = [
 
 # ── Chạy pipeline, thu thập data ─────────────────────────────────────────────
 
+
 async def run_pipeline_for_eval(queries: list[str]) -> list[dict]:
     """Chạy từng query qua RAG pipeline, lấy answer + contexts."""
     rows = []
@@ -58,7 +61,7 @@ async def run_pipeline_for_eval(queries: list[str]) -> list[dict]:
             # 1. Article contexts
             contexts = []
             for src in result.get("sources", []):
-                title   = src.get("title") or ""
+                title = src.get("title") or ""
                 content = src.get("content") or ""
                 if title or content:
                     contexts.append(f"{title}\n{content}".strip())
@@ -71,24 +74,29 @@ async def run_pipeline_for_eval(queries: list[str]) -> list[dict]:
             if not contexts:
                 contexts = ["(không có context)"]
 
-            rows.append({
-                "question":   query,
-                "answer":     result.get("answer", ""),
-                "contexts":   contexts,
-                "latency_ms": int(elapsed * 1000),
-            })
+            rows.append(
+                {
+                    "question": query,
+                    "answer": result.get("answer", ""),
+                    "contexts": contexts,
+                    "latency_ms": int(elapsed * 1000),
+                }
+            )
         except Exception as e:
             print(f"     ⚠ Lỗi: {e}")
-            rows.append({
-                "question":   query,
-                "answer":     "",
-                "contexts":   ["(lỗi pipeline)"],
-                "latency_ms": 0,
-            })
+            rows.append(
+                {
+                    "question": query,
+                    "answer": "",
+                    "contexts": ["(lỗi pipeline)"],
+                    "latency_ms": 0,
+                }
+            )
     return rows
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
+
 
 async def main() -> None:
     settings = get_settings()
@@ -106,7 +114,11 @@ async def main() -> None:
     rows = await run_pipeline_for_eval(TEST_QUERIES)
 
     # Lọc bỏ câu trả lời rỗng
-    valid_rows = [r for r in rows if r["answer"] and r["answer"] != "Tôi không tìm thấy thông tin liên quan trong dữ liệu hiện có."]
+    valid_rows = [
+        r
+        for r in rows
+        if r["answer"] and r["answer"] != "Tôi không tìm thấy thông tin liên quan trong dữ liệu hiện có."
+    ]
     print(f"\n{len(valid_rows)}/{len(rows)} query có câu trả lời hợp lệ để đánh giá.")
 
     if not valid_rows:
@@ -114,25 +126,25 @@ async def main() -> None:
         return
 
     # 2. Chuẩn bị RAGAS dataset
-    dataset = Dataset.from_list([
-        {
-            "question": r["question"],
-            "answer":   r["answer"],
-            "contexts": r["contexts"],
-        }
-        for r in valid_rows
-    ])
+    dataset = Dataset.from_list(
+        [
+            {
+                "question": r["question"],
+                "answer": r["answer"],
+                "contexts": r["contexts"],
+            }
+            for r in valid_rows
+        ]
+    )
 
     # 3. Cấu hình RAGAS dùng GPT-4o-mini
     print("\nCấu hình RAGAS với GPT-4o-mini...")
-    judge_llm  = LangchainLLMWrapper(
-        ChatOpenAI(model="gpt-4o-mini", api_key=settings.openai_api_key, temperature=0)
-    )
-    judge_emb  = LangchainEmbeddingsWrapper(
+    judge_llm = LangchainLLMWrapper(ChatOpenAI(model="gpt-4o-mini", api_key=settings.openai_api_key, temperature=0))
+    judge_emb = LangchainEmbeddingsWrapper(
         OpenAIEmbeddings(model="text-embedding-3-small", api_key=settings.openai_api_key)
     )
-    faithfulness_metric.llm        = judge_llm
-    answer_relevancy_metric.llm        = judge_llm
+    faithfulness_metric.llm = judge_llm
+    answer_relevancy_metric.llm = judge_llm
     answer_relevancy_metric.embeddings = judge_emb
 
     # 4. Chạy RAGAS
@@ -144,13 +156,13 @@ async def main() -> None:
     scores = ragas_result.to_pandas()
     print(f"  Columns: {list(scores.columns)}")  # debug — xem tên column thực tế
 
-    faith_col  = next((c for c in scores.columns if "faith" in c.lower()), None)
-    relev_col  = next((c for c in scores.columns if "relev" in c.lower()), None)
+    faith_col = next((c for c in scores.columns if "faith" in c.lower()), None)
+    relev_col = next((c for c in scores.columns if "relev" in c.lower()), None)
 
-    avg_faithfulness     = float(scores[faith_col].mean()) if faith_col else float("nan")
+    avg_faithfulness = float(scores[faith_col].mean()) if faith_col else float("nan")
     avg_answer_relevancy = float(scores[relev_col].mean()) if relev_col else float("nan")
-    avg_latency_ms        = sum(r["latency_ms"] for r in rows) / len(rows)
-    answered_rate         = len(valid_rows) / len(rows)
+    avg_latency_ms = sum(r["latency_ms"] for r in rows) / len(rows)
+    answered_rate = len(valid_rows) / len(rows)
 
     print(f"\n{'=' * 60}")
     print("KẾT QUẢ ĐÁNH GIÁ")
@@ -175,26 +187,26 @@ async def main() -> None:
 
     with mlflow.start_run(run_name="ragas_eval"):
         # Params
-        mlflow.log_param("embedding_model",  settings.embedding_model)
-        mlflow.log_param("reranker_model",   settings.reranker_model)
-        mlflow.log_param("llm_model",        settings.llm_model)
-        mlflow.log_param("judge_model",      "gpt-4o-mini")
-        mlflow.log_param("num_queries",      len(TEST_QUERIES))
-        mlflow.log_param("num_evaluated",    len(valid_rows))
+        mlflow.log_param("embedding_model", settings.embedding_model)
+        mlflow.log_param("reranker_model", settings.reranker_model)
+        mlflow.log_param("llm_model", settings.llm_model)
+        mlflow.log_param("judge_model", "gpt-4o-mini")
+        mlflow.log_param("num_queries", len(TEST_QUERIES))
+        mlflow.log_param("num_evaluated", len(valid_rows))
 
         # Metrics tổng hợp
-        mlflow.log_metric("faithfulness",     avg_faithfulness)
+        mlflow.log_metric("faithfulness", avg_faithfulness)
         mlflow.log_metric("answer_relevancy", avg_answer_relevancy)
-        mlflow.log_metric("answered_rate",    answered_rate)
-        mlflow.log_metric("avg_latency_ms",   avg_latency_ms)
+        mlflow.log_metric("answered_rate", answered_rate)
+        mlflow.log_metric("avg_latency_ms", avg_latency_ms)
 
         # Metrics từng câu
         for i, (row, (_, score_row)) in enumerate(zip(valid_rows, scores.iterrows())):
             faith = score_row.get(faith_col, float("nan")) if faith_col else float("nan")
             relev = score_row.get(relev_col, float("nan")) if relev_col else float("nan")
-            mlflow.log_metric(f"q{i+1}_faithfulness",     faith)
-            mlflow.log_metric(f"q{i+1}_answer_relevancy", relev)
-            mlflow.log_metric(f"q{i+1}_latency_ms",       row["latency_ms"])
+            mlflow.log_metric(f"q{i + 1}_faithfulness", faith)
+            mlflow.log_metric(f"q{i + 1}_answer_relevancy", relev)
+            mlflow.log_metric(f"q{i + 1}_latency_ms", row["latency_ms"])
 
         # Lưu full scores CSV
         scores_path = "/tmp/ragas_scores.csv"

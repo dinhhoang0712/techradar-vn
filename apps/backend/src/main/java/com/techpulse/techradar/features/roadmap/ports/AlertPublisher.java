@@ -5,7 +5,7 @@ import com.techpulse.techradar.features.notification.event.RoadmapAlertEvent;
 /**
  * Output port for publishing roadmap alert events, so {@code RoadmapAlertService} (the weekly
  * scan that decides *whether* a user should be alerted) doesn't need to know *how* that alert is
- * delivered (currently Kafka, via {@code features.kafka.producer.KafkaProducerService}).
+ * delivered (currently Kafka, via {@code features.kafka.adapters.output.KafkaProducerService}).
  */
 public interface AlertPublisher {
 

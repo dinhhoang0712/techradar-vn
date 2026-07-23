@@ -53,10 +53,22 @@ WORKDIR /app
 COPY --from=builder /root/.local /root/.local
 COPY --from=builder /root/.cache /root/.cache
 ENV PATH=/root/.local/bin:$PATH
+ENV HOME=/root
 
 # Copy source
 COPY . .
 
+# The pip --user install + HF model cache above landed under /root (this stage's builder ran as
+# root), which defaults to 0700 — inaccessible to any other user. huggingface_hub also writes a
+# cache-refresh marker (refs/main) back into the model cache on load, so appuser needs actual
+# ownership there, not just read access — chmod alone left it able to read the cached model but
+# not update that marker, which surfaced as (harmless but noisy) "Permission denied" warnings.
+RUN useradd --create-home --uid 1000 appuser \
+    && chmod 755 /root \
+    && chown -R appuser:appuser /root/.local /root/.cache /app
+
 EXPOSE 8000
+
+USER appuser
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

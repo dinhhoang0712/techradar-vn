@@ -1,8 +1,23 @@
 """
 ITviec crawler — itviec.com
 Crawl tin tuyển dụng IT từ ITviec, đẩy vào Kafka topic raw_jobs.
+
+ITviec redesign sang Rails Turbo/Stimulus (phát hiện 2026-07): Cloudflare trả 403
+cho undetected_chromedriver dù đã spoof User-Agent — headless Chrome tự nó bị flag
+bất kể UA header. Nhưng 1 request HTTP thường (requests + UA trình duyệt) lại pass
+200 ngay lập tức: listing/detail render sẵn ở server, không cần JS. Vì vậy bỏ hẳn
+Selenium, dùng requests + BeautifulSoup — vừa né được block, vừa nhẹ/nhanh hơn.
+Selector DOM cũ (div.job-content/a.job-title/div.employer-name/div.tag-list...)
+không còn khớp cấu trúc mới (job-card + data attribute), nên phải viết lại theo
+cấu trúc hiện tại: job slug lấy từ data-search--job-selection-job-slug-value trên
+trang listing; title/company/location/salary/skills lấy từ JSON nhúng sẵn
+(data-jobs--save-data-layer-value + script JobPosting ld+json) trên trang chi
+tiết — đáng tin hơn scrape DOM vì đây chính là data Rails render ra; riêng
+description/requirement/benefit vẫn phải gọi thêm endpoint {slug}/content vì
+trang chi tiết chính không chứa 3 phần này (site load qua Turbo Frame).
 """
-import gc
+
+import html
 import json
 import logging
 import os
@@ -10,11 +25,9 @@ import re
 import time
 from datetime import datetime
 
-import undetected_chromedriver as uc
-from selenium.webdriver.common.by import By
-from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
-
-from chrome_utils import installed_chrome_major_version
+import requests
+from bs4 import BeautifulSoup
+from fake_useragent import UserAgent
 from kafka_producer import CrawlerKafkaProducer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -24,15 +37,22 @@ SOURCE_PLATFORM = "ITviec"
 MAX_JOBS = 150
 BASE_URL = "https://itviec.com/it-jobs"
 NUM_PAGES = 10
+REQUEST_DELAY_SECONDS = 1.5
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data", "raw", "itviec")
 URL_CACHE = os.path.join(DATA_DIR, "processed_urls.txt")
+
+_ua = UserAgent()
+
+
+def _headers() -> dict:
+    return {"User-Agent": _ua.random}
 
 
 def _load_urls(path: str) -> set:
     if os.path.exists(path):
         with open(path, encoding="utf-8") as f:
-            return {l.strip() for l in f if l.strip()}
+            return {line.strip() for line in f if line.strip()}
     return set()
 
 
@@ -41,72 +61,80 @@ def _save_url(path: str, url: str):
         f.write(url + "\n")
 
 
-def _safe(root, css: str) -> str:
+def _fetch(url: str) -> str | None:
     try:
-        return root.find_element(By.CSS_SELECTOR, css).text.strip()
-    except NoSuchElementException:
+        resp = requests.get(url, headers=_headers(), timeout=15)
+        resp.raise_for_status()
+        return resp.text
+    except requests.RequestException as e:
+        logger.warning("Failed to fetch %s: %s", url, e)
+        return None
+
+
+def _parse_job_slugs(listing_html: str) -> list[str]:
+    return re.findall(r"data-search--job-selection-job-slug-value=['\"]([^'\"]+)['\"]", listing_html)
+
+
+def _extract_data_layer(detail_html: str) -> dict:
+    """JSON nhúng sẵn trong attribute data-jobs--save-data-layer-value (title/company/
+    location/skills) — đáng tin hơn scrape DOM vì đây chính là data Rails render ra."""
+    m = re.search(r"data-jobs--save-data-layer-value=['\"](.*?)['\"]\s", detail_html)
+    if not m:
+        return {}
+    try:
+        return json.loads(html.unescape(m.group(1)))
+    except json.JSONDecodeError:
+        return {}
+
+
+def _extract_job_posting_jsonld(detail_html: str) -> dict:
+    soup = BeautifulSoup(detail_html, "html.parser")
+    for script in soup.find_all("script", type="application/ld+json"):
+        try:
+            data = json.loads(script.string or "")
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if data.get("@type") == "JobPosting":
+            return data
+    return {}
+
+
+def _format_salary(job_posting: dict) -> str:
+    base_salary = job_posting.get("baseSalary") or {}
+    value = base_salary.get("value")
+    if not isinstance(value, dict):
         return ""
+    min_v, max_v, single_v = value.get("minValue"), value.get("maxValue"), value.get("value")
+    currency = base_salary.get("currency", "")
+    if min_v and max_v:
+        return f"{min_v} - {max_v} {currency}".strip()
+    if isinstance(single_v, (int, float)):
+        return f"{single_v} {currency}".strip()
+    return ""  # placeholder kiểu "You'll love it" (lương ẩn) -> coi như không có
 
 
-def _parse_skills(driver) -> list:
-    try:
-        tags = driver.find_elements(By.CSS_SELECTOR, "div.tag-list a, span.skill-tag, a.skill")
-        return [t.text.strip() for t in tags if t.text.strip()]
-    except Exception:
-        return []
+def _format_location(job_posting: dict) -> str:
+    places = job_posting.get("jobLocation") or []
+    regions = []
+    for place in places:
+        region = (place.get("address") or {}).get("addressRegion")
+        if region and region not in regions:
+            regions.append(region)
+    return ", ".join(regions)
 
 
-def _extract_salary(driver) -> str:
-    """ITviec renders salary via a schema.org JobPosting JSON-LD block, not
-    visible DOM elements — job pages don't ship a `.salary`/`.box-salary`
-    node at all, so scraping only ever finds it here. Undisclosed salaries
-    show up as a non-numeric placeholder (e.g. "You'll love it"), which we
-    treat the same as no salary. A page can carry multiple ld+json blocks
-    (JobPosting, BreadcrumbList, WebSite), so we pick the JobPosting one
-    instead of assuming it's first."""
-    try:
-        for script in driver.find_elements(By.CSS_SELECTOR, "script[type='application/ld+json']"):
-            data = json.loads(script.get_attribute("innerHTML"))
-            if data.get("@type") != "JobPosting":
-                continue
-            base_salary = data.get("baseSalary") or {}
-            value = base_salary.get("value") or {}
-            min_v, max_v = value.get("minValue"), value.get("maxValue")
-            if min_v and max_v:
-                return f"{min_v} - {max_v} {base_salary.get('currency', '')}".strip()
-            return ""
-    except Exception:
-        pass
-    return ""
-
-
-def _extract_sections(driver) -> dict:
+def _extract_content_sections(content_html: str) -> dict:
+    soup = BeautifulSoup(content_html, "html.parser")
     result = {"description": "", "requirement": "", "benefit": ""}
-    try:
-        sections = driver.find_elements(By.CSS_SELECTOR, "div.job-description__item, section.jd-section")
-        for sec in sections:
-            header = ""
-            try:
-                header = sec.find_element(By.CSS_SELECTOR, "h3, h4, strong").text.lower()
-            except NoSuchElementException:
-                pass
-            content = sec.text.strip()
-            if any(k in header for k in ["mô tả", "description", "về công việc"]):
-                result["description"] = content
-            elif any(k in header for k in ["yêu cầu", "requirement", "kỹ năng"]):
-                result["requirement"] = content
-            elif any(k in header for k in ["phúc lợi", "benefit", "quyền lợi"]):
-                result["benefit"] = content
-        if not any(result.values()):
-            # fallback: take whole content block
-            try:
-                result["description"] = driver.find_element(
-                    By.CSS_SELECTOR, "div.job-description, div#job-body"
-                ).text.strip()
-            except NoSuchElementException:
-                pass
-    except Exception:
-        pass
+    mapping = {
+        "job-description": "description",
+        "job-experiences": "requirement",
+        "job-why-love-working": "benefit",
+    }
+    for css_class, field in mapping.items():
+        block = soup.find(class_=css_class)
+        if block:
+            result[field] = block.get_text("\n", strip=True)
     return result
 
 
@@ -126,114 +154,92 @@ def main():
     jobs = []
     total = 0
 
-    def _make_options(factory):
-        opts = factory()
-        opts.add_argument("--headless=new")
-        opts.add_argument("--no-sandbox")
-        opts.add_argument("--disable-dev-shm-usage")
-        opts.add_argument("--disable-gpu")
-        opts.add_argument("--disable-background-networking")
-        opts.add_argument("--disable-sync")
-        opts.add_argument("--metrics-recording-only")
-        opts.add_argument("--mute-audio")
-        opts.page_load_strategy = "eager"
-        return opts
-
     try:
-        driver = uc.Chrome(
-            options=_make_options(uc.ChromeOptions),
-            version_main=installed_chrome_major_version(),
-        )
-        logger.info("Undetected ChromeDriver OK")
-    except Exception as e:
-        logger.warning("Undetected ChromeDriver failed: %s, fallback to regular Chrome", e)
-        from selenium import webdriver as _wd
-        from selenium.webdriver.chrome.options import Options as _Opts
-        driver = _wd.Chrome(options=_make_options(_Opts))
-
-    try:
-        job_urls = []
+        job_slugs = []
         for page in range(1, NUM_PAGES + 1):
-            if total + len(job_urls) >= MAX_JOBS:
+            if total + len(job_slugs) >= MAX_JOBS:
                 break
-            list_url = f"{BASE_URL}?page={page}"
-            try:
-                driver.get(list_url)
-                time.sleep(3)
-                cards = driver.find_elements(By.CSS_SELECTOR, "div.job-content a.job-title, h3.title a")
-                for a in cards:
-                    href = a.get_attribute("href") or ""
-                    if href and "itviec.com" in href and href not in processed:
-                        job_urls.append(href)
-                logger.info("Page %d: %d job URLs collected so far", page, len(job_urls))
-            except (TimeoutException, WebDriverException) as e:
-                logger.warning("Failed to load page %d: %s", page, e)
+            listing_html = _fetch(f"{BASE_URL}?page={page}")
+            time.sleep(REQUEST_DELAY_SECONDS)
+            if not listing_html:
                 break
+            slugs = [s for s in _parse_job_slugs(listing_html) if f"{BASE_URL}/{s}" not in processed]
+            job_slugs.extend(slugs)
+            logger.info("Page %d: %d job slugs collected so far", page, len(job_slugs))
 
-        job_urls = list(dict.fromkeys(job_urls))[:MAX_JOBS]
+        job_slugs = list(dict.fromkeys(job_slugs))[:MAX_JOBS]
 
-        for job_url in job_urls:
-            try:
-                driver.get(job_url)
-                time.sleep(2)
+        for slug in job_slugs:
+            job_url = f"{BASE_URL}/{slug}"
+            detail_html = _fetch(job_url)
+            time.sleep(REQUEST_DELAY_SECONDS)
+            if not detail_html:
+                continue
 
-                title = _safe(driver, "h1.job-title, h1[data-automation='job-title'], h1")
-                company = _safe(driver, "div.employer-name a, a.company-name, span.company-name")
-                location = _safe(driver, "div.location svg + span, span.location, div.address")
-                salary = _extract_salary(driver)
-                level = _safe(driver, "div.job-level, span.level, li:contains('Level')")
+            data_layer = _extract_data_layer(detail_html)
+            job_posting = _extract_job_posting_jsonld(detail_html)
 
-                sections = _extract_sections(driver)
-                skills = _parse_skills(driver)
+            title = data_layer.get("job_title") or job_posting.get("title", "")
+            company = data_layer.get("job_by_company", "")
+            if not title or not company:
+                continue
 
-                posted_date = ""
-                try:
-                    date_el = driver.find_element(By.CSS_SELECTOR, "time, span.posted-date")
-                    posted_date = date_el.get_attribute("datetime") or date_el.text.strip()
-                except NoSuchElementException:
-                    pass
+            content_html = _fetch(f"{job_url}/content?locale=en")
+            time.sleep(REQUEST_DELAY_SECONDS)
+            sections = (
+                _extract_content_sections(content_html)
+                if content_html
+                else {"description": "", "requirement": "", "benefit": ""}
+            )
 
-                if not title or not company:
-                    continue
+            skills_raw = data_layer.get("job_required_skill") or job_posting.get("skills", "")
+            skills = [s.strip() for s in skills_raw.split(",") if s.strip()]
 
-                job_data = {
-                    "title": title, "company": company, "location": location,
-                    "salary": salary, "level": level,
-                    "description": sections["description"],
-                    "requirement": sections["requirement"],
-                    "benefit": sections["benefit"],
-                    "skills": skills, "source_url": job_url,
-                    "posted_date": posted_date,
-                }
-                jobs.append(job_data)
-                _save_url(URL_CACHE, job_url)
-                processed.add(job_url)
+            location = _format_location(job_posting) or data_layer.get("job_by_city", "")
+            salary = _format_salary(job_posting)
+            posted_date = job_posting.get("datePosted", "")
 
-                if kafka_enabled:
-                    kafka.send_job(
-                        job_title=title, company_name=company, location=location,
-                        salary=salary, level=level,
-                        description=sections["description"],
-                        requirement=sections["requirement"],
-                        benefit=sections["benefit"],
-                        skills=skills, source_url=job_url,
-                        posted_date=posted_date, source_platform=SOURCE_PLATFORM,
-                    )
+            job_data = {
+                "title": title,
+                "company": company,
+                "location": location,
+                "salary": salary,
+                "level": "",
+                "description": sections["description"],
+                "requirement": sections["requirement"],
+                "benefit": sections["benefit"],
+                "skills": skills,
+                "source_url": job_url,
+                "posted_date": posted_date,
+            }
+            jobs.append(job_data)
+            _save_url(URL_CACHE, job_url)
+            processed.add(job_url)
 
-                total += 1
-                logger.info("[%d] %s @ %s", total, title[:50], company[:30])
+            if kafka_enabled:
+                kafka.send_job(
+                    job_title=title,
+                    company_name=company,
+                    location=location,
+                    salary=salary,
+                    level="",
+                    description=sections["description"],
+                    requirement=sections["requirement"],
+                    benefit=sections["benefit"],
+                    skills=skills,
+                    source_url=job_url,
+                    posted_date=posted_date,
+                    source_platform=SOURCE_PLATFORM,
+                )
 
-            except (TimeoutException, WebDriverException) as e:
-                logger.warning("Failed job %s: %s", job_url, e)
+            total += 1
+            logger.info("[%d] %s @ %s", total, title[:50], company[:30])
 
     finally:
-        driver.quit()
-        gc.collect()
         kafka.close()
 
     with open(output_file, "w", encoding="utf-8") as f:
-        json.dump({"source_platform": SOURCE_PLATFORM, "jobs": jobs}, f,
-                  ensure_ascii=False, indent=2)
+        json.dump({"source_platform": SOURCE_PLATFORM, "jobs": jobs}, f, ensure_ascii=False, indent=2)
 
     logger.info("ITviec done: %d jobs", total)
 

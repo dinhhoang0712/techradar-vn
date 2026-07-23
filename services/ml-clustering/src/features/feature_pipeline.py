@@ -12,19 +12,17 @@ import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
 
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
+from conf.config import FeatureParams
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import (
     MinMaxScaler,
     RobustScaler,
     StandardScaler,
 )
-
-from conf.config import FeatureParams
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +44,7 @@ class FeatureMeta:
         n_techs:                row count.
         n_techs_dropped:        row bị drop (degree quá thấp / no signal).
     """
+
     tech_ids: list[str]
     feature_groups: dict[str, tuple[int, int]]
     scaler_name: str
@@ -112,9 +111,7 @@ def build_feature_matrix(
     if "louvain" in gds_features:
         top_k = params.louvain.top_k_communities
         louvain_ids = _reindex(gds_features["louvain"], tech_ids)["louvain_community"].values
-        top_communities = (
-            pd.Series(louvain_ids).value_counts().head(top_k).index.tolist()
-        )
+        top_communities = pd.Series(louvain_ids).value_counts().head(top_k).index.tolist()
         onehot = np.zeros((len(tech_ids), top_k), dtype=np.float32)
         for k, cid in enumerate(top_communities):
             onehot[:, k] = (louvain_ids == cid).astype(np.float32)
@@ -165,8 +162,7 @@ def build_feature_matrix(
 
     # Scale từng group riêng
     transformers = [
-        (name, _make_scaler(params.scaler), list(range(start, end)))
-        for name, (start, end) in feature_groups.items()
+        (name, _make_scaler(params.scaler), list(range(start, end))) for name, (start, end) in feature_groups.items()
     ]
     ct = ColumnTransformer(transformers, remainder="drop")
     X = ct.fit_transform(X).astype(np.float32)
@@ -190,16 +186,38 @@ def build_feature_matrix(
     reduce_meta = None
     if params.reduce_dim.enabled and params.reduce_dim.method != "none":
         n_components = params.reduce_dim.n_components
+        n_samples, n_features = X.shape
         if params.reduce_dim.method == "umap":
             import umap
-            reducer = umap.UMAP(n_components=n_components, random_state=42, verbose=False)
+
+            # UMAP's spectral init requires n_components < n_samples (production-tuned config
+            # can exceed this on small/dev datasets) — clamp instead of letting it crash.
+            effective_n = min(n_components, max(1, n_samples - 1))
+            if effective_n < n_components:
+                logger.warning(
+                    "reduce_dim.n_components=%d vượt quá n_samples-1=%d (UMAP) — hạ xuống %d.",
+                    n_components,
+                    n_samples - 1,
+                    effective_n,
+                )
+            reducer = umap.UMAP(n_components=effective_n, random_state=42, verbose=False)
         else:
             from sklearn.decomposition import PCA
-            reducer = PCA(n_components=n_components, random_state=42)
+
+            effective_n = min(n_components, n_samples, n_features)
+            if effective_n < n_components:
+                logger.warning(
+                    "reduce_dim.n_components=%d vượt quá min(n_samples=%d, n_features=%d) (PCA) — hạ xuống %d.",
+                    n_components,
+                    n_samples,
+                    n_features,
+                    effective_n,
+                )
+            reducer = PCA(n_components=effective_n, random_state=42)
 
         X = reducer.fit_transform(X).astype(np.float32)
         final_dim = X.shape[1]
-        reduce_meta = {"method": params.reduce_dim.method, "n_components": n_components}
+        reduce_meta = {"method": params.reduce_dim.method, "n_components": effective_n}
         logger.info("Sau %s: shape=%s", params.reduce_dim.method, X.shape)
 
     # Validate — không cho NaN/Inf vào HDBSCAN
@@ -229,9 +247,7 @@ def save_features(X: np.ndarray, meta: FeatureMeta, out_dir: str | Path) -> None
     assert len(X) == len(meta.tech_ids), "X rows != tech_ids length"
 
     np.save(out / "X.npy", X)
-    pd.DataFrame({"tech_id": meta.tech_ids}).to_parquet(
-        out / "tech_ids.parquet", index=False
-    )
+    pd.DataFrame({"tech_id": meta.tech_ids}).to_parquet(out / "tech_ids.parquet", index=False)
     (out / "feature_meta.json").write_text(
         json.dumps(dataclasses.asdict(meta), indent=2, ensure_ascii=False),
         encoding="utf-8",

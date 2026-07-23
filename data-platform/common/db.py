@@ -1,11 +1,21 @@
 """Shared database connection helpers."""
+
+import json
+
 import psycopg2
 import psycopg2.extras
-from neo4j import GraphDatabase
-from minio import Minio
-from loguru import logger
-
+import redis
 from config import Settings
+from loguru import logger
+from minio import Minio
+from neo4j import GraphDatabase
+
+JOB_COMPLETED_CHANNEL = "job:completed"
+
+# redis-py connects lazily on first command, so building this unconditionally at import time is
+# safe even if Redis isn't reachable yet — same pattern as services/crawler/run_all.py.
+_settings = Settings()
+_redis_client = redis.from_url(_settings.redis_url, decode_responses=True)
 
 
 def get_pg_conn(settings: Settings):
@@ -34,9 +44,9 @@ def ensure_bronze_bucket(client: Minio, bucket: str) -> None:
         logger.info("Created MinIO bucket: {}", bucket)
 
 
-def log_pipeline_run(conn, job_name: str, status: str,
-                     rows_affected: int = None, error_msg: str = None,
-                     run_id: int = None) -> int:
+def log_pipeline_run(
+    conn, job_name: str, status: str, rows_affected: int = None, error_msg: str = None, run_id: int = None
+) -> int:
     with conn.cursor() as cur:
         if run_id is None:
             cur.execute(
@@ -53,4 +63,17 @@ def log_pipeline_run(conn, job_name: str, status: str,
                 (status, rows_affected, error_msg, run_id),
             )
         conn.commit()
+    # Only terminal statuses are a real "completion" — the initial INSERT (status='running')
+    # doesn't warrant an admin notification. Fire-and-forget: a Redis hiccup here must never
+    # fail the job whose result it's merely reporting.
+    if status in ("success", "failed"):
+        try:
+            _redis_client.publish(JOB_COMPLETED_CHANNEL, json.dumps({
+                "job_name": job_name,
+                "status": status,
+                "rows_affected": rows_affected,
+                "error_msg": error_msg,
+            }))
+        except redis.exceptions.RedisError as e:
+            logger.warning("Could not publish job completion to Redis: {}", e)
     return run_id

@@ -6,18 +6,19 @@ Action: Dedup + quality score → ghi vào PostgreSQL Silver catalog.
 extracted_* topics được tạo ra bởi Spring Boot KafkaExtractorService.
 Group-id silver-processor: KHÔNG xung đột với Spring Boot consumer group.
 """
+
 import hashlib
 import json
 import time
-from datetime import datetime, timezone
-
-from kafka import KafkaConsumer
-from kafka.errors import NoBrokersAvailable
-from loguru import logger
+from datetime import UTC, datetime
 
 from common import tech_alias_cache
 from common.db import get_pg_conn
 from config import Settings
+from kafka import KafkaConsumer
+from kafka.errors import NoBrokersAvailable
+from loguru import logger
+
 from silver.deduplicator import (
     check_content_duplicate,
     check_job_duplicate,
@@ -47,7 +48,7 @@ def _parse_published_at(date_str: str) -> datetime | None:
         return None
     for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"):
         try:
-            return datetime.strptime(date_str[:19], fmt).replace(tzinfo=timezone.utc)
+            return datetime.strptime(date_str[:19], fmt).replace(tzinfo=UTC)
         except ValueError:
             continue
     return None
@@ -62,7 +63,9 @@ def _process_article(conn, msg: dict) -> None:
     article_id = hashlib.md5(source_url.encode()).hexdigest()
     title = data.get("title") or ""
     content = data.get("content") or ""
-    published_at = _parse_published_at(data.get("published_at") or data.get("publish_date") or data.get("published_date") or "")
+    published_at = _parse_published_at(
+        data.get("published_at") or data.get("publish_date") or data.get("published_date") or ""
+    )
     source_platform = data.get("source_platform") or msg.get("source_platform", "unknown")
 
     # Support both flat entity_techs/entity_orgs/entity_locs and nested entities.tech/org/loc
@@ -91,12 +94,19 @@ def _process_article(conn, msg: dict) -> None:
                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'processed')
                ON CONFLICT (source_url) DO NOTHING""",
             (
-                article_id, source_url, source_platform,
+                article_id,
+                source_url,
+                source_platform,
                 title[:1000] if title else None,
                 content,
                 published_at,
-                techs, orgs, locs,
-                chash, is_dup, dup_of, quality,
+                techs,
+                orgs,
+                locs,
+                chash,
+                is_dup,
+                dup_of,
+                quality,
             ),
         )
     conn.commit()
@@ -146,15 +156,21 @@ def _process_job(conn, msg: dict) -> None:
                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'processed',%s,%s)
                ON CONFLICT (source_url) DO NOTHING""",
             (
-                job_id, source_url, job.get("source_platform") or msg.get("source_platform", "unknown"),
+                job_id,
+                source_url,
+                job.get("source_platform") or msg.get("source_platform", "unknown"),
                 title[:500] if title else None,
                 company_name[:300] if company_name else None,
                 company_location[:200] if company_location else None,
                 job.get("salary", "")[:200] if job.get("salary") else None,
-                desc, req,
+                desc,
+                req,
                 job.get("benefit") or "",
-                skills, techs,
-                chash, is_dup, quality,
+                skills,
+                techs,
+                chash,
+                is_dup,
+                quality,
                 company_industry[:200] if company_industry else None,
                 company_size[:100] if company_size else None,
             ),
@@ -196,7 +212,7 @@ def run(settings: Settings) -> None:
         try:
             tech_alias_cache.refresh_if_stale(pg_conn)  # rẻ — chỉ query khi đã hết hạn ~5 phút
             records = consumer.poll(timeout_ms=2000)
-            for tp, messages in records.items():
+            for _tp, messages in records.items():
                 for record in messages:
                     try:
                         msg = record.value

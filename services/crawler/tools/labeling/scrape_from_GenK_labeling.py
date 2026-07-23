@@ -5,10 +5,8 @@ import time
 from datetime import datetime
 
 from selenium import webdriver
-from selenium.common.exceptions import NoSuchElementException
-from selenium.common.exceptions import StaleElementReferenceException
+from selenium.common.exceptions import NoSuchElementException, StaleElementReferenceException
 from selenium.webdriver.common.by import By
-
 
 GENK_SOURCE_URL = "https://genk.vn/ai.chn"
 

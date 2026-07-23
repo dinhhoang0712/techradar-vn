@@ -16,6 +16,7 @@ Chỉ nhận trigger cho các job KHÔNG đã có nút riêng: gold_pg_etl (đã
 /admin/clustering/pipeline/trigger — proxy sang ml-clustering) bị loại khỏi
 whitelist để tránh 2 nguồn sự thật cho cùng 1 job.
 """
+
 from __future__ import annotations
 
 import json
@@ -23,9 +24,8 @@ from datetime import datetime
 
 import redis
 from apscheduler.schedulers.background import BackgroundScheduler
-from loguru import logger
-
 from config import Settings
+from loguru import logger
 
 TRIGGER_CHANNEL = "data-platform:trigger"
 
@@ -54,7 +54,10 @@ def _handle_trigger(scheduler: BackgroundScheduler, raw_payload: str) -> None:
         logger.warning("Job Trigger Listener: jobId '{}' không tồn tại trong scheduler, bỏ qua", job_id)
         return
 
-    scheduler.modify_job(job_id, next_run_time=datetime.now())
+    # Must be timezone-aware in the scheduler's own tz (Asia/Ho_Chi_Minh) — a naive datetime.now()
+    # here gets localized as if it already were that tz, landing ~7h in the past on a UTC host and
+    # silently misfiring (misfire_grace_time=3600 is far smaller than that gap).
+    scheduler.modify_job(job_id, next_run_time=datetime.now(scheduler.timezone))
     logger.info("Job Trigger Listener: đã trigger '{}' chạy ngay", job_id)
 
 

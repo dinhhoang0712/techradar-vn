@@ -1,7 +1,6 @@
 package com.techpulse.techradar.integration;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.http.MediaType;
 
 import java.util.Map;
@@ -10,7 +9,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Auth flows: register/login/refresh/logout envelope shape, and forgot/reset password. */
-@EnabledIfEnvironmentVariable(named = "POSTGRES_HOST", matches = ".+")
 class AuthIntegrationTest extends IntegrationTestSupport {
 
     @Test
@@ -93,5 +91,48 @@ class AuthIntegrationTest extends IntegrationTestSupport {
         web.post().uri("/api/v1/auth/reset-password").contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of("token", "not-a-uuid", "new_password", "NewPass1!"))
                 .exchange().expectStatus().isBadRequest();
+    }
+
+    @Test
+    void bannedUser_accessTokenRejected_afterStatusChangeBumpsSecurityStamp() {
+        String token = registerAndLogin("banned-access@test.vn");
+        String userId = meId(token);
+
+        // token still valid before the ban
+        web.get().uri("/api/v1/auth/me").header("Authorization", bearer(token))
+                .exchange().expectStatus().isOk();
+
+        String admin = adminToken();
+        web.put().uri("/api/v1/admin/users/" + userId).header("Authorization", bearer(admin))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("status", "banned"))
+                .exchange().expectStatus().isOk();
+
+        // Same access token as before, now rejected: banning bumped the user's security stamp in
+        // Redis, and JwtReactiveAuthenticationManager rejects because it no longer matches the
+        // stamp baked into this already-issued token - proving the ban takes effect immediately
+        // rather than only once the token naturally expires.
+        web.get().uri("/api/v1/auth/me").header("Authorization", bearer(token))
+                .exchange().expectStatus().isUnauthorized();
+    }
+
+    @Test
+    void bannedUser_refreshTokenRejected_evenThoughStructurallyValidAndNotBlacklisted() {
+        Map<String, Object> reg = registerUser("banned-refresh@test.vn");
+        String refresh = (String) reg.get("refresh_token");
+        String userId = meId((String) reg.get("access_token"));
+
+        String admin = adminToken();
+        web.put().uri("/api/v1/admin/users/" + userId).header("Authorization", bearer(admin))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("status", "banned"))
+                .exchange().expectStatus().isOk();
+
+        // The refresh token itself is still structurally valid and was never blacklisted (no
+        // /auth/logout call happened) - only RefreshTokenUseCase's isActive() check catches this,
+        // otherwise a banned user could keep minting brand-new access tokens indefinitely.
+        web.post().uri("/api/v1/auth/refresh").contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("refresh_token", refresh))
+                .exchange().expectStatus().isUnauthorized();
     }
 }

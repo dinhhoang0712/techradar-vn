@@ -309,16 +309,22 @@ WITH t.name AS tech, substring(toString(coalesce(j.posted_date, j.due_date)), 0,
 RETURN tech, ym, count(DISTINCT j) AS cnt
 ```
 
-**Output**: Upsert vào `tech_analytics`
+**Output**: Upsert vào `tech_analytics` (`UNIQUE(technology_name, month)`, xem
+`V1__init_schema.sql`)
 
 | Column | Mô tả |
 |--------|-------|
-| `tech_name` | Tên công nghệ |
-| `period` | Tháng (YYYY-MM-01) |
+| `technology_name` | Tên công nghệ (KHÔNG phải `tech_name`) |
+| `month` | Tháng (DATE, YYYY-MM-01 — KHÔNG phải cột `period`) |
 | `article_count` | Số bài viết đề cập |
 | `job_count` | Số job yêu cầu |
 | `growth_rate` | % tăng trưởng so với tháng trước |
-| `snapshot_jobs` | Tổng job hiện tại (snapshot) |
+| `yoy_growth` | % tăng trưởng so với cùng kỳ năm trước |
+| `mom_growth` | % tăng trưởng tháng-qua-tháng |
+| `ranking` | Thứ hạng công nghệ trong tháng đó |
+
+Không có cột `snapshot_jobs` — giá trị "tổng job hiện tại" được gộp thẳng vào `job_count` của
+tháng hiện tại trong code (`data-platform/gold/pg_etl.py`), không lưu riêng.
 
 ### Neo4j Enricher
 
@@ -362,13 +368,19 @@ AuraDB cloud mới có).
 
 **Chạy**: 4:00 AM daily
 
-Gọi `POST {RAG_BASE_URL}/embed/trigger` với header `X-Embed-Secret`. `ai-rag-core` sẽ embed các Article mới từ Neo4j vào Qdrant (vector store). Response ngay lập tức, job chạy async trong background.
+Gọi `POST {RAG_BASE_URL}/embed/trigger` với header `X-Embed-Secret`. `ai-rag-core` đọc Article
+trực tiếp từ Neo4j, embed bằng `multilingual-e5-base`, rồi ghi vector **thẳng vào property
+`Article.embedding` trong Neo4j** — KHÔNG phải Qdrant. Response ngay lập tức, job chạy async trong
+background. (Qdrant là một pipeline hoàn toàn khác, riêng biệt: `embedding-service` — Kafka
+consumer trên `extracted_articles`/`extracted_jobs`, publish `article_vectors`/`job_vectors` —
+rồi `qdrant-writer` consume và ghi vào Qdrant; chỉ chạy khi bật profile `vector`, xem
+[`AI_PLATFORM.md` §4.2-4.3](./AI_PLATFORM.md).)
 
 ### Clustering Retrain
 
 **Chạy**: 6:00 AM, mỗi Chủ nhật
 
-Gọi `POST {ML_CLUSTERING_BASE_URL}/pipeline/trigger`. `ml-clustering` service chạy DVC pipeline (5 stages: snapshot → embed → cluster → evaluate → promote). Sau khi trigger thành công, job block lại và **poll `GET /pipeline/status`** định kỳ (`CLUSTERING_RETRAIN_POLL_INTERVAL_S`, mặc định 30s) cho tới khi pipeline xong hoặc hết `CLUSTERING_RETRAIN_MAX_WAIT_S` (mặc định 7200s), rồi ghi kết quả thật vào `dp_pipeline_runs` — trước đây chỉ log việc trigger HTTP thành công, không biết pipeline có thật sự chạy xong hay lỗi (vd hết quota LLM ở Stage 4).
+Gọi `POST {ML_CLUSTERING_BASE_URL}/pipeline/trigger`. `ml-clustering` service chạy DVC pipeline (5 stages: `stage_01_extract` → `stage_02_features` → `stage_03_train` → `stage_04_label` → `stage_05_writeback`). Sau khi trigger thành công, job block lại và **poll `GET /pipeline/status`** định kỳ (`CLUSTERING_RETRAIN_POLL_INTERVAL_S`, mặc định 30s) cho tới khi pipeline xong hoặc hết `CLUSTERING_RETRAIN_MAX_WAIT_S` (mặc định 7200s), rồi ghi kết quả thật vào `dp_pipeline_runs` — trước đây chỉ log việc trigger HTTP thành công, không biết pipeline có thật sự chạy xong hay lỗi (vd hết quota LLM ở Stage 4).
 
 Trong `ml-clustering`, model mới chỉ được gán alias `champion` trong MLflow Model Registry nếu tốt hơn (hoặc bằng) champion hiện tại theo cùng `primary_metric` dùng để chọn best trial — model cũ vẫn được đăng ký (giữ lịch sử) nhưng không ghi đè champion nếu kém hơn. Xem [`AI_PLATFORM.md` §3.2](./AI_PLATFORM.md#32-pipeline-5-stages).
 
@@ -382,10 +394,13 @@ Dùng **APScheduler** với `BackgroundScheduler` (chạy trong main thread củ
 
 | Job | Cron | Mô tả |
 |-----|------|-------|
+| `neo4j_article_sync` | `0 2 * * *` | Bù đồng bộ Bài viết → Neo4j (Silver → Graph, độc lập với Kafka realtime) |
+| `neo4j_job_sync` | `30 2 * * *` | Bù đồng bộ Tin tuyển dụng → Neo4j (tương tự) |
 | `gold_pg_etl` | `0 3 * * *` | Rebuild tech_analytics từ Neo4j |
 | `embed_trigger` | `0 4 * * *` | Trigger vector embedding mới |
 | `neo4j_enricher` | `0 5 * * *` | Cập nhật derived relationships |
 | `tech_dedup` | `30 5 * * *` | Gộp Technology node trùng lặp (alias map + LLM) |
+| `retrain_clustering` | `0 6 * * 0` (Chủ nhật) | Trigger + poll pipeline retrain clustering (xem mục Clustering Retrain) |
 | `retrain_clustering` | `0 6 * * 0` | Retrain ML clustering (Chủ nhật) |
 
 ### Dev Mode — Chạy jobs ngay khi start
@@ -400,6 +415,8 @@ Khi `run_jobs_on_start=true`, tất cả jobs được trigger ngay lập tức 
 ### Cấu hình cron qua env vars
 
 ```bash
+ARTICLE_SYNC_HOUR=2    ARTICLE_SYNC_MINUTE=0
+JOB_SYNC_HOUR=2        JOB_SYNC_MINUTE=30
 GOLD_ETL_HOUR=3        GOLD_ETL_MINUTE=0
 EMBED_TRIGGER_HOUR=4   EMBED_TRIGGER_MINUTE=0
 NEO4J_ENRICHER_HOUR=5  NEO4J_ENRICHER_MINUTE=0
@@ -410,7 +427,7 @@ CLUSTERING_RETRAIN_DAY_OF_WEEK=sun
 
 **LLM cho Tech Dedup** (Giai đoạn B — case chưa có trong alias map):
 ```bash
-TECH_DEDUP_LLM_PROVIDER=gemini   # "gemini" | "openai"
+TECH_DEDUP_LLM_PROVIDER=gemini   # "gemini" | "openai" | "groq" (mặc định model groq: llama-3.3-70b-versatile)
 GEMINI_API_KEY=...
 OPENAI_API_KEY=...
 ```
@@ -428,7 +445,7 @@ CREATE TABLE dp_bronze_catalog (
     id              TEXT PRIMARY KEY,      -- MD5(source_url)
     source_url      TEXT NOT NULL UNIQUE,
     source_platform TEXT NOT NULL,         -- VNExpress, GenK, ...
-    content_type    TEXT NUT NULL,         -- article | job
+    content_type    TEXT NOT NULL,         -- article | job
     minio_path      TEXT NOT NULL,         -- s3://techradar-bronze/...
     file_size_bytes BIGINT,
     kafka_topic     TEXT,                  -- raw_articles | raw_jobs
@@ -533,7 +550,7 @@ Job execution log:
 ```sql
 CREATE TABLE dp_pipeline_runs (
     id          BIGSERIAL PRIMARY KEY,
-    job_name    TEXT NOT NULL,   -- gold_pg_etl | neo4j_enricher | tech_dedup | embed_trigger
+    job_name    TEXT NOT NULL,   -- neo4j_article_sync | neo4j_job_sync | gold_pg_etl | embed_trigger | neo4j_enricher | tech_dedup | retrain_clustering
     status      TEXT NOT NULL,   -- running | success | failed
     rows_affected INT,
     error_msg   TEXT,

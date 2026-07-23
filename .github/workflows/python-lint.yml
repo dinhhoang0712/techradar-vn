@@ -1,0 +1,41 @@
+name: Python Lint
+
+# One shared lint job for every Python component (data-platform, services/*) instead of
+# duplicating ruff setup in each component's own workflow — ruff needs no project dependencies
+# installed, so a single fast job covers the whole tree via the root pyproject.toml config
+# (which already excludes mlruns/data/published/.dvc/migrations/etc). This also covers
+# services/crawler, services/embedding-service and services/qdrant-writer, which have no test
+# suite of their own and therefore no dedicated CI workflow.
+on:
+  push:
+    branches: [master]
+    paths:
+      - "**/*.py"
+      - "pyproject.toml"
+      - ".github/workflows/python-lint.yml"
+  pull_request:
+    paths:
+      - "**/*.py"
+      - "pyproject.toml"
+      - ".github/workflows/python-lint.yml"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Pinned to the same version as .pre-commit-config.yaml so local `pre-commit run` and CI
+      # never disagree on a rule.
+      - name: Install ruff
+        run: pip install ruff==0.9.9
+
+      - name: Ruff check
+        run: ruff check .
+
+      - name: Ruff format check
+        run: ruff format --check .

@@ -7,8 +7,6 @@ CLI:
 Output: data/labels/<tag>/cluster_labels.json
 """
 
-import sys
-
 import mlflow
 import numpy as np
 import pandas as pd
@@ -56,6 +54,7 @@ def main(
         models_dir,
         snapshot_dir,
     )
+
     from src.features.feature_pipeline import load_features
     from src.labeling.llm_labeler import (
         label_all_clusters,
@@ -85,9 +84,7 @@ def main(
     # Reindex df_labels theo thứ tự của tech_ids (để labels array căn với X)
     label_map: dict[str, int] = df_labels.set_index("tech_id")["cluster_id"].to_dict()
     # tech_id nào không có trong best_labels → gán noise (-1)
-    labels_aligned = np.array(
-        [label_map.get(tid, -1) for tid in tech_ids], dtype=np.int32
-    )
+    labels_aligned = np.array([label_map.get(tid, -1) for tid in tech_ids], dtype=np.int32)
 
     # 4. Load snapshot DataFrames
     snap_dir = snapshot_dir(tag)
@@ -98,7 +95,9 @@ def main(
     df_edges_job: pd.DataFrame = pd.read_parquet(snap_dir / "edges_job_requires_tech.parquet")
     logger.info(
         "Snapshot loaded: {} techs, {} companies, {} jobs",
-        len(df_technologies), len(df_companies), len(df_jobs),
+        len(df_technologies),
+        len(df_companies),
+        len(df_jobs),
     )
 
     # 5. Build cluster_to_members
@@ -158,7 +157,6 @@ def main(
 
 
 def _print_summary(cluster_labels: dict) -> None:
-    from src.labeling.llm_labeler import ClusterLabel
 
     header = f"{'ID':>4}  {'Label':<28}  {'Domain':<18}  {'Size':>5}  {'Conf':>5}  Top-3 Members"
     sep = "-" * len(header)

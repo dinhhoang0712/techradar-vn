@@ -17,7 +17,6 @@ Output:
 import json
 import math
 import tempfile
-from pathlib import Path
 from typing import Any
 
 import mlflow
@@ -26,17 +25,14 @@ import typer
 from loguru import logger
 from neo4j import Driver
 
+from pipelines.graph_writeback_utils import chunks as _chunks
+
 app = typer.Typer(add_completion=False, help="Write cluster nodes & relationships to Neo4j")
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-def _chunks(lst: list, size: int):
-    """Chia list thành các chunk kích thước `size`."""
-    for i in range(0, len(lst), size):
-        yield lst[i : i + size]
 
 
 def _run_batched(driver: Driver, cypher: str, rows: list[dict], batch_size: int) -> int:
@@ -57,6 +53,7 @@ def _run_batched(driver: Driver, cypher: str, rows: list[dict], batch_size: int)
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 @app.command()
 def main(
@@ -99,6 +96,7 @@ def main(
       10. Đóng driver, return 0.
     """
     from conf.config import labels_dir, load_params, models_dir
+
     from src.data.neo4j_loader import close_driver, get_driver, run_query
 
     # 1. Load params
@@ -107,10 +105,7 @@ def main(
     wb = params_obj.writeback
 
     if not wb.enabled:
-        logger.warning(
-            "writeback.enabled = false trong params.yaml. "
-            "Bật lên khi đã chốt model & labels rồi chạy lại."
-        )
+        logger.warning("writeback.enabled = false trong params.yaml. Bật lên khi đã chốt model & labels rồi chạy lại.")
         raise typer.Exit(code=0)
 
     logger.info("Stage 05 — WRITEBACK | tag={} dry_run={}", tag, dry_run)
@@ -230,14 +225,17 @@ def main(
             for entry in entries:
                 score = float(entry.get("score", 0.0))
                 if score >= threshold:
-                    near_rows.append({
-                        "tech_id": str(tech_id),
-                        "cluster_id": int(entry["cluster_id"]),
-                        "score": score,
-                    })
+                    near_rows.append(
+                        {
+                            "tech_id": str(tech_id),
+                            "cluster_id": int(entry["cluster_id"]),
+                            "score": score,
+                        }
+                    )
         logger.info(
             "Ghi {} :NEAR_CLUSTER relationships (threshold={}) ...",
-            len(near_rows), threshold,
+            len(near_rows),
+            threshold,
         )
         _run_batched(
             driver,
@@ -255,19 +253,17 @@ def main(
         logger.info(":NEAR_CLUSTER written")
 
         # 9. Verify
-        res_belongs = run_query(
-            "MATCH (:Technology)-[:BELONGS_TO]->(:Cluster) RETURN count(*) AS n"
-        )
-        res_near = run_query(
-            "MATCH (:Technology)-[:NEAR_CLUSTER]->(:Cluster) RETURN count(*) AS n"
-        )
+        res_belongs = run_query("MATCH (:Technology)-[:BELONGS_TO]->(:Cluster) RETURN count(*) AS n")
+        res_near = run_query("MATCH (:Technology)-[:NEAR_CLUSTER]->(:Cluster) RETURN count(*) AS n")
         n_belongs_db = res_belongs[0]["n"]
         n_near_db = res_near[0]["n"]
 
         logger.info(
             "Verify: :BELONGS_TO={} (kỳ vọng {}), :NEAR_CLUSTER={} (kỳ vọng {})",
-            n_belongs_db, len(belongs_to_rows),
-            n_near_db, len(near_rows),
+            n_belongs_db,
+            len(belongs_to_rows),
+            n_near_db,
+            len(near_rows),
         )
         if n_belongs_db < len(belongs_to_rows):
             logger.warning(

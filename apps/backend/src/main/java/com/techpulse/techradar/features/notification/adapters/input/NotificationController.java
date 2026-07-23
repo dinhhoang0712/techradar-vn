@@ -42,11 +42,11 @@ public class NotificationController {
                 .map(items -> ResponseEntity.ok(ApiResponse.success(items, "Notifications retrieved")));
     }
 
-    @Operation(summary = "Count unread notifications")
+    @Operation(summary = "Count unread notifications, optionally filtered to one type")
     @GetMapping("/unread-count")
-    public Mono<ResponseEntity<ApiResponse<Long>>> unreadCount() {
+    public Mono<ResponseEntity<ApiResponse<Long>>> unreadCount(@RequestParam(required = false) String type) {
         return SecurityUtils.currentUserId()
-                .flatMap(notificationService::unreadCount)
+                .flatMap(userId -> notificationService.unreadCount(userId, type))
                 .map(count -> ResponseEntity.ok(ApiResponse.success(count, "Unread count retrieved")));
     }
 

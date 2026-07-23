@@ -5,6 +5,7 @@ Recommendation Service — gợi ý công nghệ / kỹ năng dựa trên:
   3. PostgreSQL tech_analytics (growth_rate tháng gần nhất)
   4. LLM sinh lý giải ngắn cho từng recommendation
 """
+
 import logging
 import uuid
 from pathlib import Path
@@ -89,10 +90,7 @@ async def _get_latest_analytics(tech_names: list[str]) -> dict[str, dict]:
                 """),
                 {"names": tech_names},
             )
-            return {
-                row["technology_name"]: dict(row._mapping)
-                for row in result
-            }
+            return {row["technology_name"]: dict(row._mapping) for row in result}
         except Exception as e:
             logger.warning("Failed to get analytics for recommendation: %s", e)
             return {}
@@ -111,10 +109,7 @@ def _score_and_rank(
         return []
 
     max_co = max((r.get("co_occurrence") or 0) for r in related) or 1
-    growth_values = [
-        analytics.get(r["related_tech"], {}).get("mom_growth") or 0.0
-        for r in related
-    ]
+    growth_values = [analytics.get(r["related_tech"], {}).get("mom_growth") or 0.0 for r in related]
     max_growth = max(abs(g) for g in growth_values) or 1
 
     scored = []
@@ -124,12 +119,14 @@ def _score_and_rank(
         analytic = analytics.get(name, {})
         growth = (analytic.get("mom_growth") or 0.0) / max_growth
         score = 0.6 * co + 0.4 * growth
-        scored.append({
-            **r,
-            "growth_rate": analytic.get("growth_rate"),
-            "job_count":   analytic.get("job_count"),
-            "confidence":  round(score, 3),
-        })
+        scored.append(
+            {
+                **r,
+                "growth_rate": analytic.get("growth_rate"),
+                "job_count": analytic.get("job_count"),
+                "confidence": round(score, 3),
+            }
+        )
 
     scored.sort(key=lambda x: x["confidence"], reverse=True)
     return scored[:limit]
@@ -147,9 +144,7 @@ async def _llm_explain(user_techs: list[str], top_items: list[dict]) -> list[str
         growth = item.get("growth_rate")
         co = item.get("co_occurrence", 0)
         growth_str = f"{growth:+.1f}%" if growth is not None else "không có dữ liệu"
-        lines.append(
-            f"- {name} (ring: {ring}, co-occurrence: {co}, tăng trưởng: {growth_str})"
-        )
+        lines.append(f"- {name} (ring: {ring}, co-occurrence: {co}, tăng trưởng: {growth_str})")
 
     try:
         template = _load_template("recommend_template.txt")
@@ -165,14 +160,16 @@ async def _llm_explain(user_techs: list[str], top_items: list[dict]) -> list[str
                     "Bạn là chuyên gia tư vấn công nghệ. "
                     "Với mỗi công nghệ được đề xuất, hãy viết 1 câu lý giải ngắn gọn bằng tiếng Việt "
                     "tại sao nên học/dùng nó dựa trên context. "
-                    "Chỉ trả về danh sách JSON: [{\"tech\": \"...\", \"reason\": \"...\"}]"
+                    'Chỉ trả về danh sách JSON: [{"tech": "...", "reason": "..."}]'
                 ),
             },
             {"role": "user", "content": prompt},
         ]
 
         raw = await generate(messages)
-        import json, re
+        import json
+        import re
+
         match = re.search(r"\[.*\]", raw, re.DOTALL)
         if match:
             return json.loads(match.group())
@@ -203,7 +200,9 @@ async def handle(req: RecommendRequest, db: AsyncSession) -> RecommendResponse:
 
     # 5. LLM explain
     explanations = await _llm_explain(user_techs, top_items)
-    explain_map = {e.get("tech", ""): e.get("reason", "") for e in explanations} if isinstance(explanations, list) else {}
+    explain_map = (
+        {e.get("tech", ""): e.get("reason", "") for e in explanations} if isinstance(explanations, list) else {}
+    )
 
     recommendations = [
         RecommendItem(

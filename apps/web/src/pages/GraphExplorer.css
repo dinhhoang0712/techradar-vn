@@ -653,6 +653,35 @@ button.breadcrumb-item:hover {
     background: var(--border);
 }
 
+.legend-hint {
+    margin: 0;
+    font-size: 0.72rem;
+    line-height: 1.4;
+    color: var(--text-3);
+}
+
+/* Cảnh báo nhỏ khi bật chế độ Phân tích đồ thị nhưng chưa từng rebuild — nổi ngay trên dock,
+   không đè lên breadcrumb/tooltip/panel bên. */
+.graph-analytics-hint {
+    position: absolute;
+    bottom: 56px;
+    left: 12px;
+    right: 12px;
+    max-width: 420px;
+    margin: 0 auto;
+    background: rgba(19, 22, 37, 0.94);
+    border: 1px solid var(--border-2);
+    border-radius: var(--radius-sm);
+    padding: 8px 14px;
+    font-size: 0.78rem;
+    line-height: 1.4;
+    color: var(--text-2);
+    text-align: center;
+    z-index: 46;
+    pointer-events: none;
+    animation: fadeScaleIn 0.2s ease;
+}
+
 /* ─── Panel bên (lộ trình/cạnh): nổi đè lên góc phải canvas (slide-in) thay vì
    chiếm chỗ và đẩy co hẹp khung đồ thị như trước ── */
 .graph-side-panels {

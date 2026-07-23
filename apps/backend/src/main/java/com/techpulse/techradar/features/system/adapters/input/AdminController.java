@@ -29,7 +29,7 @@ public class AdminController {
 
     @Operation(summary = "Get application settings")
     @GetMapping("/settings")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('system:settings')")
     public Mono<ResponseEntity<ApiResponse<List<AppSettings>>>> getSettings() {
         return adminService.getAllSettings()
                 .collectList()
@@ -40,7 +40,7 @@ public class AdminController {
 
     @Operation(summary = "Get specific setting")
     @GetMapping("/settings/{key}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('system:settings')")
     public Mono<ResponseEntity<ApiResponse<AppSettings>>> getSetting(
             @PathVariable String key
     ) {
@@ -53,7 +53,7 @@ public class AdminController {
 
     @Operation(summary = "Update setting")
     @PutMapping("/settings/{key}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('system:settings')")
     public Mono<ResponseEntity<ApiResponse<AppSettings>>> updateSetting(
             @PathVariable String key,
             @RequestBody UpdateSettingRequest request
@@ -66,7 +66,7 @@ public class AdminController {
 
     @Operation(summary = "Delete setting")
     @DeleteMapping("/settings/{key}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('system:settings')")
     public Mono<ResponseEntity<ApiResponse<Void>>> deleteSetting(
             @PathVariable String key
     ) {

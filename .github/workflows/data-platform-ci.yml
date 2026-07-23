@@ -1,0 +1,33 @@
+name: Data Platform CI
+
+# data-platform's test suite (data-platform/tests/conftest.py) mocks Neo4j/Postgres/Redis/Kafka
+# entirely — no service containers needed here, unlike backend-ci.yml's Postgres/Neo4j/Redis.
+on:
+  push:
+    branches: [master]
+    paths:
+      - "data-platform/**"
+      - ".github/workflows/data-platform-ci.yml"
+  pull_request:
+    paths:
+      - "data-platform/**"
+      - ".github/workflows/data-platform-ci.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Matches data-platform/Dockerfile's base image (python:3.12-slim).
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: data-platform/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r data-platform/requirements.txt
+
+      - name: Run tests
+        run: pytest data-platform/tests

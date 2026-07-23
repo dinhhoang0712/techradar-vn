@@ -203,7 +203,9 @@ def main():
         if labeled_samples:
             print("\nThreshold sweep")
             print("-" * 72)
-            print(f"{'threshold':>10}  {'acc':>8}  {'prec':>8}  {'recall':>8}  {'f1':>8}  {'tp':>4}  {'fp':>4}  {'tn':>4}  {'fn':>4}")
+            print(
+                f"{'threshold':>10}  {'acc':>8}  {'prec':>8}  {'recall':>8}  {'f1':>8}  {'tp':>4}  {'fp':>4}  {'tn':>4}  {'fn':>4}"
+            )
 
             best_score = None
             for step in range(0, 101):

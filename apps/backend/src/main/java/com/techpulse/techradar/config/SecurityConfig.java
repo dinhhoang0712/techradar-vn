@@ -75,12 +75,22 @@ public class SecurityConfig {
             PublicRoute.anyMethod("/swagger-ui/**"),
             PublicRoute.anyMethod("/v3/api-docs/**"),
             PublicRoute.anyMethod("/webjars/**"),
+            // aiproxy: public here means "forwards via AiProxyRequestHandler.forward() — general
+            // content, not personalized to a signed-in user". The remaining aiproxy routes
+            // (/career, /recommend, /interview, /agent) use forwardAsCurrentUser() to inject the
+            // caller's user_id and stay authenticated on purpose. /company-insight is rendered on
+            // the public /companies page (itself public below), so it must be public too — it was
+            // missing here before, which forced anonymous /companies visitors through a spurious
+            // 401 that the web client's interceptor treated as a logged-out session.
             PublicRoute.anyMethod("/forecast"),
             PublicRoute.anyMethod("/report"),
             PublicRoute.anyMethod("/chat/summarize"),
+            PublicRoute.anyMethod("/company-insight"),
             new PublicRoute(HttpMethod.OPTIONS, "/**"),
             new PublicRoute(HttpMethod.GET, "/user/avatar/**"),
-            new PublicRoute(HttpMethod.GET, "/posts/*/images/**"));
+            new PublicRoute(HttpMethod.GET, "/posts/*/images/**"),
+            new PublicRoute(HttpMethod.GET, "/posts/*/comments"),
+            new PublicRoute(HttpMethod.GET, "/companies/**"));
 
     /** {@link #PUBLIC_ROUTES} as matchers, shared by both the JWT filter and {@code authorizeExchange}. */
     private static ServerWebExchangeMatcher[] publicRouteMatchers() {

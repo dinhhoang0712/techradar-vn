@@ -1,7 +1,8 @@
 # TechRadar VN — Web
 
-Single-page app (React 19 + Vite) cho nền tảng TechRadar VN: Trend Radar, Knowledge Graph Explorer,
-Compare, Graph RAG Chat và trang quản trị (Admin).
+Single-page app (React 19 + Vite + **TypeScript strict**, `allowJs: false`) cho nền tảng
+TechRadar VN: Trend Radar, Knowledge Graph Explorer, Compare, Graph RAG Chat và trang quản trị
+(Admin).
 
 ## Phát triển
 
@@ -10,11 +11,15 @@ npm install
 npm run dev        # http://localhost:5173
 npm run build      # build production vào dist/
 npm run preview    # xem thử bản build
+npm run lint       # ESLint
+npm run typecheck  # tsc --noEmit
+npm test           # Vitest
+npm run test:watch # Vitest watch mode
 ```
 
 ## Kết nối API
 
-- API client gọi **đường dẫn tương đối** `/api/v1` (xem [src/utils/apiClient.js](src/utils/apiClient.js)),
+- API client gọi **đường dẫn tương đối** `/api/v1` (xem [src/utils/apiClient.ts](src/utils/apiClient.ts)),
   nên không cần đặt URL backend lúc build.
 - **Khi chạy dev**: cấu hình proxy của Vite (hoặc chạy backend cùng origin) để `/api` trỏ tới `http://localhost:8080`.
 - **Khi chạy Docker**: Nginx ([nginx.conf](nginx.conf)) proxy `location /api` → `spring-api:8080`,

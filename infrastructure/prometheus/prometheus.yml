@@ -1,0 +1,13 @@
+# Single-node Prometheus for the bundled docker-compose stack (not a production HA setup).
+# Data lands in the prometheus_data volume; default retention below.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: spring-api
+    # spring.webflux.base-path (/api/v1) applies to actuator too — see SecurityConfig's note on why
+    # its own route matchers don't repeat this prefix (the HttpHandler already strips it by then).
+    metrics_path: /api/v1/actuator/prometheus
+    static_configs:
+      - targets: ["spring-api:8080"]

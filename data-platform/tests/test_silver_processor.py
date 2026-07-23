@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
-
 import silver.processor as processor
 from common import tech_alias_cache
 
@@ -61,7 +60,7 @@ def test_quality_score_ignores_titles_under_ten_chars():
 
 
 def test_parse_published_at_supports_all_known_formats():
-    expected = datetime(2026, 4, 11, tzinfo=timezone.utc)
+    expected = datetime(2026, 4, 11, tzinfo=UTC)
     assert processor._parse_published_at("2026-04-11") == expected
     assert processor._parse_published_at("11/04/2026") == expected
     assert processor._parse_published_at("2026-04-11T00:00:00") == expected
@@ -92,8 +91,21 @@ def test_process_article_extracts_nested_entities_and_inserts():
     assert conn.commit_count == 1
     query, params = conn.cursors[-1].executed[-1]
     assert "INSERT INTO dp_processed_articles" in query
-    (article_id, source_url, source_platform, title, content, published_at,
-     techs, orgs, locs, chash, is_dup, dup_of, quality) = params
+    (
+        article_id,
+        source_url,
+        source_platform,
+        title,
+        content,
+        published_at,
+        techs,
+        orgs,
+        locs,
+        chash,
+        is_dup,
+        dup_of,
+        quality,
+    ) = params
     assert source_url == "https://example.com/a1"
     assert source_platform == "VN-Express"
     assert techs == ["Python", "Kubernetes"]
@@ -160,9 +172,25 @@ def test_process_job_extracts_company_from_nested_object():
     assert conn.commit_count == 1
     query, params = conn.cursors[-1].executed[-1]
     assert "INSERT INTO dp_processed_jobs" in query
-    (job_id, source_url, source_platform, title, company_name, company_location,
-     salary, desc, req, benefit, skills, techs, chash, is_dup, quality,
-     company_industry, company_size) = params
+    (
+        job_id,
+        source_url,
+        source_platform,
+        title,
+        company_name,
+        company_location,
+        salary,
+        desc,
+        req,
+        benefit,
+        skills,
+        techs,
+        chash,
+        is_dup,
+        quality,
+        company_industry,
+        company_size,
+    ) = params
     assert company_name == "FPT"
     assert company_location == "Hanoi"
     assert skills == ["Python"]

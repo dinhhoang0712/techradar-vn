@@ -2,6 +2,7 @@ package com.techpulse.techradar.features.company.adapters.input;
 
 import com.techpulse.techradar.features.company.application.GetCompaniesUseCase;
 import com.techpulse.techradar.features.company.application.GetCompanyMentionsUseCase;
+import com.techpulse.techradar.features.company.application.GetCompanyTechHealthScoreUseCase;
 import com.techpulse.techradar.features.company.application.GetSimilarCompaniesUseCase;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,6 +30,7 @@ public class CompanyController {
     private final GetCompaniesUseCase getCompaniesUseCase;
     private final GetSimilarCompaniesUseCase getSimilarCompaniesUseCase;
     private final GetCompanyMentionsUseCase getCompanyMentionsUseCase;
+    private final GetCompanyTechHealthScoreUseCase getCompanyTechHealthScoreUseCase;
 
     @Operation(summary = "Companies with an inferred tech stack, ranked by job count")
     @GetMapping
@@ -56,6 +58,18 @@ public class CompanyController {
         return getSimilarCompaniesUseCase.execute(id, limit)
                 .map(list -> list.stream().map(CompanyDtos.SimilarCompanyResponse::from).toList())
                 .map(list -> ResponseEntity.ok(ApiResponse.success(list, "Similar companies")));
+    }
+
+    @Operation(
+            summary = "Company Tech Health Score",
+            description = "0-100 score derived from tech_analytics growth data for the company's inferred tech " +
+                          "stack: how much the company is trending toward growing (vs. declining) technologies."
+    )
+    @GetMapping("/{id}/health-score")
+    public Mono<ResponseEntity<ApiResponse<CompanyDtos.CompanyTechHealthScoreResponse>>> healthScore(@PathVariable String id) {
+        return getCompanyTechHealthScoreUseCase.execute(id)
+                .map(CompanyDtos.CompanyTechHealthScoreResponse::from)
+                .map(dto -> ResponseEntity.ok(ApiResponse.success(dto, "Company tech health score")));
     }
 
     @Operation(

@@ -12,6 +12,7 @@ Usage (in app/main.py, BEFORE creating the FastAPI app):
     ...
     app.add_middleware(RequestContextMiddleware)
 """
+
 from __future__ import annotations
 
 import logging
@@ -111,7 +112,5 @@ class RequestContextMiddleware:
             request_id_ctx.reset(token)
 
         elapsed_ms = (time.perf_counter() - start) * 1000
-        level = logging.ERROR if status_code >= 500 else (
-            logging.WARNING if status_code >= 400 else logging.INFO
-        )
+        level = logging.ERROR if status_code >= 500 else (logging.WARNING if status_code >= 400 else logging.INFO)
         access_logger.log(level, "%s %s -> %d (%.1f ms)", method, path, status_code, elapsed_ms)

@@ -32,4 +32,9 @@ public class DataPlatformJobStatusService {
                 .map(row -> "running".equals(row.get("status")))
                 .defaultIfEmpty(false);
     }
+
+    /** Full run history for one job, newest first, paginated. */
+    public Flux<Map<String, Object>> findRunHistory(String jobName, int limit, int offset) {
+        return pipelineRunRepository.findRunHistory(jobName, limit, offset);
+    }
 }

@@ -13,6 +13,7 @@ Chạy:
   cd src/ml-clustering
   uvicorn app.main:app --reload --port 8001
 """
+
 from __future__ import annotations
 
 import logging
@@ -43,12 +44,16 @@ logger = logging.getLogger("ml-clustering")
 # Lifespan: warm up store (load artifacts) on startup
 # ---------------------------------------------------------------------------
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     store = get_store()  # trigger load + cache
     logger.info(
         "Store ready: snapshot_tag=%s source=%s n_techs=%d n_clusters=%d",
-        store.tag, store.source, len(store.tech_to_cluster), len(store.cluster_labels),
+        store.tag,
+        store.source,
+        len(store.tech_to_cluster),
+        len(store.cluster_labels),
     )
     yield
 
@@ -68,6 +73,7 @@ app.include_router(pipeline_router)
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _build_tech_result(name: str, store) -> TechClusterResult:
     tech_id, cluster_id = store.lookup_tech(name)
@@ -117,6 +123,7 @@ def _build_tech_result(name: str, store) -> TechClusterResult:
 # Routes
 # ---------------------------------------------------------------------------
 
+
 @app.get("/health")
 def health():
     """
@@ -154,16 +161,18 @@ def list_clusters(is_coherent: bool | None = Query(default=None)):
         if is_coherent is not None and info.get("is_coherent", True) != is_coherent:
             continue
         members = store.cluster_to_techs.get(cid, [])
-        result.append(ClusterSummary(
-            cluster_id=cid,
-            label=info.get("label", ""),
-            label_en=info.get("label_en", ""),
-            domain=info.get("domain", "Other"),
-            confidence=info.get("confidence", 0.0),
-            is_coherent=info.get("is_coherent", True),
-            n_members=len(members),
-            overridden=info.get("overridden", False),
-        ))
+        result.append(
+            ClusterSummary(
+                cluster_id=cid,
+                label=info.get("label", ""),
+                label_en=info.get("label_en", ""),
+                domain=info.get("domain", "Other"),
+                confidence=info.get("confidence", 0.0),
+                is_coherent=info.get("is_coherent", True),
+                n_members=len(members),
+                overridden=info.get("overridden", False),
+            )
+        )
     return result
 
 
@@ -257,7 +266,7 @@ def get_tech_cluster(tech_name: str):
         raise HTTPException(
             status_code=404,
             detail=f"'{tech_name}' không có trong snapshot (tag={store.tag}), và không khớp đủ "
-                   "giống tech nào đã biết để gán tạm. Chạy lại pipeline khi DB được update.",
+            "giống tech nào đã biết để gán tạm. Chạy lại pipeline khi DB được update.",
         )
     return result
 

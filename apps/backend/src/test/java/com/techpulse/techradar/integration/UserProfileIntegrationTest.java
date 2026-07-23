@@ -1,7 +1,6 @@
 package com.techpulse.techradar.integration;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.http.MediaType;
 
 import java.util.List;
@@ -10,7 +9,6 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** User profile (users.full_name + user_profile text[]) and avatar upload/serve. */
-@EnabledIfEnvironmentVariable(named = "POSTGRES_HOST", matches = ".+")
 class UserProfileIntegrationTest extends IntegrationTestSupport {
 
     @Test

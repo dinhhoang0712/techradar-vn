@@ -4,6 +4,7 @@ Log kết quả vào mlflow.db (file đã tồn tại tại services/ai-rag-core
 
 Chỉ chạy khi settings.eval_enabled = True (tắt mặc định để không tăng latency).
 """
+
 import logging
 import re
 
@@ -21,7 +22,7 @@ async def score_faithfulness(
     LLM judge: câu trả lời có trung thực với context không?
     Trả về float 0.0–1.0. Lỗi → trả về -1.0 (không log).
     """
-    context_text = "\n\n".join(f"[{i+1}] {c[:500]}" for i, c in enumerate(contexts[:5]))
+    context_text = "\n\n".join(f"[{i + 1}] {c[:500]}" for i, c in enumerate(contexts[:5]))
     messages = [
         {
             "role": "system",

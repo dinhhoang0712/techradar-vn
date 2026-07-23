@@ -18,8 +18,8 @@ from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
-
 from conf.config import ClusteringParams
+
 from src.clustering.evaluator import compute_related_split_ratio, evaluate_clustering
 from src.clustering.trainer import train_by_algorithm
 
@@ -64,6 +64,7 @@ class TrialResult:
                            khác cụm — NaN nếu không truyền df_related/tech_ids
                            vào grid_search. Xem evaluator.compute_related_split_ratio.
     """
+
     algorithm: str
     params: dict[str, Any]
     labels: np.ndarray = field(repr=False)
@@ -80,7 +81,7 @@ class TrialResult:
     related_split_ratio: float | None = None
 
 
-def _build_param_grid(params: ClusteringParams) -> list[dict]:
+def _build_param_grid(params: ClusteringParams, n_samples: int) -> list[dict]:
     """Tạo cartesian product tham số theo algorithm."""
     alg = params.algorithm
     if alg == "dbscan":
@@ -97,16 +98,30 @@ def _build_param_grid(params: ClusteringParams) -> list[dict]:
                 "min_samples": ms,
                 "cluster_selection_method": g.cluster_selection_method,
             }
-            for mcs, ms in itertools.product(
-                g.min_cluster_size_grid, g.min_samples_grid
-            )
+            for mcs, ms in itertools.product(g.min_cluster_size_grid, g.min_samples_grid)
         ]
     else:  # kmeans
         g = params.kmeans
-        return [
-            {"n_clusters": nc, "n_init": g.n_init, "random_state": g.random_state}
-            for nc in g.n_clusters_grid
-        ]
+        # sklearn's KMeans raises ValueError("n_samples=X should be >= n_clusters=Y") — a hard
+        # crash, not a per-trial failure — for any grid value above n_samples. n_clusters_grid is
+        # tuned for the production scale (~250 tech); on a smaller dataset (dev/test, early-crawl)
+        # every value can exceed n_samples, so filter instead of letting KMeans raise.
+        valid_nc = [nc for nc in g.n_clusters_grid if nc <= n_samples]
+        if not valid_nc:
+            valid_nc = [max(1, n_samples // 2)] if n_samples > 1 else [1]
+            logger.warning(
+                "kmeans.n_clusters_grid=%s toàn bộ vượt quá n_samples=%d — dùng %s thay thế.",
+                g.n_clusters_grid,
+                n_samples,
+                valid_nc,
+            )
+        elif len(valid_nc) < len(g.n_clusters_grid):
+            logger.warning(
+                "kmeans.n_clusters_grid: lọc bỏ %d giá trị vượt quá n_samples=%d.",
+                len(g.n_clusters_grid) - len(valid_nc),
+                n_samples,
+            )
+        return [{"n_clusters": nc, "n_init": g.n_init, "random_state": g.random_state} for nc in valid_nc]
 
 
 def grid_search(
@@ -126,84 +141,104 @@ def grid_search(
     ngay tại vòng grid search, và cho `select_best_trial` dùng làm tie-break.
     Thiếu 1 trong 2 tham số → related_split_ratio = NaN, hành vi y hệt trước đây.
     """
-    param_grid = _build_param_grid(params)
+    n_samples = X.shape[0]
+    param_grid = _build_param_grid(params, n_samples)
     logger.info(
         "Grid search algorithm=%s, tổng %d trial(s).",
-        params.algorithm, len(param_grid),
+        params.algorithm,
+        len(param_grid),
     )
-    print(f"[grid_search] {params.algorithm} — {len(param_grid)} trials")
 
     sel = params.selection
     can_score_related = tech_ids is not None and df_related is not None
     results: list[TrialResult] = []
 
+    # require_min_clusters check được HOÃN tới sau vòng lặp (xem dưới `results`) thay vì áp ngay
+    # ở đây — một công thức ước tính trước "cluster tối đa khả thi" (dựa n_samples/noise_ratio/
+    # min_cluster_size) từng thử nhưng vẫn có thể lạc quan hơn thực tế mà HDBSCAN đạt được (cấu
+    # trúc embedding thật không chỉ phụ thuộc số liệu thô). Đáng tin hơn: chạy hết grid trước, rồi
+    # so require_min_clusters với SỐ CLUSTER TỐT NHẤT ĐÃ THỰC SỰ ĐẠT ĐƯỢC trong các trial đã thoả
+    # max_clusters/max_noise_ratio — không bao giờ optimistic hơn dữ liệu thật.
     for i, trial_params in enumerate(param_grid, 1):
         t0 = time.time()
         try:
             model, labels = train_by_algorithm(params.algorithm, X, **trial_params)
-            metrics   = evaluate_clustering(X, labels, model=model)
-            wall      = time.time() - t0
+            metrics = evaluate_clustering(X, labels, model=model)
+            wall = time.time() - t0
 
             related_ratio = _NAN
             if can_score_related:
-                related_ratio = compute_related_split_ratio(
-                    df_related, tech_ids, labels
-                )["related_pairs_split_ratio"]
+                related_ratio = compute_related_split_ratio(df_related, tech_ids, labels)["related_pairs_split_ratio"]
 
+            # passed_constraints ở đây CHƯA gồm require_min_clusters — được áp bổ sung ngay sau
+            # vòng lặp (xem effective_min_clusters), khi đã biết mức khả thi thực tế.
             passed = (
-                metrics["n_clusters"] >= sel.require_min_clusters
-                and metrics["n_clusters"] <= sel.require_max_clusters
+                metrics["n_clusters"] <= sel.require_max_clusters
                 and metrics["noise_ratio"] <= sel.require_max_noise_ratio
             )
             if sel.require_max_related_split_ratio is not None and not np.isnan(related_ratio):
                 passed = passed and related_ratio <= sel.require_max_related_split_ratio
 
             result = TrialResult(
-                algorithm          = params.algorithm,
-                params             = trial_params,
-                labels             = labels,
-                n_clusters         = metrics["n_clusters"],
-                n_noise            = metrics["n_noise"],
-                noise_ratio        = metrics["noise_ratio"],
-                silhouette         = metrics["silhouette"],
-                davies_bouldin     = metrics["davies_bouldin"],
-                calinski_harabasz  = metrics["calinski_harabasz"],
-                dbcv               = metrics["dbcv"],
-                passed_constraints = passed,
-                failure_reason     = None,
-                wall_seconds       = wall,
-                related_split_ratio = related_ratio,
+                algorithm=params.algorithm,
+                params=trial_params,
+                labels=labels,
+                n_clusters=metrics["n_clusters"],
+                n_noise=metrics["n_noise"],
+                noise_ratio=metrics["noise_ratio"],
+                silhouette=metrics["silhouette"],
+                davies_bouldin=metrics["davies_bouldin"],
+                calinski_harabasz=metrics["calinski_harabasz"],
+                dbcv=metrics["dbcv"],
+                passed_constraints=passed,
+                failure_reason=None,
+                wall_seconds=wall,
+                related_split_ratio=related_ratio,
             )
         except Exception as exc:
             wall = time.time() - t0
             logger.warning("Trial %d/%d failed: %s", i, len(param_grid), exc)
             result = TrialResult(
-                algorithm          = params.algorithm,
-                params             = trial_params,
-                labels             = np.array([], dtype=int),
-                n_clusters         = 0,
-                n_noise            = 0,
-                noise_ratio        = 1.0,
-                silhouette         = None,
-                davies_bouldin     = None,
-                calinski_harabasz  = None,
-                dbcv               = None,
-                passed_constraints = False,
-                failure_reason     = str(exc),
-                wall_seconds       = wall,
-                related_split_ratio = _NAN,
+                algorithm=params.algorithm,
+                params=trial_params,
+                labels=np.array([], dtype=int),
+                n_clusters=0,
+                n_noise=0,
+                noise_ratio=1.0,
+                silhouette=None,
+                davies_bouldin=None,
+                calinski_harabasz=None,
+                dbcv=None,
+                passed_constraints=False,
+                failure_reason=str(exc),
+                wall_seconds=wall,
+                related_split_ratio=_NAN,
             )
 
         results.append(result)
         status = "✓" if result.passed_constraints else "✗"
         sil_str = f"{result.silhouette:.3f}" if result.silhouette is not None else "N/A"
-        print(
-            f"  [{status}] Trial {i}/{len(param_grid)} "
-            f"params={trial_params} "
-            f"n_clusters={result.n_clusters} "
-            f"silhouette={sil_str} "
-            f"({wall:.1f}s)"
+        logger.info(
+            "[%s] Trial %d/%d params=%s n_clusters=%d silhouette=%s (%.1fs)",
+            status, i, len(param_grid), trial_params, result.n_clusters, sil_str, wall,
         )
+
+    # require_min_clusters (params.yaml, tuned cho quy mô production ~250 tech) áp dụng bổ sung ở
+    # đây, sau khi đã biết trial nào thực sự đạt max_clusters/max_noise_ratio — effective_min_clusters
+    # không bao giờ vượt quá số cluster TỐT NHẤT đã thực đạt được, nên không thể lạc quan hơn dữ
+    # liệu thật (khác với ước tính trước dựa công thức, vốn có thể vẫn sai với embedding thực tế).
+    achievable = [r.n_clusters for r in results if r.passed_constraints]
+    effective_min_clusters = min(sel.require_min_clusters, max(achievable)) if achievable else sel.require_min_clusters
+    if effective_min_clusters < sel.require_min_clusters:
+        logger.warning(
+            "require_min_clusters=%d vượt quá số cluster tốt nhất thực đạt được (%d, n_samples=%d) — hạ xuống %d.",
+            sel.require_min_clusters,
+            max(achievable) if achievable else 0,
+            n_samples,
+            effective_min_clusters,
+        )
+    for r in results:
+        r.passed_constraints = r.passed_constraints and r.n_clusters >= effective_min_clusters
 
     n_passed = sum(r.passed_constraints for r in results)
     logger.info("Grid search xong: %d/%d trial pass constraints.", n_passed, len(results))
@@ -225,6 +260,7 @@ def find_eps_via_kdistance(X: np.ndarray, k: int = 5) -> dict:
     kneedle_eps = None
     try:
         from kneed import KneeLocator
+
         kl = KneeLocator(
             range(len(k_distances)),
             k_distances,
@@ -242,9 +278,9 @@ def find_eps_via_kdistance(X: np.ndarray, k: int = 5) -> dict:
 
     logger.info("find_eps_via_kdistance: k=%d, kneedle_eps=%.4f", k, kneedle_eps or -1)
     return {
-        "k":            k,
-        "kneedle_eps":  kneedle_eps,
-        "k_distances":  k_distances,
+        "k": k,
+        "kneedle_eps": kneedle_eps,
+        "k_distances": k_distances,
     }
 
 
@@ -306,6 +342,9 @@ def select_best_trial(
     best = sorted(passed, key=sort_key, reverse=True)[0]
     logger.info(
         "Best trial: params=%s n_clusters=%d silhouette=%.4f noise_ratio=%.3f",
-        best.params, best.n_clusters, best.silhouette or 0, best.noise_ratio,
+        best.params,
+        best.n_clusters,
+        best.silhouette or 0,
+        best.noise_ratio,
     )
     return best

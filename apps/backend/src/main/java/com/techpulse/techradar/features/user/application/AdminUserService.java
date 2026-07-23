@@ -1,8 +1,12 @@
 package com.techpulse.techradar.features.user.application;
 
 import com.techpulse.techradar.features.auth.domain.User;
+import com.techpulse.techradar.features.auth.ports.RolePermissionRepository;
 import com.techpulse.techradar.features.auth.ports.UserRepository;
+import com.techpulse.techradar.shared.exception.BadRequestException;
+import com.techpulse.techradar.shared.exception.ErrorCode;
 import com.techpulse.techradar.shared.exception.NotFoundException;
+import com.techpulse.techradar.shared.redis.SecurityStampService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -12,6 +16,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.Locale;
+import java.util.UUID;
 
 /**
  * Application service for admin-only user management: CRUD on arbitrary users, independent of
@@ -25,6 +30,8 @@ public class AdminUserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserAccountValidator accountValidator;
+    private final SecurityStampService securityStampService;
+    private final RolePermissionRepository rolePermissionRepository;
 
     public Flux<User> listUsers() {
         return userRepository.findAll();
@@ -37,17 +44,18 @@ public class AdminUserService {
                                  String status,
                                  String subscriptionTier) {
         return accountValidator.validateEmailUnique(email, null)
-                .then(Mono.defer(() -> {
+                .then(normalizeRole(role))
+                .flatMap(normalizedRole -> {
                     User user = User.builder()
                             .email(email)
                             .fullName(fullName)
                             .passwordHash(passwordEncoder.encode(rawPassword))
-                            .role(normalizeRole(role))
+                            .role(normalizedRole)
                             .status(StringUtils.hasText(status) ? status : "active")
                             .subscriptionTier(StringUtils.hasText(subscriptionTier) ? subscriptionTier : "free")
                             .build();
                     return userRepository.save(user);
-                }))
+                })
                 .doOnSuccess(u -> log.info("Admin created user: id={}, email={}, role={}",
                         u.getId(), u.getEmail(), u.getRole()));
     }
@@ -67,7 +75,10 @@ public class AdminUserService {
                     }
                     return Mono.just(existing);
                 })
-                .flatMap(existing -> {
+                .flatMap(existing -> resolveRoleChange(existing, role))
+                .flatMap(roleChange -> {
+                    User existing = roleChange.user();
+                    boolean revokesExistingTokens = roleChange.revokesExistingTokens();
                     if (StringUtils.hasText(email)) {
                         existing.setEmail(email);
                     }
@@ -76,19 +87,39 @@ public class AdminUserService {
                     }
                     if (StringUtils.hasText(rawPassword)) {
                         existing.setPasswordHash(passwordEncoder.encode(rawPassword));
-                    }
-                    if (StringUtils.hasText(role)) {
-                        existing.setRole(normalizeRole(role));
+                        revokesExistingTokens = true;
                     }
                     if (StringUtils.hasText(status)) {
+                        revokesExistingTokens |= !status.equals(existing.getStatus());
                         existing.setStatus(status);
                     }
                     if (StringUtils.hasText(subscriptionTier)) {
                         existing.setSubscriptionTier(subscriptionTier);
                     }
-                    return userRepository.save(existing);
+                    if (revokesExistingTokens) {
+                        existing.setSecurityStamp(UUID.randomUUID());
+                    }
+                    boolean bumpStamp = revokesExistingTokens;
+                    return userRepository.save(existing)
+                            .flatMap(saved -> bumpStamp
+                                    ? securityStampService.set(saved.getId().toString(), saved.getSecurityStamp()).thenReturn(saved)
+                                    : Mono.just(saved));
                 })
                 .doOnSuccess(u -> log.info("Admin updated user: id={}", u.getId()));
+    }
+
+    private record RoleChange(User user, boolean revokesExistingTokens) {
+    }
+
+    private Mono<RoleChange> resolveRoleChange(User existing, String role) {
+        if (!StringUtils.hasText(role)) {
+            return Mono.just(new RoleChange(existing, false));
+        }
+        return normalizeRole(role).map(normalized -> {
+            boolean changed = !normalized.equals(existing.getRole());
+            existing.setRole(normalized);
+            return new RoleChange(existing, changed);
+        });
     }
 
     public Mono<Void> deleteUser(String userId) {
@@ -99,11 +130,19 @@ public class AdminUserService {
                 .doOnSuccess(v -> log.info("Admin deleted user: id={}", userId));
     }
 
-    private String normalizeRole(String role) {
+    /**
+     * Validates against the {@code roles} table (V24/V25 migrations) instead of a hardcoded
+     * admin/user binary, so a new role added purely as data (e.g. "moderator") becomes assignable
+     * here immediately - no code change needed.
+     */
+    private Mono<String> normalizeRole(String role) {
         if (!StringUtils.hasText(role)) {
-            return "user";
+            return Mono.just("user");
         }
         String normalized = role.trim().toLowerCase(Locale.ROOT);
-        return normalized.equals("admin") ? "admin" : "user";
+        return rolePermissionRepository.roleExists(normalized)
+                .flatMap(exists -> exists
+                        ? Mono.just(normalized)
+                        : Mono.error(new BadRequestException(ErrorCode.VALIDATION_ERROR, "Unknown role: " + role)));
     }
 }

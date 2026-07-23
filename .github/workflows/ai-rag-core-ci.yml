@@ -1,0 +1,40 @@
+name: AI RAG Core CI
+
+# tests/conftest.py mocks Neo4j/Postgres/the Gemini LLM entirely (mock_env_vars/mock_db/
+# mock_neo4j_session/mock_llm fixtures) — no service containers needed, just the dependencies
+# importable.
+on:
+  push:
+    branches: [master]
+    paths:
+      - "services/ai-rag-core/**"
+      - ".github/workflows/ai-rag-core-ci.yml"
+  pull_request:
+    paths:
+      - "services/ai-rag-core/**"
+      - ".github/workflows/ai-rag-core-ci.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Matches services/ai-rag-core/Dockerfile's base image (python:3.11-slim).
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: services/ai-rag-core/requirements.txt
+
+      # CPU-only torch FIRST — sentence-transformers/transformers below pull torch transitively,
+      # and without this index pip defaults to the CUDA wheel (~5x larger download) even though
+      # CI never touches a GPU. Same pattern as the service's own Dockerfile.
+      - name: Install torch (CPU-only)
+        run: pip install --timeout 600 torch==2.4.1 --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install dependencies
+        run: pip install -r services/ai-rag-core/requirements.txt
+
+      - name: Run tests
+        run: pytest services/ai-rag-core/tests

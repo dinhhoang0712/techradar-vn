@@ -26,7 +26,7 @@ public class PostgresUserRepository implements UserRepository, UserStatsReposito
     @Override
     public Mono<User> findByEmail(String email) {
         return dbClient.sql(
-                "SELECT id, email, password_hash, full_name, role, status, subscription_tier, created_at, updated_at " +
+                "SELECT id, email, password_hash, full_name, role, status, subscription_tier, security_stamp, created_at, updated_at " +
                 "FROM users WHERE email = :email"
         )
                 .bind("email", email)
@@ -37,7 +37,7 @@ public class PostgresUserRepository implements UserRepository, UserStatsReposito
     @Override
     public Mono<User> findById(String userId) {
         return dbClient.sql(
-                "SELECT id, email, password_hash, full_name, role, status, subscription_tier, created_at, updated_at " +
+                "SELECT id, email, password_hash, full_name, role, status, subscription_tier, security_stamp, created_at, updated_at " +
                 "FROM users WHERE id = :id"
         )
                 .bind("id", UUID.fromString(userId))
@@ -66,7 +66,7 @@ public class PostgresUserRepository implements UserRepository, UserStatsReposito
     @Override
     public Flux<User> findAll() {
         return dbClient.sql(
-                "SELECT id, email, password_hash, full_name, role, status, subscription_tier, created_at, updated_at " +
+                "SELECT id, email, password_hash, full_name, role, status, subscription_tier, security_stamp, created_at, updated_at " +
                 "FROM users ORDER BY created_at DESC"
         )
                 .map(row -> mapRowToUser((Row) row))
@@ -88,16 +88,30 @@ public class PostgresUserRepository implements UserRepository, UserStatsReposito
                 .one();
     }
 
+    @Override
+    public Flux<User> findAdmins() {
+        return dbClient.sql(
+                "SELECT id, email, password_hash, full_name, role, status, subscription_tier, security_stamp, created_at, updated_at " +
+                "FROM users WHERE role = :role"
+        )
+                .bind("role", "admin")
+                .map(row -> mapRowToUser((Row) row))
+                .all();
+    }
+
     private Mono<User> insert(User user) {
         UUID id = UUID.randomUUID();
         LocalDateTime now = LocalDateTime.now();
         user.setId(id);
         user.setCreatedAt(now);
         user.setUpdatedAt(now);
+        if (user.getSecurityStamp() == null) {
+            user.setSecurityStamp(UUID.randomUUID());
+        }
 
         DatabaseClient.GenericExecuteSpec spec = dbClient.sql(
-                "INSERT INTO users (id, email, password_hash, full_name, role, status, subscription_tier, created_at, updated_at) " +
-                "VALUES (:id, :email, :password_hash, :full_name, :role, :status, :subscription_tier, :created_at, :updated_at)"
+                "INSERT INTO users (id, email, password_hash, full_name, role, status, subscription_tier, security_stamp, created_at, updated_at) " +
+                "VALUES (:id, :email, :password_hash, :full_name, :role, :status, :subscription_tier, :security_stamp, :created_at, :updated_at)"
         )
                 .bind("id", id)
                 .bind("email", user.getEmail())
@@ -105,6 +119,7 @@ public class PostgresUserRepository implements UserRepository, UserStatsReposito
                 .bind("role", user.getRole())
                 .bind("status", user.getStatus() != null ? user.getStatus() : "active")
                 .bind("subscription_tier", user.getSubscriptionTier() != null ? user.getSubscriptionTier() : "free")
+                .bind("security_stamp", user.getSecurityStamp())
                 .bind("created_at", now)
                 .bind("updated_at", now);
         spec = bindNullable(spec, "full_name", user.getFullName());
@@ -118,7 +133,7 @@ public class PostgresUserRepository implements UserRepository, UserStatsReposito
 
         DatabaseClient.GenericExecuteSpec spec = dbClient.sql(
                 "UPDATE users SET email = :email, password_hash = :password_hash, full_name = :full_name, role = :role, " +
-                "status = :status, subscription_tier = :subscription_tier, updated_at = :updated_at " +
+                "status = :status, subscription_tier = :subscription_tier, security_stamp = :security_stamp, updated_at = :updated_at " +
                 "WHERE id = :id"
         )
                 .bind("id", user.getId())
@@ -127,6 +142,7 @@ public class PostgresUserRepository implements UserRepository, UserStatsReposito
                 .bind("role", user.getRole())
                 .bind("status", user.getStatus())
                 .bind("subscription_tier", user.getSubscriptionTier())
+                .bind("security_stamp", user.getSecurityStamp())
                 .bind("updated_at", now);
         spec = bindNullable(spec, "full_name", user.getFullName());
 
@@ -147,6 +163,7 @@ public class PostgresUserRepository implements UserRepository, UserStatsReposito
                 .role(row.get("role", String.class))
                 .status(row.get("status", String.class))
                 .subscriptionTier(row.get("subscription_tier", String.class))
+                .securityStamp(row.get("security_stamp", UUID.class))
                 .createdAt(row.get("created_at", LocalDateTime.class))
                 .updatedAt(row.get("updated_at", LocalDateTime.class))
                 .build();

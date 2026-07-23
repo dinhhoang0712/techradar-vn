@@ -50,12 +50,12 @@ async def get_user_context(user_id: str) -> dict | None:
         return None
 
     return {
-        "user_id":      str(row["user_id"]),
-        "full_name":    row["full_name"],
-        "job_role":     row["job_role"],
+        "user_id": str(row["user_id"]),
+        "full_name": row["full_name"],
+        "job_role": row["job_role"],
         "technologies": list(row["technologies"] or []),
-        "location":     row["location"],
-        "bio":          row["bio"],
+        "location": row["location"],
+        "bio": row["bio"],
     }
 
 

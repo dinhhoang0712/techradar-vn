@@ -3,7 +3,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import requests
-
 from config import Settings
 from scheduler.jobs import job_retrain_clustering
 
@@ -25,7 +24,11 @@ def _fake_pg_conn():
 @patch("scheduler.jobs.requests.get")
 @patch("scheduler.jobs.requests.post")
 def test_retrain_clustering_polls_until_success_and_logs_success(
-    mock_post, mock_get, mock_get_pg_conn, mock_log_run, mock_sleep,
+    mock_post,
+    mock_get,
+    mock_get_pg_conn,
+    mock_log_run,
+    mock_sleep,
 ):
     mock_get_pg_conn.return_value = _fake_pg_conn()
     mock_log_run.side_effect = [1, None]  # đầu ("running") trả run_id=1, các lần sau không cần giá trị
@@ -48,7 +51,11 @@ def test_retrain_clustering_polls_until_success_and_logs_success(
 @patch("scheduler.jobs.requests.get")
 @patch("scheduler.jobs.requests.post")
 def test_retrain_clustering_polls_until_failed_and_logs_failed_with_error(
-    mock_post, mock_get, mock_get_pg_conn, mock_log_run, mock_sleep,
+    mock_post,
+    mock_get,
+    mock_get_pg_conn,
+    mock_log_run,
+    mock_sleep,
 ):
     mock_get_pg_conn.return_value = _fake_pg_conn()
     mock_log_run.side_effect = [1, None]
@@ -69,7 +76,11 @@ def test_retrain_clustering_polls_until_failed_and_logs_failed_with_error(
 @patch("scheduler.jobs.requests.get")
 @patch("scheduler.jobs.requests.post")
 def test_retrain_clustering_times_out_when_status_never_settles(
-    mock_post, mock_get, mock_get_pg_conn, mock_log_run, mock_sleep,
+    mock_post,
+    mock_get,
+    mock_get_pg_conn,
+    mock_log_run,
+    mock_sleep,
 ):
     mock_get_pg_conn.return_value = _fake_pg_conn()
     mock_log_run.side_effect = [1, None]
@@ -88,7 +99,9 @@ def test_retrain_clustering_times_out_when_status_never_settles(
 @patch("common.db.get_pg_conn")
 @patch("scheduler.jobs.requests.post")
 def test_retrain_clustering_connection_error_logs_failed_without_polling(
-    mock_post, mock_get_pg_conn, mock_log_run,
+    mock_post,
+    mock_get_pg_conn,
+    mock_log_run,
 ):
     mock_get_pg_conn.return_value = _fake_pg_conn()
     mock_log_run.return_value = 1
@@ -106,7 +119,9 @@ def test_retrain_clustering_connection_error_logs_failed_without_polling(
 @patch("common.db.get_pg_conn")
 @patch("scheduler.jobs.requests.post")
 def test_retrain_clustering_409_already_running_logs_failed(
-    mock_post, mock_get_pg_conn, mock_log_run,
+    mock_post,
+    mock_get_pg_conn,
+    mock_log_run,
 ):
     mock_get_pg_conn.return_value = _fake_pg_conn()
     mock_log_run.return_value = 1

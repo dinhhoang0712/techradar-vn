@@ -98,6 +98,7 @@ Trực quan hóa và khám phá đồ thị tri thức với force-directed grap
 - **Graph Traversal**: Tìm đường đi ngắn nhất giữa 2 công nghệ
 - **Advanced Filtering**: Lọc theo location, salary, sentiment, node types
 - **Node Details**: Xem chi tiết thông tin từng node
+- **Graph Analytics**: Chế độ tô màu công nghệ theo cộng đồng (Louvain) + resize theo mức độ trung tâm (PageRank), tính bằng Neo4j GDS (`POST /admin/graph-analytics/rebuild`, admin-triggered)
 
 **Use Case**: Developer muốn biết React có liên quan đến những công nghệ nào, những công ty nào đang dùng React.
 
@@ -176,6 +177,7 @@ Khám phá công ty và tech stack thực tế của họ, suy luận từ dữ 
 
 - **Company Directory**: Danh sách công ty xếp hạng theo số lượng job đang tuyển
 - **Similar Companies**: Gợi ý công ty có tech stack tương đồng (Jaccard similarity)
+- **AI Company Insight**: Tóm tắt ngắn bằng AI về hồ sơ tuyển dụng/tech stack công ty (`/company-insight`, public — hiển thị ngay trên trang Company Explorer không cần đăng nhập)
 
 **Use Case**: Developer muốn biết công ty nào đang dùng stack giống công ty mình đang cân nhắc ứng tuyển.
 
@@ -224,7 +226,7 @@ Nhắn tin trực tiếp 1-1 giữa người dùng, realtime qua SSE (fan-out qu
 
 Quản lý tài khoản và hồ sơ cá nhân.
 
-- **Authentication**: JWT với refresh token rotation
+- **Authentication**: JWT với refresh token rotation; token bị vô hiệu hoá ngay lập tức (security stamp) khi admin đổi role/khoá tài khoản, không phải chờ token hết hạn
 - **Profile Management**: Quản lý thông tin cá nhân, avatar
 - **Technology Preferences**: Đăng ký công nghệ quan tâm
 - **Notification Settings**: Bật/tắt thông báo in-app và email
@@ -281,6 +283,7 @@ Backend được xây dựng với **Spring Boot 3.4** theo mô hình **Hexagona
 - `notification`: In-app / email alerts, SSE stream, trend & job-match dispatch
 - `company`: Company Explorer (Neo4j)
 - `job`: Job Matching theo skill overlap (Neo4j)
+- `roadmap`: Career Roadmap + "what-if" skill simulation (`GET /career/roadmap`, `/career/simulate`), cache Redis riêng, alert khi có lộ trình mới phù hợp
 - `messaging`: Direct messages 1-1 (Postgres + SSE qua Redis Pub/Sub)
 - `social`: Feed / follow / like / comment / content report
 - `aiproxy`: Forward career / forecast / recommend / report / interview / agent / summarize → `ai-rag-core`
@@ -305,6 +308,7 @@ Backend được xây dựng với **Spring Boot 3.4** theo mô hình **Hexagona
 **Job Sources:**
 - TopCV
 - ITviec
+- VietnamWorks
 - GitHub (optional)
 
 ### Pipeline Stages
@@ -386,7 +390,7 @@ Luồng chatbot: entity extraction → hybrid retrieval (graph + vector + SQL) �
 - **Build Tool**: Vite 7
 - **Routing**: React Router DOM 7
 - **Charts**: Recharts 3
-- **Graph Visualization**: D3.js 7, react-force-graph-2d
+- **Graph Visualization**: react-force-graph-2d (dùng d3-force nội bộ cho physics simulation)
 - **HTTP**: Fetch API
 - **Testing**: Vitest, Testing Library
 
@@ -404,7 +408,7 @@ Luồng chatbot: entity extraction → hybrid retrieval (graph + vector + SQL) �
 - **Messaging**: Spring Kafka
 - **Email**: Spring Boot Mail
 - **Resilience**: Resilience4j
-- **Testing**: Testcontainers, WireMock
+- **Testing**: JUnit 5, Mockito, WireMock, Testcontainers (Postgres/Neo4j/Redis thật cho integration test)
 
 ### Databases
 
@@ -434,8 +438,8 @@ Luồng chatbot: entity extraction → hybrid retrieval (graph + vector + SQL) �
 ### DevOps
 
 - **Containerization**: Docker, Docker Compose
-- **CI/CD**: GitHub Actions
-- **Testing**: Testcontainers
+- **CI/CD**: GitHub Actions — pipeline riêng cho `backend`, `ai-rag-core`, `data-platform`, `ml-clustering` + 1 job `ruff` lint dùng chung cho toàn bộ Python trong repo
+- **Testing**: JUnit 5, Mockito, WireMock, Testcontainers
 - **Monitoring**: Prometheus, Grafana (optional)
 - **Logging**: Logback + Logstash (JSON for prod)
 
@@ -449,43 +453,48 @@ TECH-RADAR/
 ├── apps/
 │   ├── backend/              # Spring Boot WebFlux API Gateway
 │   │   ├── src/
-│   │   │   └── main/
-│   │   │       ├── java/com/techpulse/
-│   │   │       │   ├── features/       # Feature modules
-│   │   │       │   │   ├── auth/
-│   │   │       │   │   ├── radar/
-│   │   │       │   │   ├── compare/
-│   │   │       │   │   ├── graph/
-│   │   │       │   │   ├── chat/
-│   │   │       │   │   ├── clustering/
-│   │   │       │   │   ├── salary/
-│   │   │       │   │   ├── notification/
-│   │   │       │   │   ├── company/
-│   │   │       │   │   ├── job/
-│   │   │       │   │   ├── messaging/
-│   │   │       │   │   ├── social/
-│   │   │       │   │   ├── aiproxy/
-│   │   │       │   │   ├── user/
-│   │   │       │   │   ├── system/     # settings, admin, health/status
-│   │   │       │   │   └── kafka/
-│   │   │       │   └── shared/         # Shared infrastructure
-│   │   │       └── resources/
-│   │   │           ├── application.yml
-│   │   │           ├── db/migrations/   # Flyway migrations
-│   │   │           └── logback-spring.xml
+│   │   │   ├── main/
+│   │   │   │   ├── java/com/techpulse/techradar/
+│   │   │   │   │   ├── features/       # Feature modules (mỗi module: domain/ports/application/adapters)
+│   │   │   │   │   │   ├── auth/
+│   │   │   │   │   │   ├── radar/
+│   │   │   │   │   │   ├── compare/
+│   │   │   │   │   │   ├── graph/
+│   │   │   │   │   │   ├── chat/
+│   │   │   │   │   │   ├── clustering/
+│   │   │   │   │   │   ├── salary/
+│   │   │   │   │   │   ├── notification/
+│   │   │   │   │   │   ├── company/
+│   │   │   │   │   │   ├── job/
+│   │   │   │   │   │   ├── roadmap/
+│   │   │   │   │   │   ├── messaging/
+│   │   │   │   │   │   ├── social/
+│   │   │   │   │   │   ├── aiproxy/
+│   │   │   │   │   │   ├── user/
+│   │   │   │   │   │   ├── system/     # settings, admin, health/status
+│   │   │   │   │   │   └── kafka/
+│   │   │   │   │   ├── config/         # Security, JWT, Kafka, Redis config
+│   │   │   │   │   └── shared/         # Shared infrastructure
+│   │   │   │   └── resources/
+│   │   │   │       ├── application.yml
+│   │   │   │       ├── db/migration/   # Flyway migrations (V1..V27)
+│   │   │   │       └── logback-spring.xml
+│   │   │   └── test/                   # Unit + integration tests (Testcontainers)
 │   │   └── pom.xml
 │   │
-│   ├── web/                  # React 19 + Vite SPA
+│   ├── web/                  # React 19 + Vite + TypeScript (strict) SPA
 │   │   ├── src/
 │   │   │   ├── api/             # API client layer
 │   │   │   ├── components/      # Reusable components
 │   │   │   ├── contexts/        # React contexts
+│   │   │   ├── hooks/           # Custom hooks
 │   │   │   ├── pages/           # Page components
 │   │   │   ├── layouts/         # Page layouts
+│   │   │   ├── types/           # Shared TS types
 │   │   │   └── utils/           # Utility functions
 │   │   └── package.json
 │   │
-│   └── mobile/               # Expo / React Native app (future)
+│   └── mobile/               # Expo / React Native app
 │
 ├── services/
 │   ├── ai-rag-core/          # FastAPI — Graph RAG chat (port 8000)
@@ -499,15 +508,19 @@ TECH-RADAR/
 │   │   ├── requirements.txt
 │   │   └── Dockerfile
 │   │
-│   └── ml-clustering/        # FastAPI — Technology clustering (port 8001)
-│       ├── app/
-│       │   ├── api/           # API routes
-│       │   ├── pipelines/     # ML pipelines
-│       │   └── src/           # ML code
-│       ├── dvc.yaml           # DVC pipeline
-│       ├── params.yaml         # Hyperparameters
-│       ├── requirements.txt
-│       └── Dockerfile
+│   ├── ml-clustering/        # FastAPI — Technology clustering (port 8001)
+│   │   ├── app/               # FastAPI routes (routes_pipeline.py) + schemas/security
+│   │   ├── conf/              # Settings (config.py)
+│   │   ├── pipelines/         # 5 DVC stages (extract → features → train → label → writeback)
+│   │   ├── src/                # ML code (clustering/, features/, labeling/, tracking/, data/)
+│   │   ├── dvc.yaml           # DVC pipeline
+│   │   ├── params.yaml         # Hyperparameters
+│   │   ├── requirements.txt
+│   │   └── Dockerfile
+│   │
+│   ├── crawler/               # 9 nguồn bài/job VN → Kafka (profile `crawl`)
+│   ├── embedding-service/     # Article → embedding, ghi Qdrant (profile `vector`)
+│   └── qdrant-writer/         # Kafka consumer ghi Qdrant (profile `vector`)
 │
 ├── data-platform/           # Data Platform (Bronze/Silver/Gold)
 │   ├── bronze/               # Kafka → MinIO writer
@@ -523,6 +536,8 @@ TECH-RADAR/
 │   ├── FRONTEND_GUIDE.md     # Frontend development guide
 │   ├── DEVELOPMENT_GUIDE.md  # Development guide
 │   ├── AI_PLATFORM.md        # AI services documentation
+│   ├── DATA_PLATFORM.md      # Data platform documentation
+│   ├── DATABASE.md           # Database schema & ownership
 │   ├── API_DOCs_v1.md       # API documentation
 │   └── DEPLOYMENT.md         # Deployment guide
 │
@@ -588,9 +603,9 @@ docker logs techradar-crawler -f
 | Profile | Bật thêm gì | Lệnh riêng lẻ |
 |---|---|---|
 | _(none)_ | App stack cơ bản — **không** có crawler, Postgres/Neo4j sẽ trống | `docker compose up --build` |
-| `crawl` | Crawler lấy dữ liệu thật từ 8 nguồn (VNExpress, GenK, DanTri, ICTNews, TopCV, ITviec, Viblo, GitHub) | `docker compose --profile crawl up -d` |
+| `crawl` | Crawler lấy dữ liệu thật từ 9 nguồn (VNExpress, GenK, DanTri, ICTNews, TopCV, ITviec, VietnamWorks, Viblo, GitHub) | `docker compose --profile crawl up -d` |
 | `vector` | Qdrant vector store cho Graph RAG | `docker compose --profile vector up -d` |
-| `observability` | Grafana + Loki + Promtail (log tập trung) | `docker compose --profile observability up -d` |
+| `observability` | Grafana + Prometheus + Loki + Promtail (metrics + log tập trung) | `docker compose --profile observability up -d` |
 
 Kết hợp nhiều profile cùng lúc bằng `COMPOSE_PROFILES=crawl,vector,observability` (như bước 3) hoặc lặp lại `--profile <name>` nhiều lần.
 
@@ -646,21 +661,22 @@ JWT_SECRET=your-secret-key-change-in-production
 INTERNAL_API_TOKEN=your-internal-token-for-python-services
 
 # LLM Provider (chọn một)
-LLM_PROVIDER=openai  # hoặc gemini
+LLM_PROVIDER=openai  # "openai" | "gemini" | "groq"
 OPENAI_API_KEY=sk-...
 GEMINI_API_KEY=...
+GROQ_API_KEY=...
 
 # CORS
-CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
+CORS_ORIGINS=http://localhost:5173,http://localhost:3000
 
-# ML Clustering
-ML_CLUSTERING_S3_BUCKET=techradar-clustering
+# ML Clustering (MinIO, không phải S3)
+MLCLUSTER_MINIO_BUCKET=ml-clustering
 
 # Data Platform
 EMBED_SECRET=your-embed-secret
 
 # Crawlers
-CRAWLER_INTERVAL_HOURS=6
+CRAWL_INTERVAL_HOURS=6
 GITHUB_TOKEN=ghp_...  # cho GitHub crawler
 ```
 
@@ -676,24 +692,22 @@ Xem `.env.docker.example` cho đầy đủ các biến.
 ```bash
 cd apps/backend
 
-# Chạy tất cả tests
+# Chạy tất cả (unit + integration) — không cần cài/khởi động gì trước
 mvn test
-
-# Chạy tests với coverage
-mvn test jacoco:report
 
 # Chạy tests cho một module cụ thể
 mvn test -Dtest=AuthControllerTest
-
-# Chạy integration tests
-mvn verify -Pintegration-test
 ```
 
+> Không có Maven wrapper (`mvnw`) trong `apps/backend` — cần Maven cài sẵn (hoặc tải thủ công).
+> Integration test cần Docker chạy được trên máy (Testcontainers tự kéo container Postgres/Neo4j/
+> Redis khi chạy `mvn test`, không cần `docker compose up` hay set env var trước).
+
 **Test Coverage:**
-- Unit tests cho business logic
-- Integration tests với Testcontainers
-- WebFlux controller tests
-- Repository tests với embedded databases
+- Unit tests cho business logic (Mockito + `StepVerifier`, tầng `application`/use case)
+- WebFlux controller tests (mock use case, gọi thẳng method controller, verify bằng `StepVerifier`)
+- Integration tests full-stack qua `WebTestClient` trên server thật (`*IntegrationTest`, chung base `IntegrationTestSupport`) — Postgres/Neo4j/Redis mỗi lần chạy đều là container Testcontainers mới (singleton pattern, tự start/dừng), Python (`ai-rag-core`/`ml-clustering`) vẫn mock qua `@MockitoBean`
+- Redis cross-instance pub/sub tests (`*RedisCrossInstanceTest`, cần set `REDIS_HOST` trỏ tới 1 Redis thật — tách riêng khỏi Testcontainers vì cần 2 Spring context độc lập cùng trỏ 1 Redis để chứng minh pub/sub xuyên instance)
 
 ### Frontend Tests (React + Vitest)
 
@@ -777,14 +791,14 @@ pytest
 
 ### Phase 3: Advanced Features (Một phần hoàn thành)
 
-- [x] Multi-source Knowledge Graph (8 nguồn bài / job VN)
+- [x] Multi-source Knowledge Graph (9 nguồn bài / job VN)
 - [x] Mobile App (Expo / React Native)
 - [x] API Rate Limiting
 - [x] Advanced Monitoring (Prometheus + Grafana + Loki)
 - [ ] Graph Embeddings (đã dùng FastRP/Node2Vec cho clustering — chưa API/product riêng)
 - [ ] Real-time Trend Detection (hiện alert theo threshold MoM qua Kafka ETL)
 - [ ] Knowledge Graph Versioning
-- [ ] Graph Analytics Dashboard (centrality / community UI)
+- [x] Graph Analytics Dashboard (PageRank/Louvain community/degree centrality qua Neo4j GDS — `features/graph` backend, độc lập với module GDS đã tắt trong `ml-clustering`; xem "Knowledge Graph Explorer" ở trên)
 
 ### Phase 4: Enterprise Features (Một phần hoàn thành)
 
@@ -792,7 +806,7 @@ pytest
 - [x] Custom Reports (report feature + ReportPage)
 - [x] Content Moderation (user report + admin queue)
 - [ ] SSO Integration (SAML, OAuth2)
-- [ ] RBAC Advanced (hiện có USER / ADMIN cơ bản)
+- [x] RBAC Advanced (permission-based — bảng `roles`/`permissions`/`role_permissions`; role `moderator` làm proof-of-concept bên cạnh `user`/`admin`, chỉ có quyền `social:moderate` + `audit:view`)
 - [ ] Data Export (PDF, Excel) — đã có PNG/CSV trên Radar
 - [ ] Webhooks
 - [ ] API Keys Management

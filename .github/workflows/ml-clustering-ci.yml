@@ -1,0 +1,40 @@
+name: ML Clustering CI
+
+# tests/conftest.py builds params/dataframes in-memory and mocks model loading (e.g.
+# content_features._get_model is patched in test_feature_pipeline.py) — no Neo4j/GDS, MLflow
+# tracking server, or DVC remote needed to run the suite.
+on:
+  push:
+    branches: [master]
+    paths:
+      - "services/ml-clustering/**"
+      - ".github/workflows/ml-clustering-ci.yml"
+  pull_request:
+    paths:
+      - "services/ml-clustering/**"
+      - ".github/workflows/ml-clustering-ci.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Matches services/ml-clustering/Dockerfile's base image (python:3.11-slim).
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: services/ml-clustering/requirements.txt
+
+      # CPU-only torch FIRST — sentence-transformers/transformers below pull torch transitively,
+      # and without this index pip defaults to the CUDA wheel even though nothing here uses a
+      # GPU. Same pattern as the service's own Dockerfile.
+      - name: Install torch (CPU-only)
+        run: pip install --timeout 600 torch==2.4.1 --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install dependencies
+        run: pip install -r services/ml-clustering/requirements.txt
+
+      - name: Run tests
+        run: pytest services/ml-clustering/tests

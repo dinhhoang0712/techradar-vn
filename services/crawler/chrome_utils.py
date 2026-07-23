@@ -8,6 +8,7 @@ là bản mới nhất) -> "session not created: This version of ChromeDriver on
 supports Chrome version X". Truyền version_main= đúng version Chrome đã cài
 để uc patch driver khớp version, tránh phải rơi vào nhánh fallback.
 """
+
 import logging
 import re
 import subprocess
@@ -21,7 +22,10 @@ def installed_chrome_major_version() -> int | None:
     for binary in CHROME_BINARIES:
         try:
             result = subprocess.run(
-                [binary, "--version"], capture_output=True, text=True, timeout=10,
+                [binary, "--version"],
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
         except (FileNotFoundError, OSError, subprocess.SubprocessError):
             continue

@@ -2,10 +2,12 @@ package com.techpulse.techradar.features.aiproxy.adapters.input;
 
 import com.techpulse.techradar.features.aiproxy.ports.AiProxyPort;
 import com.techpulse.techradar.shared.dto.ApiResponse;
+import com.techpulse.techradar.shared.util.ClientIpUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
@@ -24,13 +26,15 @@ public class ReportController {
     public Mono<ResponseEntity<ApiResponse<Map<String, Object>>>> report(
             @RequestParam String period,
             @RequestParam(defaultValue = "10") int topN,
-            @RequestParam(defaultValue = "markdown") String format) {
+            @RequestParam(defaultValue = "markdown") String format,
+            ServerHttpRequest httpRequest) {
         Map<String, Object> body = Map.of(
                 "period", period,
                 "top_n", topN,
                 "format", format
         );
         return requestHandler.forward(
-                "/report", body, AiProxyPort.DEFAULT_TIMEOUT, "Report generated", "Report service unavailable");
+                "/report", body, AiProxyPort.DEFAULT_TIMEOUT, "Report generated", "Report service unavailable",
+                ClientIpUtils.resolveClientIp(httpRequest));
     }
 }

@@ -30,7 +30,7 @@ public class CacheAdminController {
 
     @Operation(summary = "Evict the cached company list (GetCompaniesUseCase / GetSimilarCompaniesUseCase)")
     @PostMapping("/companies/evict")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('cache:manage')")
     public Mono<ResponseEntity<ApiResponse<Void>>> evictCompanies() {
         return redisCache.evict("cache:company:all")
                 .thenReturn(ResponseEntity.ok(ApiResponse.<Void>success(null, "Company cache evicted")));
@@ -38,7 +38,7 @@ public class CacheAdminController {
 
     @Operation(summary = "Evict all cached job-match results (GetJobMatchesUseCase — one entry per distinct skill set)")
     @PostMapping("/jobs/evict")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('cache:manage')")
     public Mono<ResponseEntity<ApiResponse<Void>>> evictJobs() {
         return redisCache.evictByPattern("cache:job:match:*")
                 .thenReturn(ResponseEntity.ok(ApiResponse.<Void>success(null, "Job match cache evicted")));
@@ -46,7 +46,7 @@ public class CacheAdminController {
 
     @Operation(summary = "Evict all cached career roadmaps (GetCareerRoadmapUseCase — one entry per user)")
     @PostMapping("/roadmap/evict")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('cache:manage')")
     public Mono<ResponseEntity<ApiResponse<Void>>> evictRoadmaps() {
         return redisCache.evictByPattern("cache:roadmap:*")
                 .thenReturn(ResponseEntity.ok(ApiResponse.<Void>success(null, "Roadmap cache evicted")));

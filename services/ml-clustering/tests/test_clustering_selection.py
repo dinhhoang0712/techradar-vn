@@ -1,4 +1,5 @@
 """Kiểm tra RELATED_TO split-ratio (evaluator) và logic chọn best trial (tuner)."""
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -6,10 +7,10 @@ import pytest
 from src.clustering.evaluator import compute_related_split_ratio
 from src.clustering.tuner import TrialResult, grid_search, select_best_trial
 
-
 # ---------------------------------------------------------------------------
 # compute_related_split_ratio (evaluator.py) — hàm thuần
 # ---------------------------------------------------------------------------
+
 
 def test_compute_related_split_ratio_basic():
     """t1-t2 cùng cụm (không split), t3-t4 khác cụm (split) → ratio 0.5."""
@@ -62,6 +63,7 @@ def test_compute_related_split_ratio_missing_data_returns_nan(df_related):
 # ---------------------------------------------------------------------------
 # select_best_trial (tuner.py)
 # ---------------------------------------------------------------------------
+
 
 def _make_trial(**overrides) -> TrialResult:
     base = dict(
@@ -132,6 +134,7 @@ def test_select_best_trial_missing_related_ratio_is_neutral():
 # grid_search — wiring tech_ids/df_related + require_max_related_split_ratio
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def _well_separated_data():
     # t1,t2 cụm A (gần nhau); t3,t4 cụm B (gần nhau, cách xa cụm A)
@@ -143,9 +146,7 @@ def _well_separated_data():
     return X, tech_ids, df_related
 
 
-def test_grid_search_computes_related_split_ratio_per_trial(
-    mock_clustering_params, _well_separated_data
-):
+def test_grid_search_computes_related_split_ratio_per_trial(mock_clustering_params, _well_separated_data):
     """related_split_ratio phải được tính cho MỌI trial khi truyền đủ
     tech_ids + df_related, không chỉ trial thắng cuối."""
     X, tech_ids, df_related = _well_separated_data
@@ -157,9 +158,7 @@ def test_grid_search_computes_related_split_ratio_per_trial(
     assert trials[0].related_split_ratio == 1.0
 
 
-def test_grid_search_related_split_ratio_disabled_by_default(
-    mock_clustering_params, _well_separated_data
-):
+def test_grid_search_related_split_ratio_disabled_by_default(mock_clustering_params, _well_separated_data):
     """require_max_related_split_ratio mặc định None → không ảnh hưởng
     passed_constraints (không đổi hành vi cũ)."""
     X, tech_ids, df_related = _well_separated_data
@@ -170,9 +169,7 @@ def test_grid_search_related_split_ratio_disabled_by_default(
     assert trials[0].passed_constraints is True
 
 
-def test_grid_search_applies_related_split_ratio_constraint(
-    mock_clustering_params, _well_separated_data
-):
+def test_grid_search_applies_related_split_ratio_constraint(mock_clustering_params, _well_separated_data):
     """require_max_related_split_ratio được set chặt → trial vượt ngưỡng bị
     đánh passed_constraints=False dù đạt mọi ràng buộc cũ (n_clusters/noise)."""
     X, tech_ids, df_related = _well_separated_data

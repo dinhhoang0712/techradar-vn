@@ -90,6 +90,11 @@ class NotificationServiceRedisCrossInstanceTest {
         }
 
         @Override
+        public Mono<Long> countUnreadByType(String userId, String type) {
+            return Mono.just(0L);
+        }
+
+        @Override
         public Mono<Long> markRead(String id, String userId) {
             return Mono.just(0L);
         }
@@ -105,7 +110,7 @@ class NotificationServiceRedisCrossInstanceTest {
         }
 
         @Override
-        public Flux<com.techpulse.techradar.features.notification.domain.TrendSubscriber> findJobMatchSubscribers(
+        public Flux<com.techpulse.techradar.features.notification.domain.JobMatchSubscriber> findJobMatchSubscribers(
                 java.util.List<String> technologies) {
             return Flux.empty();
         }

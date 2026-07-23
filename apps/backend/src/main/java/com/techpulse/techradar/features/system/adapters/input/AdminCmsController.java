@@ -32,7 +32,7 @@ public class AdminCmsController {
 
     @Operation(summary = "List CMS content")
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('cms:manage')")
     public Mono<ResponseEntity<ApiResponse<List<CmsContent>>>> list() {
         return cmsService.list().collectList()
                 .map(items -> ResponseEntity.ok(ApiResponse.success(items, "CMS content")));
@@ -40,7 +40,7 @@ public class AdminCmsController {
 
     @Operation(summary = "Create CMS content")
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('cms:manage')")
     public Mono<ResponseEntity<ApiResponse<CmsContent>>> create(@RequestBody CmsContentRequest req) {
         return cmsService.create(req.getTitle(), req.getType(), req.getContentDate(), req.getStatus())
                 .map(c -> ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(c, "CMS content created")));
@@ -48,7 +48,7 @@ public class AdminCmsController {
 
     @Operation(summary = "Update CMS content")
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('cms:manage')")
     public Mono<ResponseEntity<ApiResponse<CmsContent>>> update(
             @PathVariable String id, @RequestBody CmsContentRequest req) {
         return cmsService.update(id, req.getTitle(), req.getType(), req.getContentDate(), req.getStatus())
@@ -57,7 +57,7 @@ public class AdminCmsController {
 
     @Operation(summary = "Delete CMS content")
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('cms:manage')")
     public Mono<ResponseEntity<ApiResponse<Void>>> delete(@PathVariable String id) {
         return cmsService.delete(id)
                 .thenReturn(ResponseEntity.status(HttpStatus.NO_CONTENT)

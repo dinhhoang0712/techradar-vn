@@ -2,6 +2,7 @@
 ICTNews crawler — ictnews.vn
 Crawl tin công nghệ từ ICTNews, đẩy vào Kafka topic raw_articles.
 """
+
 import gc
 import json
 import logging
@@ -10,14 +11,13 @@ import re
 import time
 from datetime import datetime
 
+from kafka_producer import CrawlerKafkaProducer
 from selenium import webdriver
+from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 from webdriver_manager.chrome import ChromeDriverManager
-
-from kafka_producer import CrawlerKafkaProducer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -38,7 +38,7 @@ URL_CACHE = os.path.join(DATA_DIR, "processed_urls.txt")
 def _load_urls(path: str) -> set:
     if os.path.exists(path):
         with open(path, encoding="utf-8") as f:
-            return {l.strip() for l in f if l.strip()}
+            return {line.strip() for line in f if line.strip()}
     return set()
 
 
@@ -59,7 +59,9 @@ def _chrome_options() -> Options:
     opts.add_argument("--disable-sync")
     opts.add_argument("--metrics-recording-only")
     opts.add_argument("--mute-audio")
-    opts.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36")
+    opts.add_argument(
+        "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
+    )
     opts.page_load_strategy = "eager"
     return opts
 
@@ -157,15 +159,18 @@ def main():
                     if not title or len(content) < 100:
                         continue
 
-                    posts.append({"title": title, "content": content,
-                                  "source_url": art_url, "publish_date": publish_date})
+                    posts.append(
+                        {"title": title, "content": content, "source_url": art_url, "publish_date": publish_date}
+                    )
                     _save_url(URL_CACHE, art_url)
                     processed.add(art_url)
 
                     if kafka_enabled:
                         kafka.send_article(
-                            title=title, content=content,
-                            source_url=art_url, source_platform=SOURCE_PLATFORM,
+                            title=title,
+                            content=content,
+                            source_url=art_url,
+                            source_platform=SOURCE_PLATFORM,
                             publish_date=publish_date,
                         )
 
@@ -181,8 +186,7 @@ def main():
         kafka.close()
 
     with open(output_file, "w", encoding="utf-8") as f:
-        json.dump({"source_platform": SOURCE_PLATFORM, "post_detail": posts}, f,
-                  ensure_ascii=False, indent=2)
+        json.dump({"source_platform": SOURCE_PLATFORM, "post_detail": posts}, f, ensure_ascii=False, indent=2)
 
     logger.info("ICTNews done: %d articles", total)
 

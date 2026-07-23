@@ -131,6 +131,19 @@ app:
     chat-rate-limit:
       max-requests: ${CHAT_RATE_LIMIT_MAX:20}
       window-seconds: ${CHAT_RATE_LIMIT_WINDOW:60}
+    aiproxy-rate-limit:
+      max-requests: ${AIPROXY_RATE_LIMIT_MAX:20}
+      window-seconds: ${AIPROXY_RATE_LIMIT_WINDOW:60}
+    auth-rate-limit:
+      login:
+        max-requests: ${AUTH_LOGIN_RATE_LIMIT_MAX:10}
+        window-seconds: ${AUTH_LOGIN_RATE_LIMIT_WINDOW:60}
+      register:
+        max-requests: ${AUTH_REGISTER_RATE_LIMIT_MAX:5}
+        window-seconds: ${AUTH_REGISTER_RATE_LIMIT_WINDOW:60}
+      forgot-password:
+        max-requests: ${AUTH_FORGOT_PASSWORD_RATE_LIMIT_MAX:5}
+        window-seconds: ${AUTH_FORGOT_PASSWORD_RATE_LIMIT_WINDOW:300}
 
   analytics:
     etl:
@@ -144,6 +157,10 @@ app:
     # Each alert is published to Kafka (trend.alerts) and fanned out to subscribed users. Also
     # reused by the roadmap alert scan below as the "hot skill" threshold.
     trend-threshold: ${NOTIF_TREND_THRESHOLD:30}
+    # Timeout for the /summarize AI call TrendAlertDispatcher makes to enrich the notification
+    # body with a grounded narrative. Kept below AiProxyPort.DEFAULT_TIMEOUT (60s) so a slow/hung
+    # call can't block the Kafka consumer thread for a full minute per alert.
+    trend-summarize-timeout-ms: ${NOTIF_TREND_SUMMARIZE_TIMEOUT_MS:30000}
 
   roadmap:
     alert:
@@ -171,7 +188,10 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
   endpoint:
     health:
       show-details: always
+  metrics:
+    tags:
+      application: tech-radar-api

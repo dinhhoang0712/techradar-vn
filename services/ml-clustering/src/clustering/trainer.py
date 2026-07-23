@@ -119,13 +119,10 @@ def train_by_algorithm(
       - Không nuốt exception trong khi fit (tuner sẽ catch và đánh trial là failed).
     """
     dispatch = {
-        "dbscan":   train_dbscan,
-        "hdbscan":  train_hdbscan,
-        "kmeans":   train_kmeans,
+        "dbscan": train_dbscan,
+        "hdbscan": train_hdbscan,
+        "kmeans": train_kmeans,
     }
     if algorithm not in dispatch:
-        raise KeyError(
-            f"Unknown algorithm '{algorithm}'. "
-            f"Supported: {list(dispatch.keys())}"
-        )
+        raise KeyError(f"Unknown algorithm '{algorithm}'. Supported: {list(dispatch.keys())}")
     return dispatch[algorithm](X, **kwargs)

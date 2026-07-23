@@ -1,10 +1,8 @@
 package com.techpulse.techradar.integration;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 /** Radar top4/top10/search and compare, all fed by the Neo4j-to-Postgres analytics ETL. */
-@EnabledIfEnvironmentVariable(named = "POSTGRES_HOST", matches = ".+")
 class RadarCompareIntegrationTest extends IntegrationTestSupport {
 
     @Test

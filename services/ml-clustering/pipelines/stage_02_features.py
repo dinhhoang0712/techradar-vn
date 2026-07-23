@@ -36,11 +36,10 @@ def main(
     """
     import numpy as np
     import pandas as pd
+    from conf.config import features_dir, load_params, snapshot_dir
     from sklearn.preprocessing import normalize as sk_normalize
 
-    from conf.config import features_dir, load_params, snapshot_dir
     from src.data.neo4j_loader import load_parquet
-    from src.validation import SnapshotValidationError, validate_stage2_snapshot
     from src.features.content_features import (
         aggregate_article_embeddings,
         embed_tech_names_fallback,
@@ -53,6 +52,7 @@ def main(
         compute_neighborhood_stats,
     )
     from src.features.tech_aliases import canonicalize_technology_snapshot
+    from src.validation import SnapshotValidationError, validate_stage2_snapshot
 
     # 1. Params
     params_obj = load_params(params)
@@ -63,15 +63,15 @@ def main(
 
     # 2. Load snapshot DataFrames
     logger.info("Đọc snapshot từ {} ...", snap_dir)
-    df_tech      = load_parquet(snap_dir / "technologies.parquet")
-    df_company   = load_parquet(snap_dir / "companies.parquet")
-    df_article   = load_parquet(snap_dir / "articles.parquet")
-    df_job       = load_parquet(snap_dir / "jobs.parquet")
-    df_edges_mentions          = load_parquet(snap_dir / "edges_article_mentions_tech.parquet")
+    df_tech = load_parquet(snap_dir / "technologies.parquet")
+    df_company = load_parquet(snap_dir / "companies.parquet")
+    df_article = load_parquet(snap_dir / "articles.parquet")
+    df_job = load_parquet(snap_dir / "jobs.parquet")
+    df_edges_mentions = load_parquet(snap_dir / "edges_article_mentions_tech.parquet")
     df_edges_company_uses_tech = load_parquet(snap_dir / "edges_company_uses_tech.parquet")
     df_edges_job_requires_tech = load_parquet(snap_dir / "edges_job_requires_tech.parquet")
     df_edges_job_requires_skill = load_parquet(snap_dir / "edges_job_requires_skill.parquet")
-    df_edges_tech_related      = load_parquet(snap_dir / "edges_tech_related_tech.parquet")
+    df_edges_tech_related = load_parquet(snap_dir / "edges_tech_related_tech.parquet")
     logger.info("Snapshot loaded: {} techs, {} articles, {} jobs", len(df_tech), len(df_article), len(df_job))
 
     try:
@@ -89,7 +89,7 @@ def main(
         )
     except SnapshotValidationError as exc:
         logger.error("Data validation failed before feature build:\n{}", exc)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from exc
 
     logger.info(
         "Data validation OK: {} checks, {} warning(s)",
@@ -126,6 +126,7 @@ def main(
     # 2b. Noise filter — loại tech nodes không hợp lệ trước khi build features
     if fp.noise_filter.enabled:
         from src.features.noise_filter import filter_noise
+
         df_tech = filter_noise(df_tech, df_edges_job_requires_tech, fp.noise_filter)
         logger.info("Sau noise filter: {} techs còn lại", len(df_tech))
 
@@ -146,6 +147,7 @@ def main(
     if fp.node2vec.enabled:
         logger.info("Computing client-side node2vec embedding (networkx + gensim)...")
         from src.features.graph_features import build_client_node2vec_embedding
+
         gds_features["node2vec"] = build_client_node2vec_embedding(
             df_technologies=df_tech,
             df_edges_article_mentions_tech=df_edges_mentions,
@@ -164,19 +166,39 @@ def main(
         # Luôn dùng name embedding — bỏ qua article hoàn toàn (kể cả khi có Article trong DB)
         logger.info("use_name_embedding=true → encode tên tech bằng name embedding (bỏ qua article)...")
         from src.features.content_features import EMB_COLS, EMB_DIM
+
         names = df_tech["name"].tolist()
         tech_ids = df_tech["tech_id"].tolist()
-        embs = embed_tech_names_fallback(names)                      # (N, 768)
+        embs = embed_tech_names_fallback(names)  # (N, 768)
         embs = sk_normalize(embs, norm="l2")
         # Giảm chiều name_emb bằng PCA nếu được cấu hình
         if fp.name_emb_pca_components > 0 and fp.name_emb_pca_components < EMB_DIM:
             from sklearn.decomposition import PCA
-            pca = PCA(n_components=fp.name_emb_pca_components, random_state=42)
+
+            # PCA chỉ cho phép n_components <= min(n_samples, n_features). Với dataset nhỏ
+            # (dev/test, hoặc noise filter lọc quá mạnh) số tech còn lại có thể ít hơn config —
+            # hạ xuống mức data cho phép thay vì crash, nhưng log rõ để không âm thầm che giấu
+            # trường hợp production thật sự thiếu data.
+            n_components = min(fp.name_emb_pca_components, embs.shape[0], embs.shape[1])
+            if n_components < fp.name_emb_pca_components:
+                logger.warning(
+                    "name_emb_pca_components={} vượt quá min(n_samples={}, n_features={}) — "
+                    "hạ xuống {}. Dấu hiệu dataset nhỏ (dev/test) hoặc noise filter lọc quá mạnh.",
+                    fp.name_emb_pca_components,
+                    embs.shape[0],
+                    embs.shape[1],
+                    n_components,
+                )
+
+            pca = PCA(n_components=n_components, random_state=42)
             embs = pca.fit_transform(embs).astype(np.float32)
-            emb_cols_used = [f"article_emb_{i}" for i in range(fp.name_emb_pca_components)]
-            logger.info("PCA name_emb: {} → {} dims (explained var {:.1f}%)",
-                        EMB_DIM, fp.name_emb_pca_components,
-                        100 * pca.explained_variance_ratio_.sum())
+            emb_cols_used = [f"article_emb_{i}" for i in range(n_components)]
+            logger.info(
+                "PCA name_emb: {} → {} dims (explained var {:.1f}%)",
+                EMB_DIM,
+                n_components,
+                100 * pca.explained_variance_ratio_.sum(),
+            )
         else:
             emb_cols_used = EMB_COLS
 
@@ -239,6 +261,7 @@ def main(
     if fp.use_skill_jaccard:
         logger.info("Building skill jaccard features...")
         from src.features.graph_features import build_skill_tech_jaccard
+
         skill_jaccard = build_skill_tech_jaccard(
             df_edges_requires_skill=df_edges_job_requires_skill,
             df_edges_requires_tech=df_edges_job_requires_tech,
@@ -252,22 +275,29 @@ def main(
     if fp.use_article_temporal_stats:
         logger.info("Computing article temporal stats (recency + sentiment)...")
         from src.features.graph_features import compute_article_temporal_stats
+
         article_temporal_raw = compute_article_temporal_stats(
             df_edges_mentions=df_edges_mentions,
             df_articles=df_article,
         )
         temporal_cols = ["first_mention_days_ago", "last_mention_days_ago", "mention_recency_skew", "mean_sentiment"]
-        temporal_defaults = {"first_mention_days_ago": -1, "last_mention_days_ago": -1,
-                              "mention_recency_skew": 0.0, "mean_sentiment": 0.0}
+        temporal_defaults = {
+            "first_mention_days_ago": -1,
+            "last_mention_days_ago": -1,
+            "mention_recency_skew": 0.0,
+            "mean_sentiment": 0.0,
+        }
         if article_temporal_raw.empty:
             # Không có mention nào trong snapshot → compute_article_temporal_stats
             # trả DataFrame rỗng KHÔNG có cột "tech_id" (pd.DataFrame([])) → không
             # thể set_index/reindex; build thẳng DataFrame toàn giá trị mặc định.
             logger.warning("article_temporal: không có mention nào trong snapshot — dùng toàn giá trị mặc định.")
-            article_temporal = pd.DataFrame({
-                "tech_id": df_tech["tech_id"].tolist(),
-                **{c: temporal_defaults[c] for c in temporal_cols},
-            })
+            article_temporal = pd.DataFrame(
+                {
+                    "tech_id": df_tech["tech_id"].tolist(),
+                    **{c: temporal_defaults[c] for c in temporal_cols},
+                }
+            )
         else:
             # Tech chưa từng được mention → không xuất hiện trong kết quả trên;
             # reindex về đủ tech_ids với giá trị mặc định (giống noise_filter/graph_stats).
@@ -300,9 +330,9 @@ def main(
     # 14. Summary
     n_zero_content = (content_emb["content_n_articles"] == 0).sum()
     pct_zero = 100 * n_zero_content / len(content_emb)
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print(f"  Stage 02 FEATURES hoàn tất | tag={tag}")
-    print(f"{'='*50}")
+    print(f"{'=' * 50}")
     print(f"  Feature matrix shape : {X.shape}")
     print(f"  n_techs              : {meta.n_techs}")
     print(f"  Original dim         : {meta.original_dim}")
@@ -310,10 +340,10 @@ def main(
     print(f"  Scaler               : {meta.scaler_name}")
     print(f"  Reduce dim           : {meta.reduce_dim}")
     print(f"  Zero-content techs   : {n_zero_content} ({pct_zero:.1f}%) — đã dùng fallback")
-    print(f"\n  Feature groups:")
+    print("\n  Feature groups:")
     for name, (s, e) in meta.feature_groups.items():
-        print(f"    {name:<25} cols {s}..{e-1}  ({e-s} dim)")
-    print(f"{'='*50}\n")
+        print(f"    {name:<25} cols {s}..{e - 1}  ({e - s} dim)")
+    print(f"{'=' * 50}\n")
 
     return 0
 

@@ -1,6 +1,11 @@
 package com.techpulse.techradar.features.user.adapters.input;
 
+import com.techpulse.techradar.features.user.application.DeleteAccountRequest;
+import com.techpulse.techradar.features.user.application.DeleteAccountUseCase;
+import com.techpulse.techradar.features.user.application.ExportUserDataUseCase;
 import com.techpulse.techradar.features.user.application.ProfileService;
+import com.techpulse.techradar.features.user.application.UpdateProfileRequest;
+import com.techpulse.techradar.features.user.application.UserDataExport;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -25,6 +30,8 @@ import java.util.Objects;
 public class UserController {
 
     private final ProfileService profileService;
+    private final ExportUserDataUseCase exportUserDataUseCase;
+    private final DeleteAccountUseCase deleteAccountUseCase;
 
     @Operation(summary = "Get current user profile")
     @GetMapping("/profile")
@@ -46,6 +53,26 @@ public class UserController {
                 .flatMap(userId -> profileService.updateProfile(userId, request))
                 .map(data -> UserProfileView.from(data.user(), data.profile()))
                 .map(updated -> ResponseEntity.ok(ApiResponse.success(updated, "Profile updated")))
+                .switchIfEmpty(Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(ApiResponse.error("Unauthorized", "UNAUTHORIZED"))));
+    }
+
+    @Operation(summary = "Export all of the current user's personal data (GDPR data portability)")
+    @GetMapping("/data-export")
+    public Mono<ResponseEntity<ApiResponse<UserDataExport>>> exportData() {
+        return extractCurrentUserId()
+                .flatMap(userId -> exportUserDataUseCase.execute(userId)
+                        .map(export -> ResponseEntity.ok(ApiResponse.success(export, "Data export"))))
+                .switchIfEmpty(Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(ApiResponse.error("Unauthorized", "UNAUTHORIZED"))));
+    }
+
+    @Operation(summary = "Permanently delete the current user's account (GDPR right to erasure) - requires current password confirmation")
+    @DeleteMapping("/account")
+    public Mono<ResponseEntity<ApiResponse<Void>>> deleteAccount(@Valid @RequestBody DeleteAccountRequest request) {
+        return extractCurrentUserId()
+                .flatMap(userId -> deleteAccountUseCase.execute(userId, request.getCurrentPassword())
+                        .thenReturn(ResponseEntity.ok(ApiResponse.<Void>success(null, "Account deleted"))))
                 .switchIfEmpty(Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                         .body(ApiResponse.error("Unauthorized", "UNAUTHORIZED"))));
     }

@@ -58,8 +58,14 @@ DEFAULT_VARIANTS: list[dict[str, Any]] = [
 ]
 
 REPORT_COLUMNS = [
-    "variant", "n_clusters", "noise_ratio", "silhouette", "davies_bouldin",
-    "dbcv", "related_pairs_split_ratio", "error",
+    "variant",
+    "n_clusters",
+    "noise_ratio",
+    "silhouette",
+    "davies_bouldin",
+    "dbcv",
+    "related_pairs_split_ratio",
+    "error",
 ]
 
 
@@ -143,9 +149,7 @@ def main(
     tmp_dir = MODULE_ROOT / "experiments" / "_tmp_params"
     tmp_dir.mkdir(parents=True, exist_ok=True)
 
-    logger.info(
-        "Feature ablation study: base_tag={} | {} variant(s)", base_tag, len(DEFAULT_VARIANTS)
-    )
+    logger.info("Feature ablation study: base_tag={} | {} variant(s)", base_tag, len(DEFAULT_VARIANTS))
 
     rows: list[dict[str, Any]] = []
     for variant in DEFAULT_VARIANTS:
@@ -180,9 +184,7 @@ def main(
         rows.append(row)
 
     # --- Ghi CSV ---
-    out_path = (
-        Path(output) if output else MODULE_ROOT / "experiments" / "results" / f"feature_ablation_{base_tag}.csv"
-    )
+    out_path = Path(output) if output else MODULE_ROOT / "experiments" / "results" / f"feature_ablation_{base_tag}.csv"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     all_fields = sorted({k for r in rows for k in r.keys()} | set(REPORT_COLUMNS))
     with open(out_path, "w", newline="", encoding="utf-8") as f:

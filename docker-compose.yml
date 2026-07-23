@@ -222,6 +222,10 @@ services:
       NEO4J_AUTH: neo4j/password
       NEO4J_server_memory_heap_initial__size: 512m
       NEO4J_server_memory_heap_max__size: 2g
+      # GDS (Graph Data Science) plugin — powers PageRank/Louvain/degree centrality for the
+      # graph analytics feature (features/graph/adapters/output/Neo4jGraphAnalyticsAdapter).
+      # Community Edition plugin, no license env var needed.
+      NEO4J_PLUGINS: '["graph-data-science"]'
     volumes:
       - neo4j_data:/data
       - neo4j_logs:/logs
@@ -293,6 +297,7 @@ services:
       NEO4J_USERNAME: neo4j
       NEO4J_PASSWORD: password
       RAG_BASE_URL: http://ai-rag-core:8000
+      ML_CLUSTERING_BASE_URL: http://ml-clustering:8001
       EMBED_SECRET: ${EMBED_SECRET:-changeme}
       INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-techradar-internal-secret}
       RUN_JOBS_ON_START: ${RUN_JOBS_ON_START:-false}
@@ -311,8 +316,12 @@ services:
       postgres:
         condition: service_healthy
       neo4j:
-        condition: service_started
+        condition: service_healthy
       redis:
+        condition: service_healthy
+      ai-rag-core:
+        condition: service_healthy
+      ml-clustering:
         condition: service_healthy
     restart: unless-stopped
 
@@ -361,6 +370,24 @@ services:
     restart: unless-stopped
 
   # ----------------------------- Vector store + writer (opt-in: --profile vector) ---------
+  # Pipeline: Spring Boot KafkaExtractorService -> extracted_articles/extracted_jobs ->
+  # embedding-service (embeds + produces article_vectors/job_vectors) -> qdrant-writer -> qdrant.
+  embedding-service:
+    build:
+      context: ./services/embedding-service
+    container_name: techradar-embedding-service
+    profiles: ["vector"]
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-intfloat/multilingual-e5-base}
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+    depends_on:
+      - kafka
+    restart: unless-stopped
+
   qdrant:
     image: qdrant/qdrant:v1.18.2
     container_name: techradar-qdrant
@@ -415,6 +442,18 @@ services:
       - loki
     restart: unless-stopped
 
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: techradar-prometheus
+    profiles: ["observability"]
+    command: --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.retention.time=7d
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    restart: unless-stopped
+
   grafana:
     image: grafana/grafana:11.1.0
     container_name: techradar-grafana
@@ -431,6 +470,7 @@ services:
       - grafana_data:/var/lib/grafana
     depends_on:
       - loki
+      - prometheus
     restart: unless-stopped
 
 volumes:
@@ -445,3 +485,4 @@ volumes:
   loki_data:
   grafana_data:
   promtail_positions:
+  prometheus_data:

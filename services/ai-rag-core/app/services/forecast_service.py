@@ -5,8 +5,8 @@ Forecast Service — dự báo xu hướng công nghệ dựa trên:
   3. Neo4j: article sentiment gần đây
   4. LLM synthesis → predicted_direction + reasoning
 """
+
 import logging
-from datetime import datetime, timezone
 from pathlib import Path
 
 from app.api.schemas import ForecastRequest, ForecastResponse, ForecastSignal
@@ -35,12 +35,8 @@ def _compute_signals(timeseries: list[dict]) -> tuple[list[ForecastSignal], dict
 
     import statistics
 
-    growth_rates = [
-        float(r["growth_rate"]) for r in timeseries if r.get("growth_rate") is not None
-    ]
-    mom_values = [
-        float(r["mom_growth"]) for r in timeseries if r.get("mom_growth") is not None
-    ]
+    growth_rates = [float(r["growth_rate"]) for r in timeseries if r.get("growth_rate") is not None]
+    mom_values = [float(r["mom_growth"]) for r in timeseries if r.get("mom_growth") is not None]
     job_counts = [int(r["job_count"]) for r in timeseries if r.get("job_count") is not None]
 
     # Linear trend (slope của growth_rate)
@@ -50,48 +46,56 @@ def _compute_signals(timeseries: list[dict]) -> tuple[list[ForecastSignal], dict
 
             x = list(range(len(growth_rates)))
             slope = float(np.polyfit(x, growth_rates, 1)[0])
-            signals.append(ForecastSignal(
-                signal="Xu hướng tăng trưởng tuyến tính (linear slope)",
-                value=round(slope, 3),
-                weight=0.35,
-            ))
+            signals.append(
+                ForecastSignal(
+                    signal="Xu hướng tăng trưởng tuyến tính (linear slope)",
+                    value=round(slope, 3),
+                    weight=0.35,
+                )
+            )
         except Exception:
             pass
 
     # Momentum (MoM 3 tháng gần nhất)
     if len(mom_values) >= 3:
         momentum = statistics.mean(mom_values[-3:])
-        signals.append(ForecastSignal(
-            signal="Momentum MoM trung bình (3 tháng gần nhất)",
-            value=round(momentum, 2),
-            weight=0.30,
-        ))
+        signals.append(
+            ForecastSignal(
+                signal="Momentum MoM trung bình (3 tháng gần nhất)",
+                value=round(momentum, 2),
+                weight=0.30,
+            )
+        )
 
     # Volatility
     if len(growth_rates) >= 3:
         vol = statistics.stdev(growth_rates)
-        signals.append(ForecastSignal(
-            signal="Độ biến động tăng trưởng (volatility)",
-            value=round(vol, 2),
-            weight=0.10,
-        ))
+        signals.append(
+            ForecastSignal(
+                signal="Độ biến động tăng trưởng (volatility)",
+                value=round(vol, 2),
+                weight=0.10,
+            )
+        )
 
     # Job demand trend
     if len(job_counts) >= 2:
         job_change = job_counts[-1] - job_counts[0]
-        signals.append(ForecastSignal(
-            signal="Thay đổi số việc làm trong kỳ",
-            value=job_change,
-            weight=0.25,
-        ))
+        signals.append(
+            ForecastSignal(
+                signal="Thay đổi số việc làm trong kỳ",
+                value=job_change,
+                weight=0.25,
+            )
+        )
 
     latest = timeseries[-1]
     current_status = {
-        "job_count":     latest.get("job_count"),
+        "job_count": latest.get("job_count"),
         "article_count": latest.get("article_count"),
-        "growth_rate":   latest.get("growth_rate"),
-        "mom_growth":    latest.get("mom_growth"),
-        "month":         str(latest.get("month") or "")[:7],
+        "growth_rate": latest.get("growth_rate"),
+        "mom_growth": latest.get("mom_growth"),
+        "month": str(latest.get("month") or "")[:7],
     }
 
     return signals, current_status
@@ -136,9 +140,7 @@ async def _llm_synthesize(
     try:
         template = _load_template("forecast_template.txt")
 
-        signals_text = "\n".join(
-            f"- {s.signal}: {s.value} (trọng số {s.weight})" for s in signals
-        )
+        signals_text = "\n".join(f"- {s.signal}: {s.value} (trọng số {s.weight})" for s in signals)
         trend_text = "\n".join(
             f"  {str(r.get('month', ''))[:7]}: {r.get('job_count', 0)} việc, "
             f"tăng trưởng {r.get('growth_rate') or 0:+.1f}%"
@@ -159,15 +161,16 @@ async def _llm_synthesize(
                 "content": (
                     "Bạn là chuyên gia phân tích xu hướng công nghệ tại Việt Nam. "
                     "Dựa hoàn toàn vào dữ liệu được cung cấp, không bịa thêm số liệu. "
-                    "Trả về JSON: {\"direction\": \"growing|stable|declining\", "
-                    "\"confidence\": 0.0-1.0, \"reasoning\": \"...\"}"
+                    'Trả về JSON: {"direction": "growing|stable|declining", '
+                    '"confidence": 0.0-1.0, "reasoning": "..."}'
                 ),
             },
             {"role": "user", "content": prompt},
         ]
 
         raw = await generate(messages)
-        import json, re
+        import json
+        import re
 
         match = re.search(r"\{.*\}", raw, re.DOTALL)
         if match:
@@ -209,11 +212,11 @@ async def handle(req: ForecastRequest) -> ForecastResponse:
     # 4. LLM synthesis
     trend_data = [
         {
-            "month":        str(r.get("month") or "")[:7],
-            "job_count":    r.get("job_count"),
+            "month": str(r.get("month") or "")[:7],
+            "job_count": r.get("job_count"),
             "article_count": r.get("article_count"),
-            "growth_rate":  r.get("growth_rate"),
-            "mom_growth":   r.get("mom_growth"),
+            "growth_rate": r.get("growth_rate"),
+            "mom_growth": r.get("mom_growth"),
         }
         for r in timeseries
     ]

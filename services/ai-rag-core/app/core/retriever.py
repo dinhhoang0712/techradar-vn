@@ -1,8 +1,8 @@
 import asyncio
 
-from app.db.neo4j_client import run_query
-from app.core.embedder import embed_query
 from app.config import get_settings
+from app.core.embedder import embed_query
+from app.db.neo4j_client import run_query
 
 
 async def vector_search(query: str, top_k: int = 10) -> list[dict]:

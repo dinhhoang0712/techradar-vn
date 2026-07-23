@@ -31,8 +31,8 @@ AI Platform bao gồm 2 Python services chính và các supporting services:
 
 | Service | Mô tả |
 |---------|--------|
-| **crawler** | Web crawlers cho 8 nguồn dữ liệu |
-| **embedding-service** | Kafka consumer → sinh embedding → Neo4j |
+| **crawler** | Web crawlers cho 9 nguồn dữ liệu |
+| **embedding-service** | Kafka consumer (`extracted_articles`/`extracted_jobs`) → sinh embedding → publish `article_vectors`/`job_vectors` (Kafka), profile `vector` |
 | **qdrant-writer** | Kafka consumer → ghi embedding vào Qdrant (optional) |
 
 ### Phân tách trách nhiệm
@@ -91,7 +91,10 @@ ai-rag-core/
 | POST | `/summarize` | X-Internal-Auth | Tóm tắt xu hướng công nghệ |
 | POST | `/report` | X-Internal-Auth | Báo cáo xu hướng theo kỳ |
 | POST | `/agent` | X-Internal-Auth | AI Agent (multi-tool) |
-| POST | `/interview` | X-Internal-Auth | **NEW** — AI mock interview, stateless (xem §2.4) |
+| POST | `/interview` | X-Internal-Auth | AI mock interview, stateless (xem §2.4) |
+| POST | `/company-insight` | X-Internal-Auth | Tóm tắt AI về hồ sơ tuyển dụng/tech stack công ty (`routes_company_insight.py`) |
+| POST | `/internal/ai/llm-summary` | X-Internal-Auth | Tóm tắt bằng LLM cho tính năng Compare (`routes_internal.py`) |
+| POST | `/internal/ai/moderation-suggestion` | X-Internal-Auth | Gợi ý kiểm duyệt nội dung report cho admin (`routes_internal.py`) |
 
 ### 2.3 RAG Pipeline (Graph RAG)
 
@@ -125,7 +128,7 @@ query + user_id + session_id
         ├── [4] Build prompt
         │         system_prompt + history + rag_template
         │
-        ├── [5] LLM generate (OpenAI gpt-4o-mini hoặc Gemini)
+        ├── [5] LLM generate (OpenAI gpt-4o-mini, Gemini, hoặc Groq)
         │         retry tối đa 3 lần khi 429/503
         │
         └── [6] RAGAS evaluation (fire-and-forget)
@@ -328,10 +331,11 @@ LLM judge faithfulness → MLflow logging → `mlflow ui`
 
 | Env var | Default | Mô tả |
 |---------|---------|-------|
-| `NEO4J_URI` | — | URI AuraDB hoặc local |
+| `NEO4J_URI` | — | URI Neo4j (self-hosted qua docker-compose — dự án từng chạy AuraDB, đã migrate) |
 | `OPENAI_API_KEY` | — | API key OpenAI |
 | `GEMINI_API_KEY` | — | API key Gemini |
-| `LLM_PROVIDER` | `openai` | `"openai"` hoặc `"gemini"` |
+| `GROQ_API_KEY` | — | API key Groq |
+| `LLM_PROVIDER` | `openai` | `"openai"` \| `"gemini"` \| `"groq"` |
 | `LLM_MODEL` | `gpt-4o-mini` | Model LLM |
 | `POSTGRES_HOST` | `localhost` | PostgreSQL host |
 | `INTERNAL_API_TOKEN` | `""` | Token kiểm tra từ Spring |
@@ -421,7 +425,7 @@ ml-clustering/
 Pipeline HDBSCAN chạy tuần tự qua 5 stages:
 
 ```
-Neo4j AuraDB
+Neo4j (self-hosted, docker-compose)
      │
      ▼
 Stage 1 — EXTRACT
@@ -563,7 +567,7 @@ curl -X POST http://localhost:8001/pipeline/trigger \
 
 | Env var | Default | Mô tả |
 |---------|---------|-------|
-| `NEO4J_URI` | — | URI AuraDB |
+| `NEO4J_URI` | — | URI Neo4j (self-hosted) |
 | `NEO4J_PASSWORD` | — | Mật khẩu Neo4j |
 | `OPENAI_API_KEY` | — | API key GPT-4o-mini (stage 4) |
 | `INTERNAL_API_TOKEN` | `""` | Token kiểm tra `/pipeline/trigger` |
@@ -640,11 +644,21 @@ docker compose --profile crawl up crawler
 
 ### 4.2 Embedding Service
 
-Kafka consumer (`raw.articles` topic) → sinh embedding bằng `multilingual-e5-base` → ghi vector vào Neo4j node `Article.embedding`.
+**Khác với `ai-rag-core`'s `/embed/trigger`** — đây là 2 luồng embedding hoàn toàn tách biệt, không
+phải cùng một cơ chế:
+- `ai-rag-core` `POST /embed/trigger` (crawler gọi qua `X-Embed-Secret`): đọc Article trực tiếp từ
+  Neo4j, embed, ghi thẳng lên property `Article.embedding` trong Neo4j (dùng cho vector search nội
+  bộ khi KHÔNG bật profile `vector`).
+- **`embedding-service`** (service riêng, container `techradar-embedding`, chỉ chạy khi bật profile
+  `vector`): Kafka consumer trên topic `extracted_articles`/`extracted_jobs` (không phải
+  `raw.articles`) → sinh embedding → publish sang topic Kafka `article_vectors`/`job_vectors` —
+  KHÔNG ghi trực tiếp vào Neo4j.
 
 ### 4.3 Qdrant Writer
 
-Kafka consumer → nhận embedding → ghi vào Qdrant collection (vector store thay thế cho Neo4j vector index). Chỉ chạy khi dùng profile `vector`.
+Kafka consumer trên `article_vectors`/`job_vectors` (output của `embedding-service` ở trên) → ghi
+vào Qdrant collection (vector store thay thế cho Neo4j vector index). Chỉ chạy khi dùng profile
+`vector`.
 
 ```bash
 docker compose --profile vector up qdrant qdrant-writer
@@ -695,12 +709,17 @@ private WebClient webClient() {
 | GET `/api/v1/report` | POST `/report` | - |
 | POST `/api/v1/agent` | POST `/agent` | - |
 | POST `/api/v1/interview` **(NEW)** | POST `/interview` | - |
+| POST `/api/v1/company-insight` **(NEW)** | POST `/company-insight` | - |
 | GET `/api/v1/clustering/clusters` | - | GET `/clusters` |
 
 **Auth phía gateway (SecurityConfig, không liên quan X-Internal-Auth ở §5.3):** `/forecast`,
-`/report`, `/chat/summarize` là public (không cần Bearer JWT); `/recommend`, `/career`,
-`/interview`, `/agent` yêu cầu Bearer JWT — sự khác biệt này kế thừa từ path string của 6 module
-cũ trước khi gộp vào `aiproxy`, chưa được rà soát lại (xem `docs/API_DOCs_v1.md` mục Phân quyền).
+`/report`, `/chat/summarize`, `/company-insight` là public (không cần Bearer JWT); `/recommend`,
+`/career`, `/interview`, `/agent` yêu cầu Bearer JWT. Nguyên tắc: route dùng
+`AiProxyRequestHandler.forward()` (nội dung chung, không gắn user) thì public; route dùng
+`forwardAsCurrentUser()` (gắn `user_id` từ JWT, cá nhân hoá) thì bắt buộc auth. Cả 8 route này giờ
+cũng bị rate limit (Redis, theo user id cho route auth-required / theo IP cho route public — xem
+`docs/DATABASE.md` §5) để chặn spam vào các lệnh gọi LLM tốn kém. Xem `docs/API_DOCs_v1.md` mục
+Phân quyền và `docs/BACKEND_GUIDE.md` §4.16.
 
 ### 5.3 Security
 

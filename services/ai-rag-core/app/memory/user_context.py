@@ -10,6 +10,7 @@ Cấu trúc preferences_json gợi ý:
   "tech_interactions": {"React": 5, "Kubernetes": 2}
 }
 """
+
 import uuid
 
 from sqlalchemy import text

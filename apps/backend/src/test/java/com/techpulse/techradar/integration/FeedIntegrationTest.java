@@ -1,7 +1,6 @@
 package com.techpulse.techradar.integration;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.http.MediaType;
 
 import java.util.List;
@@ -11,7 +10,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Feed v2: hashtags, explore scope, images, company tag, mentions, threaded replies. */
-@EnabledIfEnvironmentVariable(named = "POSTGRES_HOST", matches = ".+")
 class FeedIntegrationTest extends IntegrationTestSupport {
 
     @Test
@@ -125,7 +123,7 @@ class FeedIntegrationTest extends IntegrationTestSupport {
                 .bodyValue(Map.of("content", "Tagging a ghost company",
                         "tagged_company_id", "does-not-exist-" + UUID.randomUUID()))
                 .exchange().expectStatus().isBadRequest()
-                .expectBody().jsonPath("$.errorCode").isEqualTo("INVALID_COMPANY");
+                .expectBody().jsonPath("$.error_code").isEqualTo("INVALID_COMPANY");
     }
 
     @Test
@@ -206,6 +204,6 @@ class FeedIntegrationTest extends IntegrationTestSupport {
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of("content", "reply to a reply", "parent_id", replyId))
                 .exchange().expectStatus().isBadRequest()
-                .expectBody().jsonPath("$.errorCode").isEqualTo("INVALID_PARENT");
+                .expectBody().jsonPath("$.error_code").isEqualTo("INVALID_PARENT");
     }
 }

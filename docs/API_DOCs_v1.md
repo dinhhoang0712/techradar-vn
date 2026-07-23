@@ -23,9 +23,11 @@ Tài liệu này phản ánh **API thực tế** do Spring Boot gateway (`apps/b
 15. [Messaging — `/api/v1/conversations`](#14-messaging---apiv1conversations)
 16. [Social / Feed — `/api/v1/feed`, `/api/v1/posts`, `/api/v1/users`](#15-social--feed---apiv1feed-apiv1posts-apiv1users)
 17. [AI Interview — `/api/v1/interview`](#16-ai-interview---apiv1interview)
-18. [Phân quyền](#phân-quyền)
-19. [Proxy sang Python](#proxy-sang-python)
-20. [Error Codes](#error-codes)
+18. [AiProxy — career/recommend/forecast/report/agent/summarize/company-insight](#17-aiproxy---forward-nguyên-văn-sang-ai-rag-core-module-aiproxy)
+19. [Career Roadmap — `/api/v1/career/roadmap`, `/api/v1/career/simulate`](#18-career-roadmap---apiv1careerroadmap-apiv1careersimulate-feature-roadmap-native---không-proxy)
+20. [Phân quyền](#phân-quyền)
+21. [Proxy sang Python](#proxy-sang-python)
+22. [Error Codes](#error-codes)
 
 ---
 
@@ -518,6 +520,20 @@ curl -X GET http://localhost:8080/api/v1/user/avatar/550e8400-e29b-41d4-a716-446
   --output avatar.png
 ```
 
+---
+
+### GET `/user/data-export`
+
+Xuất toàn bộ dữ liệu cá nhân của user hiện tại (GDPR-style data export).
+
+**Authentication:** Required (Bearer JWT)
+
+### DELETE `/user/account`
+
+Xoá tài khoản hiện tại (GDPR-style erasure).
+
+**Authentication:** Required (Bearer JWT)
+
 ## 3. Radar — `/api/v1/radar` *(đọc từ `tech_analytics` trong Postgres)*
 
 ### GET `/radar/top4`
@@ -744,6 +760,16 @@ curl -X GET "http://localhost:8080/api/v1/radar/export-csv?limit=50" \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
   --output radar.csv
 ```
+
+---
+
+### GET `/radar/stream`
+
+SSE stream — đẩy snapshot top4/top10 mới ngay khi admin rebuild analytics xong (`live:radar`
+Redis Pub/Sub, xem [`docs/DATABASE.md`](./DATABASE.md) §5), để `TrendDashboard` cập nhật real-time
+thay vì phải tự F5.
+
+**Authentication:** Public
 
 ## 4. Compare — `/api/v1/compare`
 
@@ -2281,26 +2307,12 @@ Hàng đợi kiểm duyệt — các report đang `PENDING`, cũ nhất trước
 
 **Error Responses:** `404 Not Found` nếu report không tồn tại hoặc không còn ở trạng thái `PENDING` (đã được xử lý trước đó)
 
----
+#### POST `/admin/reports/{id}/ai-suggestion`
 
-### Cache Admin *(NEW)*
+Gợi ý AI (qua `ai-rag-core` `/internal/ai/moderation-suggestion`) về việc report này có nên bị xử lý
+hay không — hỗ trợ admin quyết định nhanh hơn, không tự động dismiss/xoá.
 
-Xoá cache cho `company`/`job` — 2 feature cache toàn bộ kết quả Neo4j (30 phút mặc định) và không
-có bước ETL/rebuild nào để tự động invalidate như `radar` — xem [`docs/DATABASE.md`](./DATABASE.md) §5.
-
-#### POST `/admin/cache/companies/evict`
-
-Xoá cache `GET /companies` (key `cache:company:all`).
-
-**Authentication:** Admin role required
-
----
-
-#### POST `/admin/cache/jobs/evict`
-
-Xoá TOÀN BỘ cache `GET /jobs/matches` (mọi key khớp pattern `cache:job:match:*` — mỗi tập kỹ năng có 1 key riêng, không evict chọn lọc theo user được).
-
-**Authentication:** Admin role required
+**Authentication:** Admin role required (`social:moderate`)
 
 ---
 
@@ -2473,11 +2485,46 @@ Dựng lại bảng `tech_analytics` từ Neo4j.
 
 ---
 
+### Graph Analytics
+
+#### POST `/admin/graph-analytics/rebuild`
+
+Tính lại PageRank, cộng đồng công nghệ (Louvain) và degree centrality bằng Neo4j GDS trên đồ thị
+con `Technology`-`RELATED_TO`-`Technology`, ghi kết quả trực tiếp lên `Technology` node
+(`pagerank_score`, `community_id`, `degree_centrality` — xem [`docs/DATABASE.md`](./DATABASE.md)
+§4.1). Cần plugin GDS (`docker-compose.yml` `NEO4J_PLUGINS`). Dữ liệu này hiển thị ở chế độ
+"Phân tích đồ thị" trên Knowledge Graph Explorer, đọc lại qua `GET /graph/explore` như bất kỳ
+property nào khác trên node — không có endpoint đọc riêng.
+
+**Authentication:** Admin role required (`graph:manage`)
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "technologies_scored": 842,
+    "communities_found": 37
+  },
+  "message": "Graph analytics rebuilt",
+  "error_code": null,
+  "timestamp": 1719792000000
+}
+```
+
+**Error Responses:**
+- `503 Service Unavailable`: Neo4j/GDS plugin không khả dụng
+
+**Note:** `communities_found` là tổng số cộng đồng Louvain thô tìm được; UI chỉ hiển thị 6 cộng
+đồng lớn nhất (`community_id` 0-5), phần còn lại gộp vào `community_id = 99` ("khác").
+
+---
+
 ### Cache eviction
 
 Company/job không có bước ETL/rebuild như radar (dữ liệu Neo4j đã cập nhật liên tục qua Kafka +
 batch import) — chỉ có cache Redis (30 phút, xem [`docs/DATABASE.md`](./DATABASE.md) §5) là cũ.
-2 endpoint này cho phép evict tay thay vì chờ TTL.
+3 endpoint này cho phép evict tay thay vì chờ TTL.
 
 #### POST `/admin/cache/companies/evict`
 
@@ -2512,6 +2559,90 @@ Evict toàn bộ cache `cache:job:match:*` (một entry/tập kỹ năng, dùng 
   "timestamp": 1719792000000
 }
 ```
+
+#### POST `/admin/cache/roadmap/evict`
+
+Evict toàn bộ cache `cache:roadmap:*` (một entry/user, dùng bởi `GetCareerRoadmapUseCase`).
+
+**Authentication:** Admin role required
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": null,
+  "message": "Roadmap cache evicted",
+  "error_code": null,
+  "timestamp": 1719792000000
+}
+```
+
+---
+
+### Clustering Admin
+
+`AdminClusteringController`, permission `clustering:manage`.
+
+| Method | Path | Mô tả |
+|---|---|---|
+| GET | `/admin/clustering/pipeline/status` | Trạng thái lần chạy retrain gần nhất (idle/running/success/failed) |
+| POST | `/admin/clustering/pipeline/trigger` | Kích hoạt retrain pipeline `ml-clustering` (409 nếu đang chạy) |
+| GET | `/admin/clustering/pipeline/runs` | Lịch sử các lần chạy pipeline |
+| PUT | `/admin/clustering/clusters/{clusterId}/label` | Ghi đè nhãn (label) cho 1 cluster |
+
+**Authentication:** Admin role required (`clustering:manage`)
+
+---
+
+### Notification Admin
+
+`AdminNotificationController`, permission `notification:manage`.
+
+#### POST `/admin/notifications`
+
+Gửi/broadcast thông báo in-app tới người dùng (admin).
+
+**Authentication:** Admin role required (`notification:manage`)
+
+---
+
+### Data Platform Admin
+
+`AdminDataPlatformController`, permission `datapipeline:manage` — chạy tay các job Gold/sync của
+`data-platform` thay vì chờ lịch đêm, xem [`docs/DATA_PLATFORM.md`](./DATA_PLATFORM.md).
+
+| Method | Path | Mô tả |
+|---|---|---|
+| GET | `/admin/data-platform/jobs` | Trạng thái/lần chạy gần nhất của mọi job |
+| POST | `/admin/data-platform/jobs/{jobId}/trigger` | Kích hoạt 1 job chạy ngay (qua Redis Pub/Sub tới `data-platform`) |
+| GET | `/admin/data-platform/jobs/{jobId}/history` | Lịch sử chạy của 1 job |
+
+**Authentication:** Admin role required (`datapipeline:manage`)
+
+---
+
+### Audit Log
+
+`AuditLogAdminController`, permission `audit:view`.
+
+#### GET `/admin/audit-log`
+
+Danh sách audit log entries (hành động admin đã thực hiện).
+
+**Authentication:** Admin role required (`audit:view`)
+
+---
+
+### Crawler Admin
+
+`CrawlerAdminController`, permission `crawler:manage`.
+
+| Method | Path | Mô tả |
+|---|---|---|
+| POST | `/admin/crawler/trigger` | Kích hoạt crawler chạy ngay qua Redis (`delivered: false` nếu không có crawler container nào đang lắng nghe) |
+| GET | `/admin/crawler/status` | Trạng thái lần crawl gần nhất |
+
+**Authentication:** Admin role required (`crawler:manage`)
 
 ## 10. Health & Status — Public
 
@@ -2583,6 +2714,15 @@ Lấy feature flags và maintenance status (bare response).
 - `feature_career`: Career path feature enabled
 
 **Note:** Các giá trị này được đọc từ bảng `settings` trong PostgreSQL. Admin có thể cập nhật qua `/admin/settings`.
+
+---
+
+### GET `/stats/public`
+
+Vài số liệu tổng quan công khai của hệ thống (vd. tổng số công ty, tin tuyển dụng, thành viên —
+hiển thị ở trang landing).
+
+**Authentication:** Public
 
 ---
 
@@ -2659,7 +2799,8 @@ Danh sách công ty, xếp hạng theo số lượng job đang tuyển. Tech sta
 gián tiếp qua `Company<-[:POSTED_BY|HIRES_FOR]-Job-[:REQUIRES]->Technology` (KHÔNG đọc quan hệ
 `USES` — xem [`docs/DATABASE.md`](./DATABASE.md) §4.1 về sự khác biệt này).
 
-**Authentication:** Required (Bearer JWT)
+**Authentication:** Public (`GET /companies/**` nằm trong `SecurityConfig.PUBLIC_ROUTES` — trang
+Company Explorer hiển thị công khai, không cần đăng nhập)
 
 **Query params:**
 - `page` (int, optional, default `0`)
@@ -2695,7 +2836,7 @@ ingest có thể chưa xuất hiện ngay cho tới khi cache hết hạn hoặc
 
 Công ty có tech stack tương tự (Jaccard similarity, tính in-memory trên toàn bộ tập công ty).
 
-**Authentication:** Required (Bearer JWT)
+**Authentication:** Public (`GET /companies/**`, xem ghi chú ở mục `GET /companies` phía trên)
 
 **Path params:**
 - `id` (string, required) — Neo4j element id của company
@@ -2721,6 +2862,21 @@ Công ty có tech stack tương tự (Jaccard similarity, tính in-memory trên 
 
 **Error Responses:**
 - `404 Not Found`: `id` không tồn tại
+
+---
+
+### GET `/companies/{id}/health-score`
+
+Điểm "sức khoẻ công nghệ" của công ty (suy ra từ mức độ đa dạng/hiện đại của tech stack qua job
+posting).
+
+**Authentication:** Public
+
+### GET `/companies/{id}/mentions`
+
+Danh sách bài viết có nhắc đến công ty này (`Article-[:MENTIONS]->Company`).
+
+**Authentication:** Public
 
 ---
 
@@ -2952,9 +3108,8 @@ làm fail request like — xem [`docs/BACKEND_GUIDE.md`](./BACKEND_GUIDE.md) §4
 
 ### GET `/posts/{id}/comments` · POST `/posts/{id}/comments`
 
-**Authentication:** Required (Bearer JWT) — **lưu ý:** GET không thực sự cần định danh người gọi
-(handler không đọc identity), nhưng vẫn bị chặn cho người dùng chưa đăng nhập vì `/posts/**`
-không nằm trong `PUBLIC_PATHS`; đây là một điểm chưa được rà soát lại, không phải chủ đích.
+**Authentication:** GET là Public (`GET /posts/*/comments` nằm trong `SecurityConfig.PUBLIC_ROUTES`
+— khớp với việc handler không đọc identity người gọi). POST yêu cầu Bearer JWT.
 
 **Query params (GET):** `page` (default `0`), `size` (default `20`)
 
@@ -3052,6 +3207,39 @@ Gợi ý người để follow, xếp theo số follower.
 
 ---
 
+### GET `/users/search`
+
+Tìm user theo tên.
+
+**Authentication:** Required (Bearer JWT)
+
+---
+
+### GET `/feed/stream`
+
+SSE stream — đẩy bài đăng mới trong feed real-time (`live:feed` Redis Pub/Sub, xem
+[`docs/DATABASE.md`](./DATABASE.md) §5), không cần tự refresh.
+
+**Authentication:** Required (Bearer JWT)
+
+---
+
+### GET `/posts/{postId}/images/{imageId}`
+
+Lấy 1 ảnh đính kèm bài đăng (binary).
+
+**Authentication:** Public
+
+---
+
+### GET `/hashtags/trending`
+
+Danh sách hashtag đang trend trong feed.
+
+**Authentication:** Public
+
+---
+
 ## 16. AI Interview — `/api/v1/interview` *(proxy ai-rag-core qua module `aiproxy`; NEW)*
 
 ### POST `/interview`
@@ -3116,6 +3304,62 @@ curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/jso
 
 ---
 
+## 17. AiProxy — forward nguyên văn sang `ai-rag-core` *(module `aiproxy`)*
+
+Mỗi endpoint dưới đây là 1 controller riêng nhưng đều chỉ forward `Map<String,Object>` nguyên văn
+qua `AiProxyRequestHandler`/`PythonAiProxyClient` (không có typed DTO phía Java) — response từ
+Python bọc verbatim vào `ApiResponse.data`. Bất kỳ lỗi nào từ `ai-rag-core` đều bị gộp thành
+`503 SERVICE_UNAVAILABLE` chung (không passthrough chi tiết lỗi). Xem
+[`docs/BACKEND_GUIDE.md`](./BACKEND_GUIDE.md) §4.16 và [`docs/AI_PLATFORM.md`](./AI_PLATFORM.md).
+
+| Method | Path | Auth | Mô tả |
+|---|---|---|---|
+| POST | `/career` | JWT (`forwardAsCurrentUser`) | Tư vấn career path bằng AI (khác `GET /career/roadmap` ở §18 — đây là proxy LLM, không phải tính native) |
+| POST | `/recommend` | JWT (`forwardAsCurrentUser`) | Gợi ý công nghệ nên học tiếp |
+| POST | `/interview` | JWT (`forwardAsCurrentUser`) | Xem §16 |
+| POST | `/agent` | JWT (`forwardAsCurrentUser`) | AI Agent multi-tool (LangChain) |
+| GET | `/forecast` | Public (`forward`) | Dự báo xu hướng công nghệ |
+| GET | `/report` | Public (`forward`) | Báo cáo xu hướng tổng hợp theo kỳ |
+| POST | `/chat/summarize` | Public (`forward`) | Tóm tắt nhanh 1 đoạn hội thoại/nội dung |
+| POST | `/company-insight` | Public (`forward`) | Tóm tắt AI về hồ sơ tuyển dụng/tech stack 1 công ty — hiển thị trên trang `/companies` công khai |
+
+Ranh giới public/JWT là controller gọi `forward()` (nội dung chung, không cá nhân hoá) hay
+`forwardAsCurrentUser()` (đính `user_id` từ JWT, cá nhân hoá theo người dùng) trên
+`AiProxyRequestHandler` — không phải quyết định bảo mật đặc biệt cho từng route.
+
+**Rate limit:** 20 req/60s, theo user id (route JWT) hoặc IP (route public) — xem
+[Rate Limiting](#rate-limiting).
+
+---
+
+## 18. Career Roadmap — `/api/v1/career/roadmap`, `/api/v1/career/simulate` *(feature `roadmap`, native — không proxy)*
+
+Cùng base path `/career` với `POST /career` ở §17 nhưng là **controller khác**
+(`CareerRoadmapController`, feature `roadmap`) — tính native trên backend, không forward sang
+`ai-rag-core`.
+
+#### GET `/career/roadmap`
+
+Lộ trình sự nghiệp cá nhân hoá: gộp gợi ý kỹ năng tiếp theo (`/recommend`), lộ trình vai trò
+(`/career`) và job phù hợp (`/jobs/matches`) vào 1 lần gọi có cache
+(`cache:roadmap:<userId>`, TTL 30 phút — evict qua `POST /admin/cache/roadmap/evict`, §9). Nếu hồ
+sơ chưa có `technologies` nào, trả `has_technologies: false` với các mục rỗng thay vì lỗi.
+
+**Authentication:** Required (Bearer JWT)
+
+#### GET `/career/simulate`
+
+"What-if": mô phỏng tác động của việc học thêm 1 công nghệ giả định (không lưu vào hồ sơ) — số
+job phù hợp trước/sau, thống kê lương thị trường thật, và dự báo xu hướng (thống kê + LLM). Kết
+hợp `/jobs/matches` scoring, `/salary/tech` và `/forecast`. Cache riêng
+`cache:simulate:<userId>:<tech>`.
+
+**Authentication:** Required (Bearer JWT)
+
+**Query params:** `technology` (string, required)
+
+---
+
 ## Phân quyền
 
 ### Public Endpoints
@@ -3131,34 +3375,59 @@ Không yêu cầu JWT authentication:
 - `/health`
 - `/status`
 - `GET /user/avatar/{userId}`
+- `GET /companies/**` *(Company Explorer hiển thị công khai — bao gồm cả `GET /companies/{id}/similar`)*
+- `GET /posts/*/comments`, `GET /posts/*/images/**` *(đọc bình luận/ảnh bài viết không cần định danh người gọi; POST vẫn yêu cầu JWT)*
 - `/actuator/**`
 - Swagger UI (`/swagger-ui/**`, `/v3/api-docs/**`)
-- `GET /forecast` *(proxy `aiproxy` — public từ trước khi module `forecast` cũ bị gộp, path giữ nguyên)*
+- `GET /forecast` *(proxy `aiproxy` — dùng `AiProxyRequestHandler.forward()`, nội dung chung không cá nhân hoá)*
 - `GET /report` *(proxy `aiproxy`, tương tự)*
 - `POST /chat/summarize` *(proxy `aiproxy`, tương tự)*
+- `POST /company-insight` *(proxy `aiproxy`, tương tự — hiển thị trên trang `/companies` công khai nên phải public)*
 
 ### Admin Endpoints
 
-Yêu cầu role `ADMIN`:
+Tất cả endpoints dưới `/admin/**` yêu cầu JWT hợp lệ + đúng permission code (không phải bare
+`hasRole('ADMIN')` — permission-based RBAC, migration `V24`/`V27`, xem
+[`docs/BACKEND_GUIDE.md`](./BACKEND_GUIDE.md) §6.3). Role `admin` có đủ cả 13 permission; role
+`moderator` chỉ có `social:moderate` + `audit:view`.
 
-- Tất cả endpoints dưới `/admin/**`
+| Permission code | Controller |
+|---|---|
+| `user:manage` | `UserAdminController` |
+| `notification:manage` | `AdminNotificationController` |
+| `analytics:manage` | `AnalyticsAdminController` |
+| `cms:manage` | `AdminCmsController` |
+| `crawler:manage` | `CrawlerAdminController` |
+| `cache:manage` | `CacheAdminController` |
+| `system:settings` | `AdminController` |
+| `datapipeline:manage` | `AdminDataPlatformController` |
+| `social:moderate` | `AdminSocialController` |
+| `audit:view` | `AuditLogAdminController` |
+| `dashboard:view` | `AdminDashboardController` |
+| `clustering:manage` | `AdminClusteringController` |
+| `graph:manage` | `GraphAnalyticsAdminController` |
 
 ### Authenticated Endpoints
 
 Yêu cầu JWT hợp lệ:
 
 - Tất cả endpoints còn lại không thuộc Public hoặc Admin — bao gồm TOÀN BỘ endpoint mới:
-  `/companies/**`, `/jobs/matches`, `/conversations/**`, `/feed`, `/posts/**`, `/users/**`,
-  `/salary/**`, và (trong `aiproxy`) `/career`, `/recommend`, `/interview`, `/agent`.
+  `/jobs/matches`, `/conversations/**`, `/feed`, `/users/**`, `/salary/**`, và (trong `aiproxy`)
+  `/career`, `/recommend`, `/interview`, `/agent`. Ngoại lệ theo method: `/companies/**` và
+  `/posts/**` chỉ auth-required cho các route KHÔNG nằm trong danh sách Public phía trên (vd.
+  `POST /posts`, `DELETE /posts/{id}`, `POST /posts/{id}/comments` vẫn cần JWT; `GET /companies/**`
+  thì không).
 
-**Note:** `spring.webflux.base-path` bị strip **trước** security filter, nên matcher trong `SecurityConfig.PUBLIC_PATHS` được khai báo **không** kèm `/api/v1`.
+**Note:** `spring.webflux.base-path` bị strip **trước** security filter, nên matcher trong `SecurityConfig.PUBLIC_ROUTES` được khai báo **không** kèm `/api/v1`.
 
-**Chưa hợp lý cần lưu ý:** việc `/forecast`/`/report`/`/chat/summarize` là public trong khi
-`/career`/`/recommend`/`/interview`/`/agent` (cùng nhóm `aiproxy`, cùng forward sang
-`ai-rag-core`) lại yêu cầu auth là do các path string này được giữ nguyên từ 6 module cũ
-(`forecast`/`report`/`summarize` vốn đã public từ trước) khi gộp vào `aiproxy` — KHÔNG phải
-một quyết định bảo mật có chủ đích cho lần gộp module này. Xem
-[`docs/BACKEND_GUIDE.md`](./BACKEND_GUIDE.md) §4.16.
+**Nguyên tắc public/auth trong `aiproxy`:** ranh giới là controller gọi `forward()` hay
+`forwardAsCurrentUser()` trên `AiProxyRequestHandler`. `forward()` (không đính kèm user) → nội
+dung chung, public: `/forecast`, `/report`, `/chat/summarize`, `/company-insight`.
+`forwardAsCurrentUser()` (đính `user_id` từ JWT, kết quả cá nhân hoá theo người dùng đang đăng
+nhập) → yêu cầu auth: `/career`, `/recommend`, `/interview`, `/agent`. `/company-insight` trước
+đây bị bỏ sót khỏi `PUBLIC_ROUTES` dù dùng `forward()` — khách ẩn danh vào trang `/companies`
+(công khai) bị 401 ở `/company-insight` và bị web client tự động đăng xuất; đã thêm vào
+`PUBLIC_ROUTES` cho khớp nguyên tắc trên. Xem [`docs/BACKEND_GUIDE.md`](./BACKEND_GUIDE.md) §4.16.
 
 ---
 
@@ -3171,8 +3440,8 @@ Spring Boot gateway proxy các request đến Python services với header bảo
 **Endpoints được proxy:**
 - `/chat/**` — qua `RagProxyService` riêng, request/response có typed DTO (§6)
 - `/compare/llm-summary` — gọi `ai-rag-core` `POST /internal/ai/llm-summary`
-- `/career`, `/forecast`, `/recommend`, `/report`, `/chat/summarize`, `/agent`, `/interview`
-  (§11-16 + AI Interview) — qua module **`aiproxy`** (`PythonAiProxyClient`/`AiProxyPort`):
+- `/career`, `/forecast`, `/recommend`, `/report`, `/chat/summarize`, `/agent`, `/interview`,
+  `/company-insight` (§11-16 + AI Interview) — qua module **`aiproxy`** (`PythonAiProxyClient`/`AiProxyPort`):
   forward **nguyên văn** `Map<String,Object>` (KHÔNG có typed DTO phía Java, khác với `/chat/**`),
   response từ Python được bọc verbatim vào `ApiResponse.data` (double-wrapped). Bất kỳ lỗi nào
   từ phía Python đều bị gộp thành `503 SERVICE_UNAVAILABLE` chung, không passthrough chi tiết lỗi.
@@ -3287,12 +3556,15 @@ X-Internal-Auth: techradar-internal-secret
 
 ## Rate Limiting
 
-Các endpoint có thể bị rate limit để bảo vệ hệ thống:
+Chỉ 3 nhóm endpoint có rate limit thật (Redis INCR+EXPIRE, `shared/redis/*RateLimiterService`) —
+`/graph/**` và `/clustering/**` KHÔNG có rate limit riêng nào:
 
-- **Auth endpoints**: 10 requests/minute/IP
-- **Chat endpoints**: 30 requests/minute/user
-- **Graph endpoints**: 20 requests/minute/user
-- **Clustering endpoints**: 10 requests/minute/user
+- **Auth** (`/auth/login`, `/auth/register`, `/auth/forgot-password`): theo IP, mỗi action một
+  bộ đếm riêng — login 10 req/60s, register 5 req/60s, forgot-password 5 req/300s (`AuthRateLimiterService`)
+- **Chat** (`/chat/**`): 20 req/60s theo user (`ChatRateLimiterService`, `CHAT_RATE_LIMIT_MAX`/`_WINDOW`)
+- **AiProxy** (`/career`, `/recommend`, `/interview`, `/agent`, `/forecast`, `/report`,
+  `/chat/summarize`, `/company-insight`): 20 req/60s — theo user id nếu route yêu cầu đăng nhập,
+  theo IP nếu route public (`AiProxyRateLimiterService`, `AIPROXY_RATE_LIMIT_MAX`/`_WINDOW`)
 
 Khi rate limit exceeded:
 ```json

@@ -1,5 +1,6 @@
 package com.techpulse.techradar.features.notification.adapters.output;
 
+import com.techpulse.techradar.features.notification.domain.JobMatchSubscriber;
 import com.techpulse.techradar.features.notification.domain.Notification;
 import com.techpulse.techradar.features.notification.domain.TrendSubscriber;
 import com.techpulse.techradar.features.notification.ports.NotificationRepository;
@@ -83,15 +84,25 @@ public class PostgresNotificationRepository implements NotificationRepository {
     }
 
     @Override
+    public Mono<Long> countUnreadByType(String userId, String type) {
+        return dbClient.sql("SELECT count(*) FROM notification WHERE user_id = :user_id AND is_read = false AND type = :type")
+                .bind("user_id", UUID.fromString(userId))
+                .bind("type", type)
+                .map((row, meta) -> row.get(0, Long.class))
+                .one();
+    }
+
+    @Override
     public Flux<TrendSubscriber> findTrendSubscribers(String technology) {
         return userProfileRepository.findSubscribersByTechnology(technology)
                 .map(r -> new TrendSubscriber(r.userId(), r.email(), r.notifyInapp(), r.notifyEmail()));
     }
 
     @Override
-    public Flux<TrendSubscriber> findJobMatchSubscribers(List<String> technologies) {
-        return userProfileRepository.findSubscribersByAnyTechnology(technologies)
-                .map(r -> new TrendSubscriber(r.userId(), r.email(), r.notifyInapp(), r.notifyEmail()));
+    public Flux<JobMatchSubscriber> findJobMatchSubscribers(List<String> technologies) {
+        return userProfileRepository.findJobMatchSubscribers(technologies)
+                .map(r -> new JobMatchSubscriber(r.userId(), r.email(), r.notifyInapp(), r.notifyEmail(),
+                        r.matchesCurrentSkills()));
     }
 
     @Override

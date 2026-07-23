@@ -8,18 +8,25 @@ phải tạo snapshot mới (đổi `tag` trong `params.yaml`).
 
 from __future__ import annotations
 
+import concurrent.futures
 import dataclasses
 import json
 import logging
 import subprocess
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from conf.config import get_settings, snapshot_dir
+
 from src.data import neo4j_loader as loader
 
 logger = logging.getLogger(__name__)
+
+# Kept small on purpose: a remote AuraDB free-tier instance has a limited connection budget, so
+# this overlaps round-trip latency across a handful of concurrent Cypher calls rather than trying
+# to run every fetch_* at once.
+_MAX_PARALLEL_QUERIES = 4
 
 
 @dataclass
@@ -38,6 +45,7 @@ class SnapshotMeta:
         rows_per_file:        {filename: nrows}.
         git_commit:           commit hash lúc snapshot (best-effort).
     """
+
     tag: str
     created_at: str
     neo4j_uri: str
@@ -58,35 +66,37 @@ def take_snapshot(tag: str, min_tech_degree: int = 1) -> SnapshotMeta:
 
     # Bảo vệ: không ghi đè snapshot cũ
     if any(out_dir.iterdir()):
-        raise FileExistsError(
-            f"Snapshot '{tag}' đã tồn tại tại {out_dir}. "
-            "Dùng --force để ghi đè."
-        )
+        raise FileExistsError(f"Snapshot '{tag}' đã tồn tại tại {out_dir}. Dùng --force để ghi đè.")
 
     logger.info("Bắt đầu snapshot tag='%s' → %s", tag, out_dir)
 
     # ------------------------------------------------------------------ fetch
     fetch_map = {
-        "technologies":                (loader.fetch_technologies, {"min_degree": min_tech_degree}),
-        "companies":                   (loader.fetch_companies, {}),
-        "articles":                    (loader.fetch_articles, {"only_with_embedding": False}),
-        "jobs":                        (loader.fetch_jobs, {}),
-        "skills":                      (loader.fetch_skills, {}),
+        "technologies": (loader.fetch_technologies, {"min_degree": min_tech_degree}),
+        "companies": (loader.fetch_companies, {}),
+        "articles": (loader.fetch_articles, {"only_with_embedding": False}),
+        "jobs": (loader.fetch_jobs, {}),
+        "skills": (loader.fetch_skills, {}),
         "edges_article_mentions_tech": (loader.fetch_edges_article_mentions_tech, {}),
-        "edges_company_uses_tech":     (loader.fetch_edges_company_uses_tech, {}),
-        "edges_job_requires_tech":     (loader.fetch_edges_job_requires_tech, {}),
-        "edges_job_requires_skill":    (loader.fetch_edges_job_requires_skill, {}),
-        "edges_tech_related_tech":     (loader.fetch_edges_tech_related_tech, {}),
-        "edges_skill_is_technology":   (loader.fetch_edges_skill_is_technology, {}),
+        "edges_company_uses_tech": (loader.fetch_edges_company_uses_tech, {}),
+        "edges_job_requires_tech": (loader.fetch_edges_job_requires_tech, {}),
+        "edges_job_requires_skill": (loader.fetch_edges_job_requires_skill, {}),
+        "edges_tech_related_tech": (loader.fetch_edges_tech_related_tech, {}),
+        "edges_skill_is_technology": (loader.fetch_edges_skill_is_technology, {}),
     }
 
+    # Các fetch_* đọc data rời nhau (node/edge riêng biệt) nên chạy song song
+    # qua 1 thread pool nhỏ, dùng chung driver singleton — mỗi Cypher call vẫn
+    # là 1 session Neo4j riêng nhưng round-trip latency được overlap thay vì
+    # cộng dồn tuần tự (đặc biệt quan trọng với AuraDB ở xa).
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(_MAX_PARALLEL_QUERIES, len(fetch_map))) as pool:
+        fetch_futures = {name: pool.submit(fn, **kwargs) for name, (fn, kwargs) in fetch_map.items()}
+        dfs = {name: fut.result() for name, fut in fetch_futures.items()}
+
     rows_per_file: dict[str, int] = {}
-    dfs: dict = {}
-    for name, (fn, kwargs) in fetch_map.items():
-        df = fn(**kwargs)
+    for name, df in dfs.items():
         loader.save_parquet(df, out_dir / f"{name}.parquet")
         rows_per_file[name] = len(df)
-        dfs[name] = df
 
     # ------------------------------------------------------------------ verify embedding dim
     df_articles = dfs["articles"]
@@ -99,40 +109,44 @@ def take_snapshot(tag: str, min_tech_degree: int = 1) -> SnapshotMeta:
             sample_emb = df_with_emb.iloc[0]["embedding"]
             emb_dim = len(sample_emb)
             if emb_dim != 768:
-                raise ValueError(
-                    f"Article embedding dim={emb_dim}, kỳ vọng 768."
-                )
+                raise ValueError(f"Article embedding dim={emb_dim}, kỳ vọng 768.")
     else:
         logger.info("Không có Article trong DB — bỏ qua kiểm tra embedding.")
 
     # ------------------------------------------------------------------ node / edge counts từ DB
-    node_counts = {}
-    for label in ("Technology", "Article", "Company", "Job", "Skill"):
-        res = loader.run_query(f"MATCH (n:{label}) RETURN count(n) AS c")
-        node_counts[label] = res[0]["c"]
+    # Mỗi label/rel type là 1 round-trip độc lập → chạy song song qua cùng
+    # thread pool nhỏ như trên thay vì tuần tự từng cái.
+    node_labels = ("Technology", "Article", "Company", "Job", "Skill")
+    rel_candidates = ("MENTIONS", "USES", "REQUIRES", "RELATED_TO", "IS_TECHNOLOGY", "HIRES_FOR")
 
-    # Lấy danh sách rel types thực có trong DB trước để tránh query thừa
-    existing_rels = {
-        r["relationshipType"]
-        for r in loader.run_query("CALL db.relationshipTypes() YIELD relationshipType RETURN relationshipType")
-    }
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(_MAX_PARALLEL_QUERIES, len(node_labels) + 1)) as pool:
+        node_futures = {
+            label: pool.submit(loader.run_query, f"MATCH (n:{label}) RETURN count(n) AS c") for label in node_labels
+        }
+        # Lấy danh sách rel types thực có trong DB trước để tránh query thừa
+        rel_types_future = pool.submit(
+            loader.run_query,
+            "CALL db.relationshipTypes() YIELD relationshipType RETURN relationshipType",
+        )
+
+        node_counts = {label: fut.result()[0]["c"] for label, fut in node_futures.items()}
+        existing_rels = {r["relationshipType"] for r in rel_types_future.result()}
+
     edge_counts = {}
-    for rel in ("MENTIONS", "USES", "REQUIRES", "RELATED_TO", "IS_TECHNOLOGY", "HIRES_FOR"):
-        if rel in existing_rels:
-            res = loader.run_query(f"MATCH ()-[r:{rel}]->() RETURN count(r) AS c")
-            edge_counts[rel] = res[0]["c"]
-        else:
-            edge_counts[rel] = 0
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(_MAX_PARALLEL_QUERIES, len(rel_candidates))) as pool:
+        edge_futures = {
+            rel: pool.submit(loader.run_query, f"MATCH ()-[r:{rel}]->() RETURN count(r) AS c")
+            for rel in rel_candidates
+            if rel in existing_rels
+        }
+        for rel in rel_candidates:
+            edge_counts[rel] = edge_futures[rel].result()[0]["c"] if rel in edge_futures else 0
 
     # ------------------------------------------------------------------ git commit
     git_commit: str | None = None
     try:
-        git_commit = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], text=True
-        ).strip()
-        dirty = subprocess.check_output(
-            ["git", "status", "--porcelain"], text=True
-        ).strip()
+        git_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+        dirty = subprocess.check_output(["git", "status", "--porcelain"], text=True).strip()
         if dirty:
             logger.warning("Repo có uncommitted changes khi snapshot.")
     except Exception:
@@ -141,7 +155,7 @@ def take_snapshot(tag: str, min_tech_degree: int = 1) -> SnapshotMeta:
     # ------------------------------------------------------------------ ghi meta
     meta = SnapshotMeta(
         tag=tag,
-        created_at=datetime.now(timezone.utc).isoformat(),
+        created_at=datetime.now(UTC).isoformat(),
         neo4j_uri=get_settings().active_neo4j_uri,
         node_counts=node_counts,
         edge_counts=edge_counts,
@@ -178,10 +192,17 @@ def list_snapshot_files(tag: str) -> dict[str, Path]:
     """
     out_dir = snapshot_dir(tag)
     keys = [
-        "technologies", "companies", "articles", "jobs", "skills",
-        "edges_article_mentions_tech", "edges_company_uses_tech",
-        "edges_job_requires_tech", "edges_job_requires_skill",
-        "edges_tech_related_tech", "edges_skill_is_technology",
+        "technologies",
+        "companies",
+        "articles",
+        "jobs",
+        "skills",
+        "edges_article_mentions_tech",
+        "edges_company_uses_tech",
+        "edges_job_requires_tech",
+        "edges_job_requires_skill",
+        "edges_tech_related_tech",
+        "edges_skill_is_technology",
     ]
     result: dict[str, Path] = {}
     missing = []
@@ -193,7 +214,5 @@ def list_snapshot_files(tag: str) -> dict[str, Path]:
             result[key] = p.resolve()
 
     if missing:
-        raise FileNotFoundError(
-            f"Snapshot '{tag}' thiếu {len(missing)} file:\n" + "\n".join(missing)
-        )
+        raise FileNotFoundError(f"Snapshot '{tag}' thiếu {len(missing)} file:\n" + "\n".join(missing))
     return result

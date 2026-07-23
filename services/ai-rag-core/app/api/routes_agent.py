@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends
 
+from app.agent.executor import run_agent
 from app.api.schemas import AgentRequest, AgentResponse, AgentStep
 from app.api.security import require_internal_auth
-from app.agent.executor import run_agent
 
 router = APIRouter(
     prefix="/agent",

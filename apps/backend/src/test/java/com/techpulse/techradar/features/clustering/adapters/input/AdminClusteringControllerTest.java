@@ -13,10 +13,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
+import org.springframework.data.redis.core.ReactiveValueOperations;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -37,13 +40,24 @@ class AdminClusteringControllerTest {
     private GetPipelineRunsUseCase getPipelineRunsUseCase;
     @Mock
     private UpdateClusterLabelUseCase updateClusterLabelUseCase;
+    @Mock
+    private ReactiveStringRedisTemplate redisTemplate;
+    @Mock
+    private ReactiveValueOperations<String, String> valueOperations;
 
     private AdminClusteringController controller;
 
     @BeforeEach
     void setUp() {
         controller = new AdminClusteringController(
-                getPipelineStatusUseCase, triggerPipelineUseCase, getPipelineRunsUseCase, updateClusterLabelUseCase);
+                getPipelineStatusUseCase, triggerPipelineUseCase, getPipelineRunsUseCase, updateClusterLabelUseCase,
+                redisTemplate);
+    }
+
+    private void stubLockAcquired() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.setIfAbsent(eq("clustering:trigger:lock"), eq("1"), eq(Duration.ofSeconds(10))))
+                .thenReturn(Mono.just(true));
     }
 
     @Test
@@ -63,6 +77,7 @@ class AdminClusteringControllerTest {
 
     @Test
     void triggerPipeline_surfacesConflict_whenAlreadyRunning() {
+        stubLockAcquired();
         when(triggerPipelineUseCase.execute())
                 .thenReturn(Mono.error(new ConflictException(ErrorCode.PIPELINE_RUNNING, "Đang chạy")));
 
@@ -70,6 +85,23 @@ class AdminClusteringControllerTest {
                 .expectErrorMatches(ex -> ex instanceof ConflictException
                         && ((ConflictException) ex).getStatusCode() == 409)
                 .verify();
+    }
+
+    @Test
+    void triggerPipeline_returnsTooManyRequests_whenDebounceLockNotAcquired() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.setIfAbsent(eq("clustering:trigger:lock"), eq("1"), eq(Duration.ofSeconds(10))))
+                .thenReturn(Mono.just(false));
+
+        StepVerifier.create(controller.triggerPipeline())
+                .assertNext(response -> {
+                    assertThat(response.getStatusCode().value()).isEqualTo(429);
+                    ApiResponse<Map<String, Object>> body = response.getBody();
+                    assertThat(body).isNotNull();
+                    assertThat(body.isSuccess()).isFalse();
+                    assertThat(body.getErrorCode()).isEqualTo("CLUSTERING_TRIGGER_DEBOUNCED");
+                })
+                .verifyComplete();
     }
 
     @Test

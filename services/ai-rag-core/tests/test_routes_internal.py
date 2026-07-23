@@ -7,6 +7,7 @@ Chạy từ thư mục service (để `app` import được):
 
 Mock `generate` nên KHÔNG cần API key LLM hay mạng. Chỉ cần fastapi/pydantic.
 """
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -30,10 +31,14 @@ def client(monkeypatch):
 def test_path_and_response_shape(client):
     c, fake = client
     payload = {
-        "tech1": "Python", "tech2": "Go",
-        "growth_rate_1": 12.5, "growth_rate_2": -3.0,
-        "job_count_1": 120, "job_count_2": None,
-        "article_count_1": 0, "article_count_2": 8,
+        "tech1": "Python",
+        "tech2": "Go",
+        "growth_rate_1": 12.5,
+        "growth_rate_2": -3.0,
+        "job_count_1": 120,
+        "job_count_2": None,
+        "article_count_1": 0,
+        "article_count_2": 8,
     }
     res = c.post("/internal/ai/llm-summary", json=payload)
 
@@ -48,7 +53,7 @@ def test_path_and_response_shape(client):
     assert "Python" in user and "Go" in user
     assert "+12.5%" in user and "-3.0%" in user
     assert "120" in user
-    assert user.count("không có dữ liệu") == 1   # đúng 1 field thiếu (job_count_2)
+    assert user.count("không có dữ liệu") == 1  # đúng 1 field thiếu (job_count_2)
 
 
 def test_minimal_required_fields_ok(client):

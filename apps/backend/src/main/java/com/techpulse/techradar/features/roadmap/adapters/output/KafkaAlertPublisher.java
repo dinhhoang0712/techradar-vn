@@ -1,7 +1,7 @@
 package com.techpulse.techradar.features.roadmap.adapters.output;
 
 import com.techpulse.techradar.features.kafka.KafkaTopicConstants;
-import com.techpulse.techradar.features.kafka.producer.KafkaProducerService;
+import com.techpulse.techradar.features.kafka.adapters.output.KafkaProducerService;
 import com.techpulse.techradar.features.notification.event.RoadmapAlertEvent;
 import com.techpulse.techradar.features.roadmap.ports.AlertPublisher;
 import lombok.RequiredArgsConstructor;

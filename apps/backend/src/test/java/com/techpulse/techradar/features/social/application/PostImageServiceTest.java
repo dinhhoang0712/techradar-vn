@@ -1,6 +1,5 @@
 package com.techpulse.techradar.features.social.application;
 
-import com.techpulse.techradar.features.social.adapters.input.SocialDtos;
 import com.techpulse.techradar.features.social.ports.PostImageRepository;
 import com.techpulse.techradar.shared.exception.AppException;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,8 +43,8 @@ class PostImageServiceTest {
         return Base64.getEncoder().encodeToString(bytes);
     }
 
-    private static SocialDtos.ImageInput image(String contentType, byte[] bytes) {
-        return new SocialDtos.ImageInput(contentType, base64Of(bytes));
+    private static ImageInput image(String contentType, byte[] bytes) {
+        return new ImageInput(contentType, base64Of(bytes));
     }
 
     // ---- validate ---------------------------------------------------------
@@ -58,7 +57,7 @@ class PostImageServiceTest {
 
     @Test
     void validate_throwsWhenMoreThanFourImages() {
-        List<SocialDtos.ImageInput> five = List.of(
+        List<ImageInput> five = List.of(
                 image("image/png", "a".getBytes()), image("image/png", "b".getBytes()),
                 image("image/png", "c".getBytes()), image("image/png", "d".getBytes()),
                 image("image/png", "e".getBytes()));
@@ -70,7 +69,7 @@ class PostImageServiceTest {
 
     @Test
     void validate_throwsForInvalidBase64() {
-        List<SocialDtos.ImageInput> images = List.of(new SocialDtos.ImageInput("image/png", "not-valid-base64!!"));
+        List<ImageInput> images = List.of(new ImageInput("image/png", "not-valid-base64!!"));
 
         assertThatThrownBy(() -> service.validate(images))
                 .isInstanceOf(AppException.class)
@@ -79,7 +78,7 @@ class PostImageServiceTest {
 
     @Test
     void validate_throwsForEmptyDecodedData() {
-        List<SocialDtos.ImageInput> images = List.of(new SocialDtos.ImageInput("image/png", ""));
+        List<ImageInput> images = List.of(new ImageInput("image/png", ""));
 
         assertThatThrownBy(() -> service.validate(images)).isInstanceOf(AppException.class);
     }
@@ -87,7 +86,7 @@ class PostImageServiceTest {
     @Test
     void validate_throwsForOversizedImage() {
         byte[] tooBig = new byte[3 * 1024 * 1024 + 1];
-        List<SocialDtos.ImageInput> images = List.of(image("image/png", tooBig));
+        List<ImageInput> images = List.of(image("image/png", tooBig));
 
         assertThatThrownBy(() -> service.validate(images))
                 .isInstanceOf(AppException.class)
@@ -96,7 +95,7 @@ class PostImageServiceTest {
 
     @Test
     void validate_throwsForUnsupportedContentType() {
-        List<SocialDtos.ImageInput> images = List.of(image("image/svg+xml", "<svg/>".getBytes()));
+        List<ImageInput> images = List.of(image("image/svg+xml", "<svg/>".getBytes()));
 
         assertThatThrownBy(() -> service.validate(images))
                 .isInstanceOf(AppException.class)
@@ -118,14 +117,14 @@ class PostImageServiceTest {
     @Test
     void validate_stripsDataUrlPrefixBeforeDecoding() {
         String dataUrl = "data:image/png;base64," + base64Of("hello".getBytes());
-        List<PostImageService.PreparedImage> result = service.validate(List.of(new SocialDtos.ImageInput("image/png", dataUrl)));
+        List<PostImageService.PreparedImage> result = service.validate(List.of(new ImageInput("image/png", dataUrl)));
         assertThat(result).hasSize(1);
         assertThat(result.get(0).data()).isEqualTo("hello".getBytes());
     }
 
     @Test
     void validate_preservesOrderAndDecodesEachImage() {
-        List<SocialDtos.ImageInput> images = List.of(
+        List<ImageInput> images = List.of(
                 image("image/png", "first".getBytes()), image("image/jpeg", "second".getBytes()));
 
         List<PostImageService.PreparedImage> result = service.validate(images);

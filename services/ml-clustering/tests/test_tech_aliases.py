@@ -1,8 +1,8 @@
 """Kiểm tra việc merge seed alias (dp_tech_alias_map export) vào TECH_ALIAS_MAP."""
+
 import json
 
 from src.features.tech_aliases import (
-    TECH_ALIAS_MAP,
     _build_merged_alias_map,
     _load_seed_aliases,
     canonical_tech_name,

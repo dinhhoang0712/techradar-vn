@@ -2,19 +2,25 @@ package com.techpulse.techradar.features.auth.adapters.input;
 
 import com.techpulse.techradar.features.auth.application.ForgotPasswordUseCase;
 import com.techpulse.techradar.features.auth.application.GetCurrentUserUseCase;
+import com.techpulse.techradar.features.auth.application.LoginRequest;
 import com.techpulse.techradar.features.auth.application.LoginUseCase;
 import com.techpulse.techradar.features.auth.application.LogoutUseCase;
+import com.techpulse.techradar.features.auth.application.RegisterRequest;
 import com.techpulse.techradar.features.auth.application.RegisterUseCase;
 import com.techpulse.techradar.features.auth.application.RefreshTokenUseCase;
 import com.techpulse.techradar.features.auth.application.ResetPasswordUseCase;
 import com.techpulse.techradar.shared.dto.ApiResponse;
+import com.techpulse.techradar.shared.exception.RateLimitExceededException;
+import com.techpulse.techradar.shared.redis.AuthRateLimiterService;
 import com.techpulse.techradar.shared.security.SecurityUtils;
+import com.techpulse.techradar.shared.util.ClientIpUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
@@ -35,6 +41,7 @@ public class AuthController {
     private final GetCurrentUserUseCase getCurrentUserUseCase;
     private final ForgotPasswordUseCase forgotPasswordUseCase;
     private final ResetPasswordUseCase resetPasswordUseCase;
+    private final AuthRateLimiterService rateLimiter;
 
     // NOTE: auth + /status responses are returned BARE (no ApiResponse envelope) because the
     // web/mobile clients read these fields at the top level (e.g. res.access_token, user.role).
@@ -43,19 +50,28 @@ public class AuthController {
     @Operation(summary = "Login with email and password")
     @PostMapping("/login")
     public Mono<ResponseEntity<Object>> login(
-            @Valid @RequestBody LoginRequest request
+            @Valid @RequestBody LoginRequest request,
+            ServerHttpRequest httpRequest
     ) {
-        return loginUseCase.execute(request)
-                .map(response -> ResponseEntity.ok((Object) response));
+        String ip = ClientIpUtils.resolveClientIp(httpRequest);
+        return rateLimiter.isLoginAllowed(ip)
+                .flatMap(allowed -> allowed
+                        ? loginUseCase.execute(request).map(response -> ResponseEntity.ok((Object) response))
+                        : Mono.error(new RateLimitExceededException("Too many login attempts. Please try again later.")));
     }
 
     @Operation(summary = "Register new user")
     @PostMapping("/register")
     public Mono<ResponseEntity<Object>> register(
-            @Valid @RequestBody RegisterRequest request
+            @Valid @RequestBody RegisterRequest request,
+            ServerHttpRequest httpRequest
     ) {
-        return registerUseCase.execute(request)
-                .map(response -> ResponseEntity.status(HttpStatus.CREATED).body((Object) response));
+        String ip = ClientIpUtils.resolveClientIp(httpRequest);
+        return rateLimiter.isRegisterAllowed(ip)
+                .flatMap(allowed -> allowed
+                        ? registerUseCase.execute(request)
+                                .map(response -> ResponseEntity.status(HttpStatus.CREATED).body((Object) response))
+                        : Mono.error(new RateLimitExceededException("Too many registration attempts. Please try again later.")));
     }
 
     @Operation(summary = "Refresh access token using refresh token")
@@ -78,10 +94,16 @@ public class AuthController {
 
     @Operation(summary = "Request a password-reset token (emailed; always returns 200)")
     @PostMapping("/forgot-password")
-    public Mono<ResponseEntity<ApiResponse<Void>>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
-        return forgotPasswordUseCase.execute(request.getEmail())
-                .thenReturn(ResponseEntity.ok(ApiResponse.<Void>success(
-                        null, "If the email exists, a reset link has been sent")));
+    public Mono<ResponseEntity<ApiResponse<Void>>> forgotPassword(
+            @Valid @RequestBody ForgotPasswordRequest request,
+            ServerHttpRequest httpRequest
+    ) {
+        String ip = ClientIpUtils.resolveClientIp(httpRequest);
+        return rateLimiter.isForgotPasswordAllowed(ip)
+                .flatMap(allowed -> allowed
+                        ? forgotPasswordUseCase.execute(request.getEmail()).thenReturn(ResponseEntity.ok(
+                                ApiResponse.<Void>success(null, "If the email exists, a reset link has been sent")))
+                        : Mono.error(new RateLimitExceededException("Too many requests. Please try again later.")));
     }
 
     @Operation(summary = "Reset password using a valid token")

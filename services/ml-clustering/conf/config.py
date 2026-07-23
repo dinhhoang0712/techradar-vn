@@ -9,16 +9,16 @@ Chiến lược:
 
 import functools
 from pathlib import Path
-from typing import Any, Literal
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT: Path = Path(__file__).resolve().parents[3]
-MODULE_ROOT:  Path = Path(__file__).resolve().parents[1]
-DATA_DIR:     Path = MODULE_ROOT / "data"
-ENV_FILE:     Path = PROJECT_ROOT / ".env"
+MODULE_ROOT: Path = Path(__file__).resolve().parents[1]
+DATA_DIR: Path = MODULE_ROOT / "data"
+ENV_FILE: Path = PROJECT_ROOT / ".env"
 
 
 class Settings(BaseSettings):
@@ -72,6 +72,7 @@ class Settings(BaseSettings):
 # Pydantic models map sang `params.yaml`. Chỉ định nghĩa schema, không load.
 # ---------------------------------------------------------------------------
 
+
 class SnapshotParams(BaseModel):
     tag: str
     min_tech_degree: int = 1
@@ -117,8 +118,8 @@ class ReduceDimParams(BaseModel):
 
 class NoiseFilterParams(BaseModel):
     enabled: bool = False
-    min_job_count: int = 1          # loại tech có ít hơn N job
-    blocklist: list[str] = []       # tên cụ thể cần loại
+    min_job_count: int = 1  # loại tech có ít hơn N job
+    blocklist: list[str] = []  # tên cụ thể cần loại
     heuristic_patterns: list[str] = []  # regex pattern — match → loại
 
 
@@ -135,7 +136,7 @@ class FeatureParams(BaseModel):
     use_job_tfidf: bool = True
     tfidf_min_df: int = 2
     tfidf_max_features: int = 500
-    use_skill_jaccard: bool = True        # bag-of-skills qua job bridge (tech->job->skill)
+    use_skill_jaccard: bool = True  # bag-of-skills qua job bridge (tech->job->skill)
     use_article_temporal_stats: bool = True  # recency + sentiment từ Article mentions
     feature_weights: dict[str, float] = {}  # nhân vào block sau scale: {"job_tfidf": 2.0, ...}
     scaler: Literal["standard", "minmax", "robust"] = "standard"
@@ -188,7 +189,7 @@ class MLflowParams(BaseModel):
 
 
 class LabelingParams(BaseModel):
-    provider: str = "gemini"           # "gemini" | "openai" | "groq"
+    provider: str = "gemini"  # "gemini" | "openai" | "groq"
     gemini_model: str = "gemini-2.5-flash"
     openai_model: str = "gpt-4o-mini"
     groq_model: str = "llama-3.3-70b-versatile"
@@ -205,6 +206,7 @@ class WritebackParams(BaseModel):
 
 class Params(BaseModel):
     """Schema gộp cho `params.yaml`."""
+
     snapshot: SnapshotParams
     features: FeatureParams
     clustering: ClusteringParams
@@ -216,6 +218,7 @@ class Params(BaseModel):
 # ---------------------------------------------------------------------------
 # Loaders
 # ---------------------------------------------------------------------------
+
 
 @functools.lru_cache(maxsize=1)
 def get_settings() -> Settings:

@@ -58,4 +58,20 @@ class CacheAdminControllerTest {
 
         verify(redisCache).evictByPattern("cache:job:match:*");
     }
+
+    @Test
+    void evictRoadmaps_evictsTheRoadmapPattern() {
+        when(redisCache.evictByPattern("cache:roadmap:*")).thenReturn(Mono.empty());
+
+        StepVerifier.create(controller.evictRoadmaps())
+                .assertNext(response -> {
+                    assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+                    ApiResponse<Void> body = response.getBody();
+                    assertThat(body).isNotNull();
+                    assertThat(body.isSuccess()).isTrue();
+                })
+                .verifyComplete();
+
+        verify(redisCache).evictByPattern("cache:roadmap:*");
+    }
 }

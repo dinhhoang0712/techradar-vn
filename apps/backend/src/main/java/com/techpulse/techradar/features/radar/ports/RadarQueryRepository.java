@@ -3,6 +3,7 @@ package com.techpulse.techradar.features.radar.ports;
 import com.techpulse.techradar.features.radar.domain.MonthlyCount;
 import com.techpulse.techradar.features.radar.domain.TechSnapshot;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 
@@ -24,4 +25,17 @@ public interface RadarQueryRepository {
      * Monthly counts for the given technology names within the last {@code months} months.
      */
     Flux<MonthlyCount> monthlySeries(List<String> keywords, int months);
+
+    /**
+     * Technologies whose earliest {@code tech_analytics} row is the current calendar month — i.e.
+     * first tracked this month. Backs the admin live-metrics dashboard's "new technologies" count.
+     */
+    Mono<Long> countNewTechnologiesThisMonth();
+
+    /**
+     * Latest {@code tech_analytics} snapshot for each of the given technology names (already
+     * lower-cased by the caller). Names with no tracked row are simply absent from the result —
+     * backs the Company Tech Health Score, which averages only over technologies with real data.
+     */
+    Flux<TechSnapshot> findLatestSnapshotsForNames(List<String> namesLower);
 }

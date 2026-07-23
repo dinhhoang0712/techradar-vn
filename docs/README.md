@@ -196,8 +196,10 @@ OPENAI_API_KEY=your-key
 GEMINI_API_KEY=your-key
 LLM_PROVIDER=openai
 
-# Frontend
-VITE_API_URL=http://localhost:8080
+# Frontend (không thực sự dùng lúc runtime — apiClient.ts hard-code path tương đối /api/v1,
+# vite.config.ts hard-code dev-proxy target http://localhost:8080; biến này chỉ có ý nghĩa
+# tham khảo trong apps/web/.env.example)
+VITE_API_BASE_URL=http://localhost:8080/api/v1
 ```
 
 ---

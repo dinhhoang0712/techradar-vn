@@ -26,6 +26,8 @@ public class User {
     private String subscriptionTier;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    /** Bumped whenever role/status/password changes, so already-issued access tokens can be invalidated early. */
+    private UUID securityStamp;
 
     public boolean isActive() {
         return "active".equalsIgnoreCase(status);

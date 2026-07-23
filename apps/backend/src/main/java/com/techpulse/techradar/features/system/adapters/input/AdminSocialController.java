@@ -26,16 +26,19 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AdminSocialController {
 
+    private static final int DEFAULT_SIZE = 20;
+    private static final int MAX_SIZE = 100;
+
     private final SocialModerationService moderationService;
 
     @Operation(summary = "List all posts for moderation")
     @GetMapping("/posts")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('social:moderate')")
     public Mono<ResponseEntity<ApiResponse<List<PostView>>>> listPosts(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        PageRequest pageRequest = PageRequest.of(page, size, size, size);
+        PageRequest pageRequest = PageRequest.of(page, size, DEFAULT_SIZE, MAX_SIZE);
         return moderationService.listPosts(pageRequest.size(), pageRequest.offset())
                 .map(PostView::from)
                 .collectList()
@@ -44,7 +47,7 @@ public class AdminSocialController {
 
     @Operation(summary = "Delete any post (moderation)")
     @DeleteMapping("/posts/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('social:moderate')")
     public Mono<ResponseEntity<ApiResponse<Void>>> deletePost(@PathVariable String id) {
         return moderationService.deletePost(id)
                 .thenReturn(ResponseEntity.ok(ApiResponse.<Void>success(null, "Post deleted")));
@@ -52,13 +55,13 @@ public class AdminSocialController {
 
     @Operation(summary = "List comments on a post for moderation")
     @GetMapping("/posts/{id}/comments")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('social:moderate')")
     public Mono<ResponseEntity<ApiResponse<List<CommentView>>>> listComments(
             @PathVariable String id,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        PageRequest pageRequest = PageRequest.of(page, size, size, size);
+        PageRequest pageRequest = PageRequest.of(page, size, DEFAULT_SIZE, MAX_SIZE);
         return moderationService.listComments(id, pageRequest.size(), pageRequest.offset())
                 .map(CommentView::from)
                 .collectList()
@@ -67,7 +70,7 @@ public class AdminSocialController {
 
     @Operation(summary = "Delete any comment (moderation)")
     @DeleteMapping("/comments/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('social:moderate')")
     public Mono<ResponseEntity<ApiResponse<Void>>> deleteComment(@PathVariable String id) {
         return moderationService.deleteComment(id)
                 .thenReturn(ResponseEntity.ok(ApiResponse.<Void>success(null, "Comment deleted")));
@@ -75,12 +78,12 @@ public class AdminSocialController {
 
     @Operation(summary = "List pending content reports (moderation queue)")
     @GetMapping("/reports")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('social:moderate')")
     public Mono<ResponseEntity<ApiResponse<List<ReportView>>>> listReports(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        PageRequest pageRequest = PageRequest.of(page, size, size, size);
+        PageRequest pageRequest = PageRequest.of(page, size, DEFAULT_SIZE, MAX_SIZE);
         return moderationService.listPendingReports(pageRequest.size(), pageRequest.offset())
                 .map(ReportView::from)
                 .collectList()
@@ -89,7 +92,7 @@ public class AdminSocialController {
 
     @Operation(summary = "Dismiss a pending report (no violation found)")
     @PostMapping("/reports/{id}/dismiss")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('social:moderate')")
     public Mono<ResponseEntity<ApiResponse<Void>>> dismissReport(@PathVariable String id) {
         return SecurityUtils.currentUserId()
                 .flatMap(adminId -> moderationService.dismissReport(id, adminId))
@@ -98,7 +101,7 @@ public class AdminSocialController {
 
     @Operation(summary = "Get (or, with force=true, regenerate) the AI moderation suggestion for a report")
     @PostMapping("/reports/{id}/ai-suggestion")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('social:moderate')")
     public Mono<ResponseEntity<ApiResponse<ReportView>>> getAiSuggestion(
             @PathVariable String id,
             @RequestParam(defaultValue = "false") boolean force

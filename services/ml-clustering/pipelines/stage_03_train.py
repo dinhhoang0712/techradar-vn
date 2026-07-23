@@ -13,7 +13,6 @@ Output:
 
 import json
 import pickle
-import sys
 from pathlib import Path
 
 import mlflow
@@ -28,6 +27,7 @@ app = typer.Typer(add_completion=False, help="Grid search + select best clustere
 # ---------------------------------------------------------------------------
 # Near-cluster computation
 # ---------------------------------------------------------------------------
+
 
 def _compute_near_clusters(
     X: np.ndarray,
@@ -46,11 +46,7 @@ def _compute_near_clusters(
     """
     # l.1 — Tính centroid mỗi cluster (bỏ noise)
     unique_labels = sorted(set(labels.tolist()))
-    centroids: dict[int, np.ndarray] = {
-        lbl: X[labels == lbl].mean(axis=0)
-        for lbl in unique_labels
-        if lbl != -1
-    }
+    centroids: dict[int, np.ndarray] = {lbl: X[labels == lbl].mean(axis=0) for lbl in unique_labels if lbl != -1}
 
     if not centroids:
         return {tid: [] for tid in tech_ids}
@@ -103,6 +99,7 @@ def _compute_near_clusters(
 # đường dẫn snapshot.
 # ---------------------------------------------------------------------------
 
+
 def _load_related_edges(tag: str) -> pd.DataFrame:
     """
     Đọc `edges_tech_related_tech.parquet` của snapshot. Không raise nếu thiếu
@@ -121,6 +118,7 @@ def _load_related_edges(tag: str) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 @app.command()
 def main(
@@ -152,6 +150,7 @@ def main(
       5. Return 0 nếu OK; 1 nếu không trial nào pass.
     """
     from conf.config import features_dir, load_params, metrics_dir, models_dir
+
     from src.clustering.evaluator import compute_related_split_ratio
     from src.clustering.trainer import train_by_algorithm
     from src.clustering.tuner import (
@@ -184,17 +183,18 @@ def main(
     logger.info("Feature matrix: shape={}", X.shape)
 
     # 3. Parent MLflow run
-    with parent_run(f"train_{tag}", tags={"snapshot": tag, "algorithm": params_obj.clustering.algorithm}) as run:
-
+    with parent_run(f"train_{tag}", tags={"snapshot": tag, "algorithm": params_obj.clustering.algorithm}):
         # 3a. Log global params
-        mlflow.log_params({
-            "algorithm":    params_obj.clustering.algorithm,
-            "scaler":       params_obj.features.scaler,
-            "reduce_dim":   params_obj.features.reduce_dim.method,
-            "n_components": params_obj.features.reduce_dim.n_components,
-            "n_techs":      meta.n_techs,
-            "final_dim":    meta.final_dim,
-        })
+        mlflow.log_params(
+            {
+                "algorithm": params_obj.clustering.algorithm,
+                "scaler": params_obj.features.scaler,
+                "reduce_dim": params_obj.features.reduce_dim.method,
+                "n_components": params_obj.features.reduce_dim.n_components,
+                "n_techs": meta.n_techs,
+                "final_dim": meta.final_dim,
+            }
+        )
 
         # Log full params.yaml (flattened) + file artifact
         log_params_from_yaml(params_obj, prefix="cfg")
@@ -234,7 +234,7 @@ def main(
             )
         except RuntimeError as exc:
             logger.error("{}", exc)
-            raise typer.Exit(code=1)
+            raise typer.Exit(code=1) from exc
 
         # 3g. Re-fit best để lấy model object
         logger.info("Re-fitting best trial: {} {}", best.algorithm, best.params)
@@ -243,7 +243,9 @@ def main(
         # 3h. Tính near_clusters
         logger.info("Computing near-cluster scores (threshold={})...", params_obj.clustering.near_cluster_threshold)
         near_clusters_map = _compute_near_clusters(
-            X, best_labels, tech_ids,
+            X,
+            best_labels,
+            tech_ids,
             threshold=params_obj.clustering.near_cluster_threshold,
         )
         n_near_edges = sum(len(v) for v in near_clusters_map.values())
@@ -277,15 +279,15 @@ def main(
 
         # 3k. Write metrics file (DVC metric)
         metrics_dict = {
-            "n_clusters":         best.n_clusters,
-            "n_noise":            best.n_noise,
-            "noise_ratio":        best.noise_ratio,
-            "silhouette":         best.silhouette,
-            "davies_bouldin":     best.davies_bouldin,
-            "calinski_harabasz":  best.calinski_harabasz,
-            "dbcv":               best.dbcv,
-            "wall_seconds":       best.wall_seconds,
-            "n_near_edges":       n_near_edges,
+            "n_clusters": best.n_clusters,
+            "n_noise": best.n_noise,
+            "noise_ratio": best.noise_ratio,
+            "silhouette": best.silhouette,
+            "davies_bouldin": best.davies_bouldin,
+            "calinski_harabasz": best.calinski_harabasz,
+            "dbcv": best.dbcv,
+            "wall_seconds": best.wall_seconds,
+            "n_near_edges": n_near_edges,
             **related_metric,
         }
         write_metrics_file(metrics_dict, metrics_dir(tag) / "best_metrics.json")
@@ -307,20 +309,22 @@ def main(
         outlier_score = getattr(model, "outlier_scores_", None)
 
         labels_path = m_dir / "best_labels.parquet"
-        df_labels = pd.DataFrame({
-            "tech_id":    tech_ids,
-            "cluster_id": best_labels.tolist(),
-            "membership_probability": (
-                np.asarray(membership_probability, dtype=float).tolist()
-                if membership_probability is not None and len(membership_probability) == n_rows
-                else [None] * n_rows
-            ),
-            "outlier_score": (
-                np.asarray(outlier_score, dtype=float).tolist()
-                if outlier_score is not None and len(outlier_score) == n_rows
-                else [None] * n_rows
-            ),
-        })
+        df_labels = pd.DataFrame(
+            {
+                "tech_id": tech_ids,
+                "cluster_id": best_labels.tolist(),
+                "membership_probability": (
+                    np.asarray(membership_probability, dtype=float).tolist()
+                    if membership_probability is not None and len(membership_probability) == n_rows
+                    else [None] * n_rows
+                ),
+                "outlier_score": (
+                    np.asarray(outlier_score, dtype=float).tolist()
+                    if outlier_score is not None and len(outlier_score) == n_rows
+                    else [None] * n_rows
+                ),
+            }
+        )
         df_labels.to_parquet(labels_path, index=False)
         logger.info("Labels saved → {} ({} rows)", labels_path, len(df_labels))
 
@@ -328,15 +332,13 @@ def main(
         # đọc lại và expose qua API (trước đây chỉ log MLflow artifact → chết
         # ở tầng serving, không route nào đọc lại).
         near_clusters_path = m_dir / "near_clusters.json"
-        near_clusters_path.write_text(
-            json.dumps(near_clusters_map, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
+        near_clusters_path.write_text(json.dumps(near_clusters_map, indent=2, ensure_ascii=False), encoding="utf-8")
         logger.info("near_clusters.json saved → {}", near_clusters_path)
 
     # 4. Summary
-    print(f"\n{'='*55}")
+    print(f"\n{'=' * 55}")
     print(f"  Stage 03 TRAIN hoàn tất | tag={tag}")
-    print(f"{'='*55}")
+    print(f"{'=' * 55}")
     print(f"  Algorithm        : {best.algorithm}")
     print(f"  Best params      : {best.params}")
     print(f"  n_clusters       : {best.n_clusters}")
@@ -345,10 +347,12 @@ def main(
     print(f"  DBCV             : {best.dbcv:.4f}" if best.dbcv else "  DBCV             : N/A")
     print(f"  Noise ratio      : {best.noise_ratio:.3f}  ({best.n_noise}/{meta.n_techs} noise)")
     print(f"  Near-cluster edges: {n_near_edges}")
-    print(f"  RELATED_TO split : {related_metric['related_pairs_split']}/{related_metric['related_pairs_evaluated']}"
-          f" ({related_metric['related_pairs_split_ratio']})")
+    print(
+        f"  RELATED_TO split : {related_metric['related_pairs_split']}/{related_metric['related_pairs_evaluated']}"
+        f" ({related_metric['related_pairs_split_ratio']})"
+    )
     print(f"  MLflow best run  : {best_run_id}")
-    print(f"{'='*55}\n")
+    print(f"{'=' * 55}\n")
 
     return 0
 

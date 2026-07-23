@@ -2,9 +2,9 @@ package com.techpulse.techradar.features.user.application;
 
 import com.techpulse.techradar.features.auth.domain.User;
 import com.techpulse.techradar.features.auth.ports.UserRepository;
-import com.techpulse.techradar.features.user.adapters.input.UpdateProfileRequest;
 import com.techpulse.techradar.features.user.domain.UserProfile;
 import com.techpulse.techradar.features.user.ports.UserProfileRepository;
+import com.techpulse.techradar.shared.redis.SecurityStampService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -27,6 +27,7 @@ public class ProfileService {
     private final UserProfileRepository profileRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserAccountValidator accountValidator;
+    private final SecurityStampService securityStampService;
 
     public Mono<User> getProfile(String userId) {
         return accountValidator.findByIdOrThrow(userId);
@@ -42,7 +43,10 @@ public class ProfileService {
     public Mono<ProfileData> updateProfile(String userId, UpdateProfileRequest request) {
         return getProfile(userId)
                 .flatMap(user -> applyAccountChanges(user, request))
-                .flatMap(userRepository::save)
+                .flatMap(changed -> userRepository.save(changed.user())
+                        .flatMap(savedUser -> changed.revokesExistingTokens()
+                                ? securityStampService.set(userId, savedUser.getSecurityStamp()).thenReturn(savedUser)
+                                : Mono.just(savedUser)))
                 .flatMap(savedUser -> profileRepository.findByUserId(userId)
                         .defaultIfEmpty(emptyProfile(userId))
                         .map(existing -> mergeProfile(existing, userId, request))
@@ -51,9 +55,16 @@ public class ProfileService {
                 .doOnSuccess(pd -> log.info("Profile updated for userId={}", userId));
     }
 
-    private Mono<User> applyAccountChanges(User user, UpdateProfileRequest request) {
+    private record AccountChange(User user, boolean revokesExistingTokens) {
+    }
+
+    private Mono<AccountChange> applyAccountChanges(User user, UpdateProfileRequest request) {
+        boolean emailChanging = StringUtils.hasText(request.getEmail())
+                && !request.getEmail().equalsIgnoreCase(user.getEmail());
+        boolean passwordChanging = StringUtils.hasText(request.getPassword());
+
         Mono<User> pipeline = Mono.just(user);
-        if (StringUtils.hasText(request.getEmail()) && !request.getEmail().equalsIgnoreCase(user.getEmail())) {
+        if (emailChanging) {
             pipeline = accountValidator.validateEmailUnique(request.getEmail(), user.getId().toString())
                     .then(Mono.fromRunnable(() -> user.setEmail(request.getEmail())))
                     .thenReturn(user);
@@ -62,13 +73,21 @@ public class ProfileService {
             if (StringUtils.hasText(request.getFullName())) {
                 u.setFullName(request.getFullName());
             }
-            if (StringUtils.hasText(request.getPassword())) {
+            if (passwordChanging) {
                 u.setPasswordHash(passwordEncoder.encode(request.getPassword()));
             }
             if (StringUtils.hasText(request.getSubscriptionTier())) {
                 u.setSubscriptionTier(request.getSubscriptionTier());
             }
-            return u;
+            // Changing the password or the email (a common account-recovery identifier) should
+            // invalidate any other already-issued access token immediately, same as an admin
+            // forcing these changes does - otherwise a session left open on another device (or
+            // stolen alongside the old password) keeps working after the owner "secures" the account.
+            boolean revokes = emailChanging || passwordChanging;
+            if (revokes) {
+                u.setSecurityStamp(UUID.randomUUID());
+            }
+            return new AccountChange(u, revokes);
         });
     }
 

@@ -12,6 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from neo4j import AsyncGraphDatabase
+
 from app.config import get_settings
 
 
@@ -59,10 +60,10 @@ async def fetch_properties(driver, label: str) -> dict:
             )
             row = await result.single()
             props[key] = {
-                "total":     row["total"],
+                "total": row["total"],
                 "has_value": row["has_value"],
-                "missing":   row["total"] - row["has_value"],
-                "samples":   row["samples"],
+                "missing": row["total"] - row["has_value"],
+                "samples": row["samples"],
             }
 
     return props
@@ -114,13 +115,11 @@ async def main() -> None:
         uri = uri.replace("neo4j+s://", "neo4j+ssc://", 1)
 
     print(f"Kết nối: {uri}")
-    driver = AsyncGraphDatabase.driver(
-        uri, auth=(settings.active_neo4j_username, settings.active_neo4j_password)
-    )
+    driver = AsyncGraphDatabase.driver(uri, auth=(settings.active_neo4j_username, settings.active_neo4j_password))
 
     try:
         labels = await fetch_labels(driver)
-        rels   = await fetch_relationships(driver)
+        rels = await fetch_relationships(driver)
 
         _print_section("NODE LABELS")
         print(f"  {labels}")
@@ -140,9 +139,7 @@ async def main() -> None:
             print(f"  {'-' * col_w} {'-------':>7}  {'-------':>7}  -------")
             for key, info in props.items():
                 samples_str = " | ".join(_fmt_sample(s) for s in info["samples"]) or "—"
-                print(
-                    f"  {key:<{col_w}} {info['has_value']:>7}  {info['missing']:>7}  {samples_str}"
-                )
+                print(f"  {key:<{col_w}} {info['has_value']:>7}  {info['missing']:>7}  {samples_str}")
 
         _print_section("RELATIONSHIP STATS")
         for rel in rels:

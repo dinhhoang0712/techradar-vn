@@ -13,6 +13,7 @@ Message shape (from embedding_service.py):
       "metadata": { ... }
     }
 """
+
 import json
 import logging
 import os

@@ -39,7 +39,6 @@ ACRONYM_MAP: dict[str, str] = {
     "SSE": "Server-Sent Events",
     "GDPR": "General Data Protection Regulation",
     "SIP": "Session Initiation Protocol",
-
     # --- Web / Frontend ---
     "CSS": "Cascading Style Sheets",
     "HTML": "HyperText Markup Language",
@@ -51,7 +50,6 @@ ACRONYM_MAP: dict[str, str] = {
     "gRPC": "Google Remote Procedure Call",
     "RPC": "Remote Procedure Call",
     "SOAP": "Simple Object Access Protocol",
-
     # --- AI / ML ---
     "LLM": "Large Language Model",
     "RAG": "Retrieval Augmented Generation",
@@ -67,7 +65,6 @@ ACRONYM_MAP: dict[str, str] = {
     "FAISS": "Facebook AI Similarity Search",
     "NLTK": "Natural Language Toolkit",
     "GenAI": "Generative Artificial Intelligence",
-
     # --- DevOps / Cloud ---
     "K8s": "Kubernetes container orchestration",
     "CI": "Continuous Integration",
@@ -76,19 +73,16 @@ ACRONYM_MAP: dict[str, str] = {
     "GCP": "Google Cloud Platform",
     "ELK": "Elasticsearch Logstash Kibana",
     "MPC": "Multi-Party Computation",
-
     # --- Data ---
     "SQL": "Structured Query Language",
     "DWH": "Data Warehouse",
     "DVC": "Data Version Control",
     "dbt": "Data Build Tool",
-
     # --- Telecom ---
     "5G": "5th Generation Mobile Network",
     "4G": "4th Generation Mobile Network",
     "eSIM": "Embedded SIM Card",
     "IoT": "Internet of Things",
-
     # --- Business / Other ---
     "RPA": "Robotic Process Automation",
     "ERP": "Enterprise Resource Planning",

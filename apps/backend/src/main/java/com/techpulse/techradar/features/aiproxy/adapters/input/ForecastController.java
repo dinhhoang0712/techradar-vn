@@ -2,10 +2,12 @@ package com.techpulse.techradar.features.aiproxy.adapters.input;
 
 import com.techpulse.techradar.features.aiproxy.ports.AiProxyPort;
 import com.techpulse.techradar.shared.dto.ApiResponse;
+import com.techpulse.techradar.shared.util.ClientIpUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
@@ -23,12 +25,14 @@ public class ForecastController {
     @GetMapping
     public Mono<ResponseEntity<ApiResponse<Map<String, Object>>>> forecast(
             @RequestParam String technology,
-            @RequestParam(defaultValue = "6") int horizonMonths) {
+            @RequestParam(defaultValue = "6") int horizonMonths,
+            ServerHttpRequest httpRequest) {
         Map<String, Object> body = Map.of(
                 "technology", technology,
                 "horizon_months", horizonMonths
         );
         return requestHandler.forward(
-                "/forecast", body, AiProxyPort.DEFAULT_TIMEOUT, "Forecast generated", "Forecast service unavailable");
+                "/forecast", body, AiProxyPort.DEFAULT_TIMEOUT, "Forecast generated", "Forecast service unavailable",
+                ClientIpUtils.resolveClientIp(httpRequest));
     }
 }

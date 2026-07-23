@@ -7,6 +7,7 @@ node khác nhau trong Neo4j.
 Refresh định kỳ (không phải mỗi message) — tra cache là 1 lần đọc dict
 trong RAM, không có round-trip Postgres nào trên luồng xử lý message.
 """
+
 from __future__ import annotations
 
 import time
@@ -24,13 +25,14 @@ def _refresh(conn) -> None:
         with conn.cursor() as cur:
             cur.execute("SELECT alias_normalized, canonical_name FROM dp_tech_alias_map")
             rows = cur.fetchall()
-        _alias_by_normalized = {row[0]: row[1] for row in rows}
+        _alias_by_normalized = {row["alias_normalized"]: row["canonical_name"] for row in rows}
         _last_refresh_at = time.monotonic()
         logger.info("TechAliasCache (Python) refreshed: {} alias entries", len(_alias_by_normalized))
     except Exception as exc:
         logger.warning(
             "TechAliasCache (Python) refresh failed, giữ cache cũ ({} entries): {}",
-            len(_alias_by_normalized), exc,
+            len(_alias_by_normalized),
+            exc,
         )
 
 

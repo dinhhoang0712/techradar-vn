@@ -18,14 +18,35 @@ import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.preprocessing import normalize
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_tfidf_fit_transform(
+    vectorizer: TfidfVectorizer, corpus: list, n_docs: int
+) -> tuple[sp.csr_matrix, list[str]]:
+    """
+    TfidfVectorizer raises ValueError("After pruning, no terms remain...") when the corpus is too
+    sparse for min_df to keep any term — e.g. dev/test data or an early-crawl snapshot with few
+    company/job edges. min_df is a fixed, production-scale-tuned threshold (params.yaml), so this
+    is reachable any time the dataset is smaller than that assumption. Fall back to a zero-column
+    matrix instead of crashing the whole stage — downstream feature concatenation already treats
+    "no signal from this block" the same as "block disabled".
+    """
+    try:
+        X = vectorizer.fit_transform(corpus)
+        feature_names = vectorizer.get_feature_names_out().tolist()
+    except ValueError as exc:
+        logger.warning("TF-IDF fit thất bại (%s) — dùng ma trận 0 cột (bỏ qua block này).", exc)
+        X = sp.csr_matrix((n_docs, 0))
+        feature_names = []
+    return X, feature_names
 
 
 # ---------------------------------------------------------------------------
 # Co-occurrence sparse matrices
 # ---------------------------------------------------------------------------
+
 
 def build_company_tech_tfidf(
     df_edges_uses: pd.DataFrame,
@@ -49,13 +70,12 @@ def build_company_tech_tfidf(
     corpus = [tech_to_companies[t] for t in tech_ids]
 
     vectorizer = TfidfVectorizer(
-        analyzer=lambda x: x,      # token đã là list, không cần tokenize
+        analyzer=lambda x: x,  # token đã là list, không cần tokenize
         min_df=min_df,
         max_features=max_features,
         norm="l2",
     )
-    X = vectorizer.fit_transform(corpus)
-    feature_names = vectorizer.get_feature_names_out().tolist()
+    X, feature_names = _safe_tfidf_fit_transform(vectorizer, corpus, len(tech_ids))
 
     logger.info("build_company_tech_tfidf: shape=%s, features=%d", X.shape, len(feature_names))
     return X, feature_names
@@ -77,12 +97,7 @@ def build_job_tech_tfidf(
 
     # Chuẩn hoá title: lowercase + bỏ ký tự đặc biệt
     df_jobs = df_jobs.copy()
-    df_jobs["title_norm"] = (
-        df_jobs["title"]
-        .str.lower()
-        .str.replace(r"[^a-z0-9 ]", "", regex=True)
-        .str.strip()
-    )
+    df_jobs["title_norm"] = df_jobs["title"].str.lower().str.replace(r"[^a-z0-9 ]", "", regex=True).str.strip()
     df_jobs["token"] = df_jobs["title_norm"] + "_" + df_jobs["level"].str.lower().fillna("unknown")
 
     job_token_map = df_jobs.set_index("job_id")["token"].to_dict()
@@ -101,8 +116,7 @@ def build_job_tech_tfidf(
         max_features=max_features,
         norm="l2",
     )
-    X = vectorizer.fit_transform(corpus)
-    feature_names = vectorizer.get_feature_names_out().tolist()
+    X, feature_names = _safe_tfidf_fit_transform(vectorizer, corpus, len(tech_ids))
 
     logger.info("build_job_tech_tfidf: shape=%s, features=%d", X.shape, len(feature_names))
     return X, feature_names
@@ -153,12 +167,14 @@ def build_skill_tech_jaccard(
             inter = jobs & top_jobs
             jaccards.append(len(inter) / len(union) if union else 0.0)
 
-        rows.append({
-            "tech_id":                tech_id,
-            "n_unique_jobs":          n_jobs,
-            "n_unique_skills_share":  len(shared_skills),
-            "mean_jaccard_with_top10": float(np.mean(jaccards)) if jaccards else 0.0,
-        })
+        rows.append(
+            {
+                "tech_id": tech_id,
+                "n_unique_jobs": n_jobs,
+                "n_unique_skills_share": len(shared_skills),
+                "mean_jaccard_with_top10": float(np.mean(jaccards)) if jaccards else 0.0,
+            }
+        )
 
     df = pd.DataFrame(rows).set_index("tech_id").loc[tech_ids].reset_index()
     logger.info("build_skill_tech_jaccard: %d rows", len(df))
@@ -168,6 +184,7 @@ def build_skill_tech_jaccard(
 # ---------------------------------------------------------------------------
 # Scalar features
 # ---------------------------------------------------------------------------
+
 
 def compute_neighborhood_stats(
     df_technologies: pd.DataFrame,
@@ -187,29 +204,22 @@ def compute_neighborhood_stats(
     def count_col(df: pd.DataFrame, col: str, new_name: str) -> pd.Series:
         if df.empty or "tech_id" not in df.columns or col not in df.columns:
             return pd.Series(0, index=tech_ids, name=new_name)
-        return (
-            df.groupby("tech_id")[col]
-            .count()
-            .reindex(tech_ids, fill_value=0)
-            .rename(new_name)
-        )
+        return df.groupby("tech_id")[col].count().reindex(tech_ids, fill_value=0).rename(new_name)
 
-    n_articles  = count_col(df_edges_article_mentions_tech, "article_id",  "n_articles_mentioning")
-    n_companies = count_col(df_edges_company_uses_tech,     "company_id",  "n_companies_using")
-    n_jobs      = count_col(df_edges_job_requires_tech,     "job_id",      "n_jobs_requiring")
-    n_related   = count_col(df_edges_tech_related_tech,     "tech_id_b",   "n_related_techs")
+    n_articles = count_col(df_edges_article_mentions_tech, "article_id", "n_articles_mentioning")
+    n_companies = count_col(df_edges_company_uses_tech, "company_id", "n_companies_using")
+    n_jobs = count_col(df_edges_job_requires_tech, "job_id", "n_jobs_requiring")
+    n_related = count_col(df_edges_tech_related_tech, "tech_id_b", "n_related_techs")
 
     df = base.join(n_articles).join(n_companies).join(n_jobs).join(n_related)
 
     # Log-transform: log1p(x) = log(x+1), tránh log(0)
-    df["log_n_articles"]   = np.log1p(df["n_articles_mentioning"])
-    df["log_n_companies"]  = np.log1p(df["n_companies_using"])
-    df["log_n_jobs"]       = np.log1p(df["n_jobs_requiring"])
+    df["log_n_articles"] = np.log1p(df["n_articles_mentioning"])
+    df["log_n_companies"] = np.log1p(df["n_companies_using"])
+    df["log_n_jobs"] = np.log1p(df["n_jobs_requiring"])
 
     # Tỉ lệ job/company — tech được nhiều job yêu cầu nhưng ít công ty dùng = niche
-    df["ratio_jobs_per_company"] = (
-        df["n_jobs_requiring"] / df["n_companies_using"].clip(lower=1)
-    )
+    df["ratio_jobs_per_company"] = df["n_jobs_requiring"] / df["n_companies_using"].clip(lower=1)
 
     logger.info("compute_neighborhood_stats: %d rows", len(df))
     return df
@@ -218,6 +228,7 @@ def compute_neighborhood_stats(
 # ---------------------------------------------------------------------------
 # Article temporal stats
 # ---------------------------------------------------------------------------
+
 
 def compute_article_temporal_stats(
     df_edges_mentions: pd.DataFrame,
@@ -241,23 +252,27 @@ def compute_article_temporal_stats(
         sentiments = grp["sentiment_score"].dropna()
 
         if len(dates) == 0:
-            rows.append({
-                "tech_id": tech_id,
-                "first_mention_days_ago":  -1,
-                "last_mention_days_ago":   -1,
-                "mention_recency_skew":     0.0,
-                "mean_sentiment":           0.0,
-            })
+            rows.append(
+                {
+                    "tech_id": tech_id,
+                    "first_mention_days_ago": -1,
+                    "last_mention_days_ago": -1,
+                    "mention_recency_skew": 0.0,
+                    "mean_sentiment": 0.0,
+                }
+            )
             continue
 
         days_ago = (now - dates).dt.days.values
-        rows.append({
-            "tech_id":               tech_id,
-            "first_mention_days_ago": int(days_ago.max()),
-            "last_mention_days_ago":  int(days_ago.min()),
-            "mention_recency_skew":   float(pd.Series(days_ago).skew()),
-            "mean_sentiment":         float(sentiments.mean()) if len(sentiments) else 0.0,
-        })
+        rows.append(
+            {
+                "tech_id": tech_id,
+                "first_mention_days_ago": int(days_ago.max()),
+                "last_mention_days_ago": int(days_ago.min()),
+                "mention_recency_skew": float(pd.Series(days_ago).skew()),
+                "mean_sentiment": float(sentiments.mean()) if len(sentiments) else 0.0,
+            }
+        )
 
     df = pd.DataFrame(rows)
     logger.info("compute_article_temporal_stats: %d rows", len(df))
@@ -267,6 +282,7 @@ def compute_article_temporal_stats(
 # ---------------------------------------------------------------------------
 # Client-side Node2Vec (không cần Neo4j GDS)
 # ---------------------------------------------------------------------------
+
 
 def build_client_node2vec_embedding(
     df_technologies: pd.DataFrame,
@@ -319,20 +335,14 @@ def build_client_node2vec_embedding(
         vs = _prefixed("tech:", df[col_tech])
         graph.add_edges_from(zip(us, vs))
 
-    if not df_edges_tech_related_tech.empty and {"tech_id_a", "tech_id_b"}.issubset(
-        df_edges_tech_related_tech.columns
-    ):
+    if not df_edges_tech_related_tech.empty and {"tech_id_a", "tech_id_b"}.issubset(df_edges_tech_related_tech.columns):
         us = _prefixed("tech:", df_edges_tech_related_tech["tech_id_a"])
         vs = _prefixed("tech:", df_edges_tech_related_tech["tech_id_b"])
         graph.add_edges_from(zip(us, vs))
 
-    connected_tech_nodes = [
-        n for n in graph.nodes if n.startswith("tech:") and graph.degree(n) > 0
-    ]
+    connected_tech_nodes = [n for n in graph.nodes if n.startswith("tech:") and graph.degree(n) > 0]
     if not connected_tech_nodes:
-        logger.warning(
-            "build_client_node2vec_embedding: không có tech nào có cạnh — trả toàn zero-vector."
-        )
+        logger.warning("build_client_node2vec_embedding: không có tech nào có cạnh — trả toàn zero-vector.")
         df_zero = pd.DataFrame(0.0, index=tech_ids, columns=cols)
         df_zero.insert(0, "tech_id", tech_ids)
         return df_zero.reset_index(drop=True)
@@ -361,6 +371,9 @@ def build_client_node2vec_embedding(
     df_emb = pd.DataFrame(rows).set_index("tech_id").loc[tech_ids].reset_index()
     logger.info(
         "build_client_node2vec_embedding: %d tech, %d/%d node có vector thực, %.1fs",
-        len(df_emb), len(connected_tech_nodes), len(tech_ids), time.time() - t0,
+        len(df_emb),
+        len(connected_tech_nodes),
+        len(tech_ids),
+        time.time() - t0,
     )
     return df_emb

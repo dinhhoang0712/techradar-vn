@@ -6,6 +6,8 @@ import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.buffer.DataBufferLimitException;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -66,6 +68,15 @@ public class GlobalExceptionHandler {
         log.warn("Rejected request with invalid argument: {}", ex.getMessage());
         return ResponseEntity.status(ErrorCode.BAD_REQUEST.getStatus())
                 .body(ApiResponse.error("Invalid request", ErrorCode.BAD_REQUEST.name()));
+    }
+
+    // Spring Security's own exceptions for a @PreAuthorize failure (or its programmatic
+    // equivalent) — without these, the Exception.class catch-all below would swallow them and
+    // report 500 instead of 403 for every authenticated-but-not-authorized request.
+    @ExceptionHandler({AuthorizationDeniedException.class, AccessDeniedException.class})
+    public ResponseEntity<ApiResponse<Void>> handleAuthorizationDenied(Exception ex) {
+        return ResponseEntity.status(ErrorCode.FORBIDDEN.getStatus())
+                .body(ApiResponse.error("Access denied", ErrorCode.FORBIDDEN.name()));
     }
 
     @ExceptionHandler(Exception.class)

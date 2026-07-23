@@ -4,12 +4,15 @@ import com.techpulse.techradar.features.auth.ports.PasswordResetRepository;
 import com.techpulse.techradar.features.auth.ports.UserRepository;
 import com.techpulse.techradar.shared.exception.BadRequestException;
 import com.techpulse.techradar.shared.exception.ErrorCode;
+import com.techpulse.techradar.shared.redis.SecurityStampService;
 import com.techpulse.techradar.shared.util.UuidUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
+
+import java.util.UUID;
 
 /**
  * Resets a user's password given a valid, unused, non-expired reset token.
@@ -22,6 +25,7 @@ public class ResetPasswordUseCase {
     private final UserRepository userRepository;
     private final PasswordResetRepository passwordResetRepository;
     private final PasswordEncoder passwordEncoder;
+    private final SecurityStampService securityStampService;
 
     public Mono<Void> execute(String token, String newPassword) {
         if (newPassword == null || newPassword.length() < 8) {
@@ -44,7 +48,10 @@ public class ResetPasswordUseCase {
                         }))
                         .flatMap(user -> {
                             user.setPasswordHash(passwordEncoder.encode(newPassword));
-                            return userRepository.save(user);
+                            user.setSecurityStamp(UUID.randomUUID());
+                            return userRepository.save(user)
+                                    .flatMap(saved -> securityStampService
+                                            .set(saved.getId().toString(), saved.getSecurityStamp()));
                         })
                         .then(passwordResetRepository.markUsed(token))
                         .doOnSuccess(v -> log.info("Password reset successful for userId={}", userId)));

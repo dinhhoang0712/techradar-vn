@@ -23,4 +23,7 @@ public interface UserRepository {
      * @return the number of rows deleted (0 when the user did not exist).
      */
     Mono<Long> deleteById(String userId);
+
+    /** Every user with {@code role = 'admin'}. Used to fan out ops notifications (in-app + email). */
+    Flux<User> findAdmins();
 }

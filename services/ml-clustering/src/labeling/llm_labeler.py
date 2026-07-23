@@ -23,9 +23,8 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from loguru import logger
-
 from conf.config import LabelingParams, get_settings
+from loguru import logger
 
 _REQUIRED_KEYS = {"label", "label_en", "description", "domain", "confidence", "outliers"}
 
@@ -33,9 +32,18 @@ _REQUIRED_KEYS = {"label", "label_en", "description", "domain", "confidence", "o
 # LLM đôi khi trả domain lệch enum (typo, viết hoa khác, domain tự bịa) → phá
 # group-by-domain ở UI; validate + fallback "Other" thay vì tin tưởng mù quáng.
 _ALLOWED_DOMAINS = {
-    "AI/ML", "Web Frontend", "Web Backend", "Mobile", "Data Engineering",
-    "DevOps/Cloud", "Security", "Database", "Hardware", "Soft Skills",
-    "Mixed/Noise", "Other",
+    "AI/ML",
+    "Web Frontend",
+    "Web Backend",
+    "Mobile",
+    "Data Engineering",
+    "DevOps/Cloud",
+    "Security",
+    "Database",
+    "Hardware",
+    "Soft Skills",
+    "Mixed/Noise",
+    "Other",
 }
 
 # Rate-limit giữa các lần gọi LLM cho từng cluster. Chỉ Gemini free tier
@@ -53,9 +61,11 @@ def _normalize_domain(domain: str, cluster_id: int) -> str:
         return domain
     logger.warning(
         "Cluster {}: domain '{}' không khớp enum cho phép — fallback 'Other'.",
-        cluster_id, domain,
+        cluster_id,
+        domain,
     )
     return "Other"
+
 
 # Lazy template cache: path → content
 _template_cache: dict[str, str] = {}
@@ -79,6 +89,7 @@ class ClusterLabel:
         member_count:    số thành viên cụm.
         sample_techs:    tech đại diện đã đưa vào prompt.
     """
+
     cluster_id: int
     label: str
     label_en: str
@@ -183,31 +194,20 @@ def collect_cluster_context(
         tech_set = set(tech_ids)
 
         if not df_edges_company_uses_tech.empty and "tech_id" in df_edges_company_uses_tech.columns:
-            comp_edges = df_edges_company_uses_tech[
-                df_edges_company_uses_tech["tech_id"].isin(tech_set)
-            ]
+            comp_edges = df_edges_company_uses_tech[df_edges_company_uses_tech["tech_id"].isin(tech_set)]
             top_companies = (
                 comp_edges["company_id"]
                 .value_counts()
                 .head(top_n_companies)
-                .index
-                .map(lambda cid: company_name.get(cid, cid))
+                .index.map(lambda cid: company_name.get(cid, cid))
                 .tolist()
             )
         else:
             top_companies = []
 
         if not df_edges_job_requires_tech.empty and "tech_id" in df_edges_job_requires_tech.columns:
-            job_edges = df_edges_job_requires_tech[
-                df_edges_job_requires_tech["tech_id"].isin(tech_set)
-            ]
-            top_job_ids = (
-                job_edges["job_id"]
-                .value_counts()
-                .head(top_n_jobs)
-                .index
-                .tolist()
-            )
+            job_edges = df_edges_job_requires_tech[df_edges_job_requires_tech["tech_id"].isin(tech_set)]
+            top_job_ids = job_edges["job_id"].value_counts().head(top_n_jobs).index.tolist()
             top_jobs = [job_title.get(jid, jid) for jid in top_job_ids]
         else:
             top_jobs = []
@@ -253,6 +253,7 @@ def _call_llm_raw(prompt: str, params: LabelingParams) -> str:
 
     if provider == "openai":
         from openai import OpenAI
+
         client = OpenAI(api_key=get_settings().openai_api_key)
         response = client.chat.completions.create(
             model=params.openai_model,
@@ -263,6 +264,7 @@ def _call_llm_raw(prompt: str, params: LabelingParams) -> str:
         return response.choices[0].message.content.strip()
     elif provider == "groq":
         from groq import Groq
+
         client = Groq(api_key=get_settings().groq_api_key)
         response = client.chat.completions.create(
             model=params.groq_model,
@@ -273,6 +275,7 @@ def _call_llm_raw(prompt: str, params: LabelingParams) -> str:
         return response.choices[0].message.content.strip()
     else:
         import google.generativeai as genai
+
         api_key = get_settings().gemini_api_key
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel(
@@ -314,7 +317,7 @@ def call_gemini(
     last_exc: Exception | None = None
     for attempt in range(4):
         if attempt > 0:
-            wait = 2 ** attempt  # 2s, 4s, 8s
+            wait = 2**attempt  # 2s, 4s, 8s
             logger.warning("{} retry {}/3 sau {}s (lỗi: {})", provider, attempt, wait, last_exc)
             time.sleep(wait)
         try:
@@ -334,9 +337,7 @@ def call_gemini(
                 raise ValueError("Thiếu keys trong response: " + str(missing))
 
             if cache_path is not None:
-                cache_path.write_text(
-                    json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
-                )
+                cache_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
             return data
 
         except Exception as exc:
@@ -372,7 +373,10 @@ def label_all_clusters(
     prompt_template_path = Path(__file__).parent / "prompts" / "cluster_label.txt"
 
     top_members_by_name = select_top_members_per_cluster(
-        cluster_to_members, X, tech_ids, df_technologies,
+        cluster_to_members,
+        X,
+        tech_ids,
+        df_technologies,
         top_k=params.max_members_in_prompt,
     )
     cluster_ids = sorted(cid for cid in cluster_to_members if cid != -1)
@@ -396,10 +400,7 @@ def label_all_clusters(
                 time.sleep(delay)
             is_coherent = bool(data.get("is_coherent", True))
             allowed_outliers = set(top_names)
-            outliers = [
-                item for item in list(data.get("outliers", []))
-                if item in allowed_outliers
-            ]
+            outliers = [item for item in list(data.get("outliers", [])) if item in allowed_outliers]
             label = ClusterLabel(
                 cluster_id=cluster_id,
                 label=data["label"],

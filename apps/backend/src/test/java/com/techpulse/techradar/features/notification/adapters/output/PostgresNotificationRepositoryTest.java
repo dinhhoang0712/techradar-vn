@@ -61,20 +61,27 @@ class PostgresNotificationRepositoryTest {
     }
 
     @Test
-    void findJobMatchSubscribers_delegatesToUserProfileRepositoryWithSameTechnologyList() {
-        UUID userId = UUID.randomUUID();
+    void findJobMatchSubscribers_delegatesToUserProfileRepositoryAndPreservesMatchType() {
+        UUID currentSkillUser = UUID.randomUUID();
+        UUID learningUser = UUID.randomUUID();
         List<String> technologies = List.of("Java", "React");
-        NotificationRecipient recipient = new NotificationRecipient(userId, "match@example.com", false, true);
-        when(userProfileRepository.findSubscribersByAnyTechnology(eq(technologies))).thenReturn(Flux.just(recipient));
+        when(userProfileRepository.findJobMatchSubscribers(eq(technologies))).thenReturn(Flux.just(
+                new com.techpulse.techradar.features.user.domain.JobMatchSubscriber(
+                        currentSkillUser, "match@example.com", false, true, true),
+                new com.techpulse.techradar.features.user.domain.JobMatchSubscriber(
+                        learningUser, "learner@example.com", true, false, false)));
 
         StepVerifier.create(repository.findJobMatchSubscribers(technologies))
-                .expectNextMatches(sub -> sub.userId().equals(userId)
+                .expectNextMatches(sub -> sub.userId().equals(currentSkillUser)
                         && sub.email().equals("match@example.com")
                         && !sub.notifyInapp()
-                        && sub.notifyEmail())
+                        && sub.notifyEmail()
+                        && sub.matchesCurrentSkills())
+                .expectNextMatches(sub -> sub.userId().equals(learningUser)
+                        && !sub.matchesCurrentSkills())
                 .verifyComplete();
 
-        verify(userProfileRepository).findSubscribersByAnyTechnology(technologies);
+        verify(userProfileRepository).findJobMatchSubscribers(technologies);
         verifyNoMoreInteractions(userProfileRepository);
     }
 

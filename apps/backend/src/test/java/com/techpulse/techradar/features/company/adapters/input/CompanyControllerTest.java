@@ -2,9 +2,11 @@ package com.techpulse.techradar.features.company.adapters.input;
 
 import com.techpulse.techradar.features.company.application.GetCompaniesUseCase;
 import com.techpulse.techradar.features.company.application.GetCompanyMentionsUseCase;
+import com.techpulse.techradar.features.company.application.GetCompanyTechHealthScoreUseCase;
 import com.techpulse.techradar.features.company.application.GetSimilarCompaniesUseCase;
 import com.techpulse.techradar.features.company.domain.CompanyMention;
 import com.techpulse.techradar.features.company.domain.CompanyProfile;
+import com.techpulse.techradar.features.company.domain.CompanyTechHealthScore;
 import com.techpulse.techradar.features.company.domain.SimilarCompany;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,11 +37,15 @@ class CompanyControllerTest {
     @Mock
     private GetCompanyMentionsUseCase getCompanyMentionsUseCase;
 
+    @Mock
+    private GetCompanyTechHealthScoreUseCase getCompanyTechHealthScoreUseCase;
+
     private CompanyController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new CompanyController(getCompaniesUseCase, getSimilarCompaniesUseCase, getCompanyMentionsUseCase);
+        controller = new CompanyController(getCompaniesUseCase, getSimilarCompaniesUseCase, getCompanyMentionsUseCase,
+                getCompanyTechHealthScoreUseCase);
     }
 
     private static CompanyProfile profile(String id, String industry, String size) {
@@ -116,5 +122,25 @@ class CompanyControllerTest {
         StepVerifier.create(controller.mentions("id-1", 5))
                 .assertNext(response -> assertThat(response.getBody().getData()).isEmpty())
                 .verifyComplete();
+    }
+
+    @Test
+    void healthScore_delegatesToUseCaseAndMapsToResponseDto() {
+        CompanyTechHealthScore score = new CompanyTechHealthScore(
+                true, 78, "Đang bắt kịp xu hướng công nghệ", 5, 3, List.of("Kubernetes"), List.of());
+        when(getCompanyTechHealthScoreUseCase.execute("id-1")).thenReturn(Mono.just(score));
+
+        StepVerifier.create(controller.healthScore("id-1"))
+                .assertNext(response -> {
+                    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+                    ApiResponse<CompanyDtos.CompanyTechHealthScoreResponse> body = response.getBody();
+                    assertThat(body).isNotNull();
+                    assertThat(body.getData().isAvailable()).isTrue();
+                    assertThat(body.getData().getScore()).isEqualTo(78);
+                    assertThat(body.getData().getStrengths()).containsExactly("Kubernetes");
+                })
+                .verifyComplete();
+
+        verify(getCompanyTechHealthScoreUseCase).execute("id-1");
     }
 }

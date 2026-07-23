@@ -14,4 +14,7 @@ public interface PipelineRunRepository {
 
     /** Latest run (any status) per job name, newest first per group. Missing jobs are simply absent. */
     Flux<Map<String, Object>> findLatestStatuses(List<String> jobNames);
+
+    /** Full run history for one job, newest first, paginated. Includes computed {@code duration_s}. */
+    Flux<Map<String, Object>> findRunHistory(String jobName, int limit, int offset);
 }

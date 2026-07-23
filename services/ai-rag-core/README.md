@@ -38,6 +38,10 @@ Health: `curl http://localhost:8000/health`
 | POST | `/summarize` | Tóm tắt theo kỳ |
 | POST | `/report` | Báo cáo tổng hợp |
 | POST | `/agent` | AI Agent (multi-tool) |
+| POST | `/interview` | AI mock interview, stateless (client tự gửi lại `history` mỗi lượt) |
+| POST | `/company-insight` | Tóm tắt AI về hồ sơ tuyển dụng/tech stack công ty |
+| POST | `/internal/ai/llm-summary` | Tóm tắt bằng LLM cho tính năng Compare |
+| POST | `/internal/ai/moderation-suggestion` | Gợi ý kiểm duyệt nội dung report cho admin |
 
 Tất cả endpoint (trừ `/health`, `/metrics`) yêu cầu header `X-Internal-Auth: <INTERNAL_API_TOKEN>`.
 
@@ -82,3 +86,12 @@ Xem đầy đủ tại [docs/AI_PLATFORM.md § 2.13](../../docs/AI_PLATFORM.md#2
 **4 GB tối thiểu** (embedder ~500MB + reranker ~1GB + app overhead).
 
 Lần khởi động đầu: download model từ HuggingFace ~2-3 phút (Dockerfile đã pre-download).
+
+---
+
+## Testing
+
+```bash
+pytest                    # toàn bộ tests/ (mock Neo4j/Postgres/LLM qua conftest.py — không cần container thật)
+pytest --cov=app tests/   # với coverage
+```

@@ -9,11 +9,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
+import org.springframework.data.redis.core.ReactiveValueOperations;
 import org.springframework.http.HttpStatus;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -32,6 +34,9 @@ class AdminDataPlatformControllerTest {
     private ReactiveStringRedisTemplate redisTemplate;
 
     @Mock
+    private ReactiveValueOperations<String, String> valueOperations;
+
+    @Mock
     private DataPlatformJobStatusService jobStatusService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -41,7 +46,13 @@ class AdminDataPlatformControllerTest {
     @BeforeEach
     void setUp() {
         RedisTriggerPublisher redisTriggerPublisher = new RedisTriggerPublisher(redisTemplate, objectMapper);
-        controller = new AdminDataPlatformController(jobStatusService, redisTriggerPublisher);
+        controller = new AdminDataPlatformController(jobStatusService, redisTriggerPublisher, redisTemplate);
+    }
+
+    private void stubLockAcquired(String jobId) {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.setIfAbsent(eq("data-platform:trigger:lock:" + jobId), eq("1"), eq(Duration.ofSeconds(10))))
+                .thenReturn(Mono.just(true));
     }
 
     @Test
@@ -86,6 +97,7 @@ class AdminDataPlatformControllerTest {
 
     @Test
     void trigger_returnsConflict_whenJobAlreadyRunning() {
+        stubLockAcquired("tech_dedup");
         when(jobStatusService.isRunning("tech_dedup")).thenReturn(Mono.just(true));
 
         StepVerifier.create(controller.trigger("tech_dedup"))
@@ -102,6 +114,7 @@ class AdminDataPlatformControllerTest {
 
     @Test
     void trigger_publishesAndReportsDelivered_whenIdleAndSubscriberPresent() {
+        stubLockAcquired("tech_dedup");
         when(jobStatusService.isRunning("tech_dedup")).thenReturn(Mono.just(false));
         when(redisTemplate.convertAndSend(eq("data-platform:trigger"), anyString())).thenReturn(Mono.just(1L));
 
@@ -117,6 +130,7 @@ class AdminDataPlatformControllerTest {
 
     @Test
     void trigger_publishesButReportsNotDelivered_whenNoSubscriberIsListening() {
+        stubLockAcquired("embed_trigger");
         when(jobStatusService.isRunning("embed_trigger")).thenReturn(Mono.just(false));
         when(redisTemplate.convertAndSend(eq("data-platform:trigger"), anyString())).thenReturn(Mono.just(0L));
 
@@ -125,6 +139,53 @@ class AdminDataPlatformControllerTest {
                     assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
                     ApiResponse<Map<String, Object>> body = response.getBody();
                     assertThat(body.getData()).containsEntry("delivered", false);
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void trigger_returnsTooManyRequests_whenDebounceLockNotAcquired() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.setIfAbsent(eq("data-platform:trigger:lock:tech_dedup"), eq("1"), eq(Duration.ofSeconds(10))))
+                .thenReturn(Mono.just(false));
+
+        StepVerifier.create(controller.trigger("tech_dedup"))
+                .assertNext(response -> {
+                    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+                    ApiResponse<Map<String, Object>> body = response.getBody();
+                    assertThat(body.isSuccess()).isFalse();
+                    assertThat(body.getErrorCode()).isEqualTo("JOB_TRIGGER_DEBOUNCED");
+                })
+                .verifyComplete();
+
+        verify(jobStatusService, never()).isRunning(anyString());
+        verify(redisTemplate, never()).convertAndSend(anyString(), anyString());
+    }
+
+    @Test
+    void jobHistory_rejectsUnknownJobId() {
+        StepVerifier.create(controller.jobHistory("bogus_job", 0, 20))
+                .assertNext(response -> {
+                    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                    ApiResponse<List<Map<String, Object>>> body = response.getBody();
+                    assertThat(body.isSuccess()).isFalse();
+                    assertThat(body.getErrorCode()).isEqualTo("UNKNOWN_JOB");
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void jobHistory_returnsPagedRunsForKnownJob() {
+        Map<String, Object> run = Map.of(
+                "id", 42L, "job_name", "tech_dedup", "status", "success",
+                "rows_affected", 10, "duration_s", 5.2);
+        when(jobStatusService.findRunHistory("tech_dedup", 20, 0)).thenReturn(Flux.just(run));
+
+        StepVerifier.create(controller.jobHistory("tech_dedup", 0, 20))
+                .assertNext(response -> {
+                    assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+                    ApiResponse<List<Map<String, Object>>> body = response.getBody();
+                    assertThat(body.getData()).containsExactly(run);
                 })
                 .verifyComplete();
     }

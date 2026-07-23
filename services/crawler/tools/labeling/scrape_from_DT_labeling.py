@@ -79,7 +79,9 @@ for page in range(1, args.num_pages + 1):
         if len(posts_info) >= args.max_posts:
             break
 
-    print(f"  Tìm thấy {len(articles)} phần tử, thêm {added_this_page} bài (bỏ qua {not_found_link} bài không tìm thấy link)")
+    print(
+        f"  Tìm thấy {len(articles)} phần tử, thêm {added_this_page} bài (bỏ qua {not_found_link} bài không tìm thấy link)"
+    )
 
     if len(posts_info) >= args.max_posts:
         break

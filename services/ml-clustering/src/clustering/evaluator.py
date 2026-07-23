@@ -63,8 +63,8 @@ def evaluate_clustering(
     n_noise = int((labels == -1).sum())
 
     # Lọc noise ra trước khi tính metric
-    mask      = labels != -1
-    X_clean   = X[mask]
+    mask = labels != -1
+    X_clean = X[mask]
     lab_clean = labels[mask]
     n_clusters = len(set(lab_clean))
 
@@ -85,25 +85,23 @@ def evaluate_clustering(
 
     dbcv = _NAN
     relative_validity = getattr(model, "relative_validity_", None)
-    if relative_validity is not None and not (
-        isinstance(relative_validity, float) and np.isnan(relative_validity)
-    ):
+    if relative_validity is not None and not (isinstance(relative_validity, float) and np.isnan(relative_validity)):
         dbcv = float(relative_validity)
 
     # Thống kê kích thước cụm
     sizes = sorted(Counter(lab_clean).values()) if n_clusters > 0 else [0]
 
     return {
-        "n_total":             n_total,
-        "n_clusters":          n_clusters,
-        "n_noise":             n_noise,
-        "noise_ratio":         round(n_noise / n_total, 4) if n_total else _NAN,
-        "silhouette":          sil,
-        "davies_bouldin":      db,
-        "calinski_harabasz":   ch,
-        "dbcv":                dbcv,
-        "min_cluster_size":    int(min(sizes)),
-        "max_cluster_size":    int(max(sizes)),
+        "n_total": n_total,
+        "n_clusters": n_clusters,
+        "n_noise": n_noise,
+        "noise_ratio": round(n_noise / n_total, 4) if n_total else _NAN,
+        "silhouette": sil,
+        "davies_bouldin": db,
+        "calinski_harabasz": ch,
+        "dbcv": dbcv,
+        "min_cluster_size": int(min(sizes)),
+        "max_cluster_size": int(max(sizes)),
         "median_cluster_size": float(np.median(sizes)),
     }
 
@@ -135,9 +133,7 @@ def compute_related_split_ratio(
         "related_pairs_split": 0,
         "related_pairs_split_ratio": _NAN,
     }
-    if df_related is None or df_related.empty or not {"tech_id_a", "tech_id_b"}.issubset(
-        df_related.columns
-    ):
+    if df_related is None or df_related.empty or not {"tech_id_a", "tech_id_b"}.issubset(df_related.columns):
         return empty_result
 
     label_by_tech = dict(zip(tech_ids, labels.tolist()))

@@ -25,7 +25,10 @@ public class ForgotPasswordUseCase {
         return userRepository.findByEmail(email)
                 .flatMap(user -> passwordResetRepository.createToken(user.getId().toString())
                         .doOnNext(token -> {
-                            log.info("[password-reset] token for {} = {}", email, token);
+                            // Never log the token itself — it's a bearer credential for the account.
+                            // Log shipping (Loki/Grafana with anonymous access enabled) would turn a
+                            // leaked log line into a full account takeover.
+                            log.info("[password-reset] token created for userId={}", user.getId());
                             emailSender.sendPasswordReset(email, token.toString())
                                     .onErrorResume(e -> {
                                         log.warn("[password-reset] email send failed for {}: {}", email, e.toString());

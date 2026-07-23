@@ -112,7 +112,9 @@ def main():
 
     print("Threshold sweep")
     print("-" * 72)
-    print(f"{'threshold':>10}  {'acc':>8}  {'prec':>8}  {'recall':>8}  {'f1':>8}  {'tp':>4}  {'fp':>4}  {'tn':>4}  {'fn':>4}")
+    print(
+        f"{'threshold':>10}  {'acc':>8}  {'prec':>8}  {'recall':>8}  {'f1':>8}  {'tp':>4}  {'fp':>4}  {'tn':>4}  {'fn':>4}"
+    )
 
     for threshold in thresholds:
         score = score_threshold(labeled_samples, threshold)

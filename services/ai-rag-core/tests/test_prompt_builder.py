@@ -1,9 +1,9 @@
-import pytest
 from app.core.prompt_builder import build_messages  # type: ignore # noqa
+
 
 def test_prompt_construction_scenarios():
     """Kiểm tra đa dạng các kịch bản xây dựng prompt: từ đủ context, thiếu dữ liệu đến xử lý văn bản quá dài."""
-    
+
     # Kịch bản 1: Đầy đủ context (Articles + Graph + User)
     query = "Lương AI?"
     articles = [{"title": "T1", "content": "C1", "source": "S1"}]

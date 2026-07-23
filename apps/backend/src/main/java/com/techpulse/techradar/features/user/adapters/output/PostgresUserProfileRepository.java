@@ -1,5 +1,6 @@
 package com.techpulse.techradar.features.user.adapters.output;
 
+import com.techpulse.techradar.features.user.domain.JobMatchSubscriber;
 import com.techpulse.techradar.features.user.domain.NotificationRecipient;
 import com.techpulse.techradar.features.user.domain.UserProfile;
 import com.techpulse.techradar.features.user.ports.UserProfileRepository;
@@ -84,22 +85,27 @@ public class PostgresUserProfileRepository implements UserProfileRepository {
     }
 
     @Override
-    public Flux<NotificationRecipient> findSubscribersByAnyTechnology(List<String> technologies) {
-        // && (overlap) instead of per-technology containment so one query covers every skill the
-        // job requires; still served by the GIN index on user_profile.technologies (V10).
+    public Flux<JobMatchSubscriber> findJobMatchSubscribers(List<String> technologies) {
+        // && (overlap) against both technologies (GIN index, V10) and target_skills (GIN index,
+        // V22) so one query covers every skill the job requires, on both "already have" and
+        // "learning next" columns. user_profile.user_id is the table's PRIMARY KEY, so the join
+        // is already one row per user — no DISTINCT/dedup needed for the two-column OR.
+        String[] techs = technologies.toArray(new String[0]);
         return dbClient.sql(
-                "SELECT u.id AS user_id, u.email AS email, p.notify_inapp, p.notify_email " +
+                "SELECT u.id AS user_id, u.email AS email, p.notify_inapp, p.notify_email, " +
+                "(p.technologies && :techs) AS matches_current " +
                 "FROM user_profile p JOIN users u ON u.id = p.user_id " +
-                "WHERE p.technologies && :techs AND (p.notify_inapp = true OR p.notify_email = true)"
+                "WHERE (p.technologies && :techs OR p.target_skills && :techs) " +
+                "AND (p.notify_inapp = true OR p.notify_email = true)"
         )
-                .bind("techs", technologies.toArray(new String[0]))
-                .map((row, meta) -> mapRecipientRow(row))
+                .bind("techs", techs)
+                .map((row, meta) -> mapJobMatchSubscriberRow(row))
                 .all();
     }
 
     @Override
     public Flux<NotificationRecipient> findSubscribersWithAnyTechnology() {
-        // Same GIN-indexed user_profile table as findSubscribersByTechnology/findSubscribersByAnyTechnology,
+        // Same GIN-indexed user_profile table as findSubscribersByTechnology/findJobMatchSubscribers,
         // just without a specific-technology filter — any user with a non-empty tech list is a
         // candidate for the weekly roadmap recompute.
         return dbClient.sql(
@@ -112,12 +118,29 @@ public class PostgresUserProfileRepository implements UserProfileRepository {
                 .all();
     }
 
+    @Override
+    public Mono<Long> updateTargetSkills(String userId, List<String> skills) {
+        return dbClient.sql("UPDATE user_profile SET target_skills = :skills WHERE user_id = :user_id")
+                .bind("user_id", UUID.fromString(userId))
+                .bind("skills", skills.toArray(new String[0]))
+                .fetch().rowsUpdated();
+    }
+
     private NotificationRecipient mapRecipientRow(Row row) {
         return new NotificationRecipient(
                 row.get("user_id", UUID.class),
                 row.get("email", String.class),
                 Boolean.TRUE.equals(row.get("notify_inapp", Boolean.class)),
                 Boolean.TRUE.equals(row.get("notify_email", Boolean.class)));
+    }
+
+    private JobMatchSubscriber mapJobMatchSubscriberRow(Row row) {
+        return new JobMatchSubscriber(
+                row.get("user_id", UUID.class),
+                row.get("email", String.class),
+                Boolean.TRUE.equals(row.get("notify_inapp", Boolean.class)),
+                Boolean.TRUE.equals(row.get("notify_email", Boolean.class)),
+                Boolean.TRUE.equals(row.get("matches_current", Boolean.class)));
     }
 
     private UserProfile mapRow(Row row) {

@@ -138,8 +138,13 @@ def fetch_companies() -> pd.DataFrame:
 def fetch_articles(only_with_embedding: bool = True) -> pd.DataFrame:
     """
     Lấy :Article. Nếu only_with_embedding=True chỉ lấy bài đã có embedding.
-    Cột: article_id, title, published_date, sentiment_score, embedding.
+    Cột: article_id, title, content, published_date, sentiment_score, embedding.
     embedding trả dạng list[float] — caller sẽ stack thành np.ndarray.
+
+    `content` (full body text, ghi bởi data-platform/gold/neo4j_article_sync.py)
+    chưa từng được stage clustering chính dùng tới (chỉ dùng embedding có sẵn) —
+    thêm cột này để các baseline dựa trên text thô (vd TF-IDF) có nguồn content
+    thật thay vì chỉ title ngắn.
     """
     where = "WHERE a.embedding IS NOT NULL" if only_with_embedding else ""
     rows = run_query(
@@ -149,6 +154,7 @@ def fetch_articles(only_with_embedding: bool = True) -> pd.DataFrame:
         RETURN
             elementId(a)                        AS article_id,
             coalesce(a.title, "")               AS title,
+            coalesce(a.content, "")              AS content,
             coalesce(a.published_date, "")      AS published_date,
             coalesce(a.sentiment_score, 0.0)    AS sentiment_score,
             a.embedding                         AS embedding
@@ -156,7 +162,9 @@ def fetch_articles(only_with_embedding: bool = True) -> pd.DataFrame:
     )
     if not rows:
         logger.info("fetch_articles: 0 rows — DB chưa có Article.")
-        return pd.DataFrame(columns=["article_id", "title", "published_date", "sentiment_score", "embedding"])
+        return pd.DataFrame(
+            columns=["article_id", "title", "content", "published_date", "sentiment_score", "embedding"]
+        )
 
     df = pd.DataFrame(rows)
 
@@ -173,7 +181,14 @@ def fetch_articles(only_with_embedding: bool = True) -> pd.DataFrame:
 def fetch_jobs() -> pd.DataFrame:
     """
     Lấy :Job.
-    Cột: job_id, title, level, salary, posted_date, source_url, company_name.
+    Cột: job_id, title, level, salary, posted_date, source_url, company_name,
+    description, requirement.
+
+    `description`/`requirement` (ghi bởi data-platform/gold/neo4j_job_sync.py)
+    chưa từng được stage clustering chính dùng tới (chỉ dùng title cho
+    job_tfidf, xem graph_features.build_job_tech_tfidf) — thêm 2 cột này để
+    baseline dựa trên text thô (vd TF-IDF) có nguồn content thật thay vì chỉ
+    job title ngắn.
     """
     rows = run_query(
         """
@@ -185,11 +200,25 @@ def fetch_jobs() -> pd.DataFrame:
             coalesce(j.salary, "")          AS salary,
             coalesce(j.posted_date, "")     AS posted_date,
             coalesce(j.source_url, "")      AS source_url,
-            coalesce(j.company_name, "")    AS company_name
+            coalesce(j.company_name, "")    AS company_name,
+            coalesce(j.description, "")     AS description,
+            coalesce(j.requirement, "")     AS requirement
         """
     )
     if not rows:
-        return pd.DataFrame(columns=["job_id", "title", "level", "salary", "posted_date", "source_url", "company_name"])
+        return pd.DataFrame(
+            columns=[
+                "job_id",
+                "title",
+                "level",
+                "salary",
+                "posted_date",
+                "source_url",
+                "company_name",
+                "description",
+                "requirement",
+            ]
+        )
     df = pd.DataFrame(rows)
     logger.info("fetch_jobs: %d rows", len(df))
     return df

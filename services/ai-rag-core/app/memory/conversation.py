@@ -3,6 +3,7 @@ Conversation Memory — sliding window từ bảng chat_message (PostgreSQL).
 Bảng này do Spring Boot Flyway own, ai-rag-core chỉ đọc.
 Schema: chat_message(id UUID, session_id UUID, role TEXT, content TEXT, created_at TIMESTAMPTZ)
 """
+
 import uuid
 
 from sqlalchemy import text

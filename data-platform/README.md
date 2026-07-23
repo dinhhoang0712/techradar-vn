@@ -24,7 +24,7 @@ Pipeline thu thập và xử lý dữ liệu công nghệ Việt Nam theo kiến
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        CRAWLER LAYER                                │
-│  VNExpress  GenK  DanTri  ICTNews  TopCV  ITviec  Viblo  GitHub   │
+│  VNExpress  GenK  DanTri  ICTNews  TopCV  ITviec  VietnamWorks  Viblo  GitHub   │
 │                      (services/crawler/)                       │
 └───────────────────────────┬─────────────────────────────────────────┘
                             │ Kafka Producer
@@ -93,8 +93,13 @@ Mỗi crawler chạy như một subprocess riêng biệt (qua `run_all.py`) đ�
 | `ICTNews.py` | Tin tức | ictnews.vietnamnet.vn | 150 bài | Selenium |
 | `TopCV.py` | Việc làm | topcv.vn (IT category) | 150 jobs | Selenium + uc |
 | `ITviec.py` | Việc làm | itviec.com | 150 jobs | Selenium + uc |
+| `VietnamWorks.py` | Việc làm | vietnamworks.com (IT category) | 150 jobs | Selenium |
 | `Viblo.py` | Forum/Blog | viblo.asia (REST API) | 150 bài | requests |
 | `GitHub.py` | OSS | GitHub API (VN orgs + queries) | 200 repos | requests |
+
+`TopDev.py` tồn tại trong repo nhưng **CHƯA đăng ký** vào `CRAWLERS` (`run_all.py`) — topdev.vn
+chặn/treo kết nối từ container, `www.topdev.vn` redirect sang login-wall; cần retry sau (mạng
+khác hoặc liên hệ TopDev) trước khi đưa vào production.
 
 ### `kafka_producer.py` — Message Format
 
@@ -139,9 +144,10 @@ Mỗi crawler chạy như một subprocess riêng biệt (qua `run_all.py`) đ�
 
 ```python
 CRAWLERS = [
-    "VNExpress.py", "GenK.py", "DanTri.py", "ICTNews.py",  # Tin tức
-    "TopCV.py", "ITviec.py",                                  # Việc làm
-    "Viblo.py", "GitHub.py",                                  # API-based
+    "VNExpress.py", "GenK.py", "DanTri.py", "ICTNews.py",      # Tin tức
+    "TopCV.py", "ITviec.py", "VietnamWorks.py",                # Việc làm
+    # TopDev.py cố tình CHƯA đăng ký — xem ghi chú ở bảng crawler phía trên
+    "Viblo.py", "GitHub.py",                                    # API-based
 ]
 ```
 
@@ -728,9 +734,11 @@ data-platform/
 │   └── jobs.py              # Job functions (pg_etl, sync, enricher, tech_dedup, embed, cluster)
 │
 └── common/
-    ├── db.py                # get_pg_conn, get_neo4j_driver, get_minio_client
-    ├── tech_alias_cache.py  # dp_tech_alias_map cache — canonicalize_techs()
-    └── logger.py            # Loguru setup
+    ├── db.py                     # get_pg_conn, get_neo4j_driver, get_minio_client
+    ├── tech_alias_cache.py       # dp_tech_alias_map cache — canonicalize_techs()
+    ├── tech_keywords.py          # danh sách keyword nhận diện công nghệ
+    ├── job_trigger_listener.py   # Redis Pub/Sub — nhận lệnh "chạy ngay" từ admin (Java)
+    └── logger.py                 # Loguru setup
 
 services/crawler/
 ├── run_all.py               # Docker entrypoint — chạy crawlers tuần tự

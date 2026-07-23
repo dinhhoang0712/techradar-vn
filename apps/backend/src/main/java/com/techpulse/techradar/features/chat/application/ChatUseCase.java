@@ -1,17 +1,18 @@
 package com.techpulse.techradar.features.chat.application;
 
-import com.techpulse.techradar.features.chat.adapters.input.dto.ChatHealthResponse;
-import com.techpulse.techradar.features.chat.adapters.input.dto.ChatRequest;
-import com.techpulse.techradar.features.chat.adapters.input.dto.ChatResponse;
-import com.techpulse.techradar.features.chat.adapters.input.dto.CreateSessionResponse;
+import com.techpulse.techradar.features.chat.domain.ChatHealthResponse;
+import com.techpulse.techradar.features.chat.domain.ChatRequest;
+import com.techpulse.techradar.features.chat.domain.ChatResponse;
+import com.techpulse.techradar.features.chat.domain.CreateSessionResponse;
 import com.techpulse.techradar.features.chat.domain.ChatSession;
-import com.techpulse.techradar.features.chat.adapters.input.dto.ChatMessageItem;
-import com.techpulse.techradar.features.chat.adapters.input.dto.ChatSessionItem;
+import com.techpulse.techradar.features.chat.domain.ChatMessageItem;
+import com.techpulse.techradar.features.chat.domain.ChatSessionItem;
 import com.techpulse.techradar.features.chat.ports.ChatPort;
 import com.techpulse.techradar.features.chat.ports.ChatRepository;
 import com.techpulse.techradar.shared.exception.ForbiddenException;
 import com.techpulse.techradar.shared.exception.RateLimitExceededException;
 import com.techpulse.techradar.shared.redis.ChatRateLimiterService;
+import com.techpulse.techradar.shared.security.OwnershipGuard;
 import com.techpulse.techradar.shared.util.UuidUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -127,10 +128,8 @@ public class ChatUseCase {
      * A session is accessible when it has no owner (anonymous) or its owner matches the caller.
      */
     private boolean isOwner(ChatSession session, String userId) {
-        if (session.getUserId() == null) {
-            return true;
-        }
-        return userId != null && session.getUserId().toString().equals(userId);
+        String ownerId = session.getUserId() == null ? null : session.getUserId().toString();
+        return OwnershipGuard.isOwnerOrPublic(ownerId, userId);
     }
 
     private Mono<ChatSession> createChatSession(String sessionId, String userId) {

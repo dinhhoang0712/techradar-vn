@@ -2,7 +2,6 @@
 LangChain tools cho AI Agent — wrapper mỏng trên các service đã có.
 Mỗi tool là 1 async function với docstring mô tả để LLM tự quyết định khi nào dùng.
 """
-import json
 
 from langchain_core.tools import tool
 
@@ -15,6 +14,7 @@ async def search_knowledge(query: str) -> str:
     Dùng khi cần thông tin tổng quan, giải thích, hoặc so sánh công nghệ.
     """
     from app.core.pipeline import answer
+
     result = await answer(query=query)
     return result.get("answer", "Không tìm thấy thông tin.")
 
@@ -27,17 +27,14 @@ async def recommend_technologies(current_techs: str, limit: int = 5) -> str:
     limit: số lượng gợi ý (1-10, mặc định 5)
     Dùng khi user hỏi 'tôi nên học gì tiếp theo' hoặc 'công nghệ nào liên quan đến X'.
     """
-    from app.services import recommend_service
     from app.api.schemas import RecommendRequest
+    from app.services import recommend_service
 
     techs = [t.strip() for t in current_techs.split(",") if t.strip()]
     req = RecommendRequest(current_techs=techs, limit=min(limit, 10))
     # db=None → bỏ qua user profile, dùng current_techs trực tiếp
     resp = await recommend_service.handle(req, db=None)
-    items = [
-        f"- {r.tech_name}: {r.reason} (tăng trưởng: {r.growth_rate or 'N/A'}%)"
-        for r in resp.recommendations
-    ]
+    items = [f"- {r.tech_name}: {r.reason} (tăng trưởng: {r.growth_rate or 'N/A'}%)" for r in resp.recommendations]
     return f"Gợi ý cho {current_techs}:\n" + "\n".join(items) if items else "Không có gợi ý."
 
 
@@ -49,14 +46,12 @@ async def forecast_technology(technology: str, horizon_months: int = 6) -> str:
     horizon_months: số tháng dự báo (1-24, mặc định 6)
     Dùng khi user hỏi về tương lai, xu hướng, hay nên đầu tư vào công nghệ nào.
     """
-    from app.services import forecast_service
     from app.api.schemas import ForecastRequest
+    from app.services import forecast_service
 
     req = ForecastRequest(technology=technology, horizon_months=min(horizon_months, 24))
     resp = await forecast_service.handle(req)
-    signals_text = ", ".join(
-        f"{s.signal}={s.value}" for s in resp.signals[:3]
-    )
+    signals_text = ", ".join(f"{s.signal}={s.value}" for s in resp.signals[:3])
     return (
         f"{resp.technology}: {resp.predicted_direction.upper()} "
         f"(confidence {resp.confidence:.0%})\n"
@@ -73,8 +68,8 @@ async def summarize_technology(tech_name: str, period: str = "") -> str:
     period: kỳ thời gian, VD: '2024-Q4', '2024-12', hoặc để trống = 3 tháng gần nhất
     Dùng khi user muốn biết gần đây có gì mới về 1 công nghệ cụ thể.
     """
-    from app.services import summarize_service
     from app.api.schemas import SummarizeRequest
+    from app.services import summarize_service
 
     req = SummarizeRequest(
         tech_name=tech_name,

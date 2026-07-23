@@ -17,6 +17,7 @@ def get_llm():
 
     if settings.llm_provider == "openai":
         from langchain_openai import ChatOpenAI
+
         return ChatOpenAI(
             model=settings.llm_model,
             openai_api_key=settings.openai_api_key,
@@ -24,6 +25,7 @@ def get_llm():
         )
     elif settings.llm_provider == "groq":
         from langchain_groq import ChatGroq
+
         return ChatGroq(
             model=settings.llm_model,
             groq_api_key=settings.groq_api_key,
@@ -31,6 +33,7 @@ def get_llm():
         )
     else:
         from langchain_google_genai import ChatGoogleGenerativeAI
+
         return ChatGoogleGenerativeAI(
             model=settings.llm_model,
             google_api_key=settings.gemini_api_key,
@@ -67,8 +70,13 @@ async def generate(messages: list[dict]) -> str:
             err = str(e).lower()
             is_retryable = any(x in err for x in ["503", "429", "service unavailable", "overloaded", "rate limit"])
             if is_retryable and attempt < _MAX_RETRIES:
-                logger.warning("%s bận/rate limit, thử lại sau %ds (lần %d/%d)...",
-                               settings.llm_provider, _RETRY_DELAY, attempt, _MAX_RETRIES)
+                logger.warning(
+                    "%s bận/rate limit, thử lại sau %ds (lần %d/%d)...",
+                    settings.llm_provider,
+                    _RETRY_DELAY,
+                    attempt,
+                    _MAX_RETRIES,
+                )
                 await asyncio.sleep(_RETRY_DELAY)
             else:
                 raise RuntimeError(f"LLM ({settings.llm_provider}) lỗi: {e}") from e

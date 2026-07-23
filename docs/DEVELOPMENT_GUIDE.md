@@ -31,7 +31,7 @@
 | **Docker** | 24+ | Containerization |
 | **Docker Compose** | v2 | Container orchestration |
 | **Git** | 2.30+ | Version control |
-| **Maven** | 3.9+ | Java build tool (tùy chọn, dùng Maven wrapper) |
+| **Maven** | 3.9+ | Java build tool (**bắt buộc cài** — không có Maven wrapper trong repo) |
 | **npm** | 9+ | JavaScript package manager |
 
 ### 1.2 IDE khuyến nghị
@@ -67,17 +67,14 @@ cd techradar-vn
 ```bash
 cd apps/backend
 
-# Sử dụng Maven wrapper (không cần cài Maven)
-./mvnw clean install
-
-# Hoặc dùng Maven nếu đã cài
+# Không có Maven wrapper (mvnw) trong repo — cần Maven cài sẵn trên máy
 mvn clean install
 
 # Chạy tests
-./mvnw test
+mvn test
 
 # Chạy application locally
-./mvnw spring-boot:run
+mvn spring-boot:run
 ```
 
 **Cấu hình môi trường:**
@@ -95,24 +92,22 @@ spring:
       host: localhost
       port: 6379
 
-neo4j:
-  uri: bolt://localhost:7687
-  username: neo4j
-  password: password
-
-jwt:
-  secret: your-local-jwt-secret-at-least-256-bits
-  access-token-expiration: 900000
-  refresh-token-expiration: 604800000
-
-python:
-  rag:
-    base-url: http://localhost:8000
-  ml:
+# Mọi config riêng của app đều nằm dưới app.* (KHÔNG phải jwt:/neo4j:/python: ở top-level)
+app:
+  jwt:
+    secret: your-local-jwt-secret-at-least-256-bits
+    expiration: 86400000          # 24h — KHÔNG phải access-token-expiration
+    refresh-expiration: 604800000 # 7 ngày — KHÔNG phải refresh-token-expiration
+  neo4j:
+    uri: bolt://localhost:7687
+    username: neo4j
+    password: password
+  python:
+    internal-token: techradar-internal-secret   # KHÔNG phải python.internal.token
+    rag:
+      base-url: http://localhost:8000
     clustering:
       base-url: http://localhost:8001
-  internal:
-    token: techradar-internal-secret
 ```
 
 ### 2.3 Frontend Setup (React)
@@ -136,11 +131,8 @@ npm run test:watch
 
 **Cấu hình môi trường:**
 
-Tạo file `apps/web/.env.local`:
-
-```env
-VITE_API_URL=http://localhost:8080
-```
+Không cần tạo `.env.local` để trỏ backend — `apps/web/src/utils/apiClient.ts` hard-code đường dẫn
+tương đối `/api/v1` và `vite.config.ts` hard-code dev-proxy target `http://localhost:8080`.
 
 ### 2.4 AI Services Setup
 
@@ -316,7 +308,7 @@ docker compose --profile observability up --build
 
 ```bash
 cd apps/backend
-./mvnw spring-boot:run
+mvn spring-boot:run
 ```
 
 **Frontend:**
@@ -346,7 +338,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
 
 ```bash
 # Backend health
-curl http://localhost:8080/health
+curl http://localhost:8080/api/v1/health
 
 # ai-rag-core health
 curl http://localhost:8000/health
@@ -806,26 +798,25 @@ repos:
 
 ### 7.1 Backend Testing
 
+Không có Maven wrapper (`mvnw`) trong `apps/backend` — dùng `mvn` đã cài sẵn (xem §1.1/§2.2).
+Cũng không có plugin Jacoco hay profile `integration-test` nào cấu hình trong `pom.xml`.
+
 **Unit Tests:**
 
 ```bash
 cd apps/backend
-./mvnw test
+mvn test
 ```
 
 **Integration Tests:**
 
-```bash
-cd apps/backend
-./mvnw verify
-```
-
-**Test Coverage:**
+Chạy trong cùng `mvn test` (không phải phase/goal riêng) — dùng Testcontainers, tự kéo container
+Postgres/Neo4j/Redis thật (singleton pattern trong `IntegrationTestSupport`), không cần cài/chạy
+gì trước ngoài việc Docker phải chạy được trên máy:
 
 ```bash
 cd apps/backend
-./mvnw jacoco:report
-# Report at target/site/jacoco/index.html
+mvn test
 ```
 
 ### 7.2 Frontend Testing
@@ -873,7 +864,7 @@ spring:
 2. Run with debug:
 
 ```bash
-./mvnw spring-boot:run -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
+mvn spring-boot:run -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
 ```
 
 3. Configure Remote Debug in IntelliJ IDEA:
@@ -963,7 +954,7 @@ docker logs techradar-spring-api
 
 ```bash
 # Check API is running
-curl http://localhost:8080/health
+curl http://localhost:8080/api/v1/health
 
 # Check CORS configuration
 # Verify VITE_API_URL in .env.local
@@ -1119,7 +1110,7 @@ docker compose down
 docker logs -f techradar-spring-api
 
 # Run backend tests
-cd apps/backend && ./mvnw test
+cd apps/backend && mvn test
 
 # Run frontend tests
 cd apps/web && npm test
@@ -1150,10 +1141,10 @@ NEO4J_PASSWORD=password
 JWT_SECRET=your-secret
 PYTHON_RAG_BASE_URL=http://localhost:8000
 PYTHON_ML_CLUSTERING_BASE_URL=http://localhost:8001
-INTERNAL_API_TOKEN=techradar-internal-secret
+PYTHON_INTERNAL_TOKEN=techradar-internal-secret   # phải khớp INTERNAL_API_TOKEN phía ai-rag-core
 
-# Frontend
-VITE_API_URL=http://localhost:8080
+# Frontend (không thực sự dùng lúc runtime — xem docs/README.md)
+VITE_API_BASE_URL=http://localhost:8080/api/v1
 
 # AI Services
 OPENAI_API_KEY=your-key

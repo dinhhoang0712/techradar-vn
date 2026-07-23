@@ -21,14 +21,14 @@ Silver) đã chặn phần lớn duplicate NGAY LÚC GHI:
 
 Chạy: định kỳ (mặc định 5:30 sáng, ngay sau neo4j_enricher).
 """
+
 from __future__ import annotations
 
 import json
 
-from loguru import logger
-
 from common.db import get_neo4j_driver, get_pg_conn, log_pipeline_run
 from config import Settings
+from loguru import logger
 
 _LLM_PROMPT_TEMPLATE = """Bạn là chuyên gia phân loại công nghệ IT. Dưới đây là danh sách tên công nghệ \
 trích xuất tự động từ nhiều nguồn khác nhau (bài viết, job posting), có thể \
@@ -114,15 +114,17 @@ def _merge_duplicate_node(driver, duplicate_name: str, canonical_name: str) -> b
     an toàn để gọi lặp lại (idempotent, dùng MERGE khi tạo lại cạnh).
     """
     with driver.session() as session:
-        exists = list(session.run(
-            """
+        exists = list(
+            session.run(
+                """
             MATCH (canonical:Technology {name: $canonical_name})
             MATCH (dup:Technology {name: $dup_name})
             WHERE elementId(canonical) <> elementId(dup)
             RETURN count(*) AS c
             """,
-            {"canonical_name": canonical_name, "dup_name": duplicate_name},
-        ))
+                {"canonical_name": canonical_name, "dup_name": duplicate_name},
+            )
+        )
         if not exists or exists[0]["c"] == 0:
             return False
 
@@ -186,6 +188,7 @@ def _call_llm(names: list[str], settings: Settings) -> list[dict]:
 
     if provider == "openai":
         from openai import OpenAI
+
         client = OpenAI(api_key=settings.openai_api_key)
         response = client.chat.completions.create(
             model=settings.tech_dedup_openai_model,
@@ -196,6 +199,7 @@ def _call_llm(names: list[str], settings: Settings) -> list[dict]:
         raw = response.choices[0].message.content
     elif provider == "groq":
         from groq import Groq
+
         client = Groq(api_key=settings.groq_api_key)
         response = client.chat.completions.create(
             model=settings.tech_dedup_groq_model,
@@ -206,6 +210,7 @@ def _call_llm(names: list[str], settings: Settings) -> list[dict]:
         raw = response.choices[0].message.content
     else:
         import google.generativeai as genai
+
         genai.configure(api_key=settings.gemini_api_key)
         model = genai.GenerativeModel(
             model_name=settings.tech_dedup_gemini_model,
@@ -226,8 +231,7 @@ def run(settings: Settings) -> dict:
         driver = get_neo4j_driver(settings)
         alias_map = _load_alias_map(pg_conn)
         names = _fetch_technology_names(driver)
-        logger.info("Tech Dedup: {} Technology name(s) hiện có, {} alias đã biết",
-                    len(names), len(alias_map))
+        logger.info("Tech Dedup: {} Technology name(s) hiện có, {} alias đã biết", len(names), len(alias_map))
 
         # Giai đoạn A — áp alias map ĐÃ BIẾT trực tiếp vào graph hiện có
         for name in names:
@@ -267,10 +271,13 @@ def run(settings: Settings) -> dict:
                     for n in group_names:
                         if n == canonical:
                             continue
-                        review_entries.append({
-                            "name_a": n, "name_b": canonical,
-                            "reasoning": group.get("reasoning", ""),
-                        })
+                        review_entries.append(
+                            {
+                                "name_a": n,
+                                "name_b": canonical,
+                                "reasoning": group.get("reasoning", ""),
+                            }
+                        )
                         results["sent_to_review"] += 1
 
             _save_new_aliases(pg_conn, new_aliases)

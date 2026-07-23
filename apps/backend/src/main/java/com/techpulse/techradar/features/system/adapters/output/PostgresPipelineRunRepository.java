@@ -32,4 +32,21 @@ public class PostgresPipelineRunRepository implements PipelineRunRepository {
                 .fetch()
                 .all();
     }
+
+    @Override
+    public Flux<Map<String, Object>> findRunHistory(String jobName, int limit, int offset) {
+        // duration_s is null while finished_at IS NULL (still running) — interval arithmetic on a
+        // null operand naturally yields null, no special-casing needed. Uses idx_dp_runs_job_started
+        // (V23) to satisfy both the job_name filter and the ORDER BY ... LIMIT via index scan.
+        return dbClient.sql(
+                "SELECT id, job_name, status, rows_affected, error_msg, started_at, finished_at, "
+                        + "EXTRACT(EPOCH FROM (finished_at - started_at)) AS duration_s "
+                        + "FROM dp_pipeline_runs WHERE job_name = :jobName "
+                        + "ORDER BY started_at DESC LIMIT :limit OFFSET :offset")
+                .bind("jobName", jobName)
+                .bind("limit", limit)
+                .bind("offset", offset)
+                .fetch()
+                .all();
+    }
 }

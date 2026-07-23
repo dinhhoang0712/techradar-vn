@@ -1,6 +1,5 @@
 package com.techpulse.techradar.features.social.application;
 
-import com.techpulse.techradar.features.social.adapters.input.SocialDtos;
 import com.techpulse.techradar.features.social.ports.PostImageRepository;
 import com.techpulse.techradar.shared.exception.BadRequestException;
 import com.techpulse.techradar.shared.exception.ErrorCode;
@@ -34,7 +33,7 @@ public class PostImageService {
     private final PostImageRepository postImageRepository;
 
     /** @throws BadRequestException if the count/size/type of any image is invalid. */
-    public List<PreparedImage> validate(List<SocialDtos.ImageInput> images) {
+    public List<PreparedImage> validate(List<ImageInput> images) {
         if (images == null || images.isEmpty()) {
             return List.of();
         }
@@ -60,7 +59,7 @@ public class PostImageService {
         return postImageRepository.findById(imageId);
     }
 
-    private PreparedImage decode(SocialDtos.ImageInput image) {
+    private PreparedImage decode(ImageInput image) {
         ImageUploadValidator.Decoded decoded;
         try {
             decoded = ImageUploadValidator.validate(image.getContentType(), image.getDataBase64());

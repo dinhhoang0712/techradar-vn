@@ -5,9 +5,10 @@ Report Generator Service — tạo báo cáo xu hướng tổng hợp theo perio
   3. ml-clustering: nhãn cụm (cluster_label) cho từng tech
   4. LLM: tổng hợp thành báo cáo markdown
 """
+
 import calendar
 import logging
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import httpx
@@ -99,11 +100,7 @@ async def _fetch_cluster_labels(tech_names: list[str]) -> dict[str, str]:
             resp = await client.post(f"{base_url}/predict/batch", json={"tech_names": tech_names})
             resp.raise_for_status()
             data = resp.json()
-        return {
-            r["tech_name"]: r["label"]
-            for r in data.get("results", [])
-            if r.get("found") and r.get("label")
-        }
+        return {r["tech_name"]: r["label"] for r in data.get("results", []) if r.get("found") and r.get("label")}
     except Exception as e:
         logger.warning("ml-clustering /predict/batch failed: %s", e)
         return {}
@@ -111,7 +108,7 @@ async def _fetch_cluster_labels(tech_names: list[str]) -> dict[str, str]:
 
 async def handle(req: ReportRequest) -> ReportResponse:
     start_date, end_date = _parse_period_dates(req.period)
-    now_str = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    now_str = datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M UTC")
 
     # 1. PostgreSQL: top growing
     top_growing = await _top_growing_techs(start_date, end_date, req.top_n)
@@ -126,22 +123,26 @@ async def handle(req: ReportRequest) -> ReportResponse:
         name = item.get("technology_name", "")
         if name not in seen:
             seen.add(name)
-            top_techs.append({
-                "name":        name,
-                "growth_rate": item.get("avg_growth"),
-                "job_count":   item.get("total_jobs"),
-                "source":      "analytics",
-            })
+            top_techs.append(
+                {
+                    "name": name,
+                    "growth_rate": item.get("avg_growth"),
+                    "job_count": item.get("total_jobs"),
+                    "source": "analytics",
+                }
+            )
 
     for item in top_mentioned:
         name = item.get("tech_name", "")
         if name not in seen:
             seen.add(name)
-            top_techs.append({
-                "name":          name,
-                "mention_count": item.get("mention_count"),
-                "source":        "articles",
-            })
+            top_techs.append(
+                {
+                    "name": name,
+                    "mention_count": item.get("mention_count"),
+                    "source": "articles",
+                }
+            )
 
     # 4. ml-clustering: gắn cluster_label cho từng tech
     cluster_labels = await _fetch_cluster_labels([t["name"] for t in top_techs])
@@ -155,10 +156,7 @@ async def handle(req: ReportRequest) -> ReportResponse:
         f"- {t['technology_name']}: tăng trưởng {t.get('avg_growth') or 0:+.1f}%, {t.get('total_jobs', 0)} việc làm"
         for t in top_growing[:10]
     )
-    mentioned_lines = "\n".join(
-        f"- {t['tech_name']}: {t.get('mention_count', 0)} bài viết"
-        for t in top_mentioned[:10]
-    )
+    mentioned_lines = "\n".join(f"- {t['tech_name']}: {t.get('mention_count', 0)} bài viết" for t in top_mentioned[:10])
 
     messages = [
         {
@@ -184,6 +182,7 @@ async def handle(req: ReportRequest) -> ReportResponse:
 
     if req.format == "json":
         import json
+
         report_text = json.dumps(
             {"period": req.period, "top_techs": top_techs, "summary": report_text},
             ensure_ascii=False,

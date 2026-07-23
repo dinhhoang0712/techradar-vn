@@ -27,6 +27,7 @@ public class PostgresModerationPostRepository implements ModerationPostRepositor
                 "FROM post p " +
                 "JOIN users u ON u.id = p.user_id " +
                 "LEFT JOIN user_profile up ON up.user_id = p.user_id " +
+                "WHERE p.deleted_at IS NULL " +
                 "ORDER BY p.created_at DESC LIMIT :limit OFFSET :offset")
                 .bind("limit", limit)
                 .bind("offset", offset)
@@ -50,7 +51,7 @@ public class PostgresModerationPostRepository implements ModerationPostRepositor
 
     @Override
     public Mono<Boolean> deleteById(UUID postId) {
-        return dbClient.sql("DELETE FROM post WHERE id = :id")
+        return dbClient.sql("UPDATE post SET deleted_at = now() WHERE id = :id AND deleted_at IS NULL")
                 .bind("id", postId)
                 .fetch().rowsUpdated()
                 .map(rows -> rows > 0);

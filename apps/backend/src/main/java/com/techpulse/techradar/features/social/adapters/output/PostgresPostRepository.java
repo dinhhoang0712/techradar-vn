@@ -48,7 +48,9 @@ public class PostgresPostRepository implements PostRepository {
 
     @Override
     public Mono<Boolean> deleteOwnedBy(UUID postId, UUID userId) {
-        return dbClient.sql("DELETE FROM post WHERE id = :id AND user_id = :user_id")
+        return dbClient.sql(
+                "UPDATE post SET deleted_at = now() " +
+                "WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL")
                 .bind("id", postId)
                 .bind("user_id", userId)
                 .fetch().rowsUpdated()
@@ -58,7 +60,8 @@ public class PostgresPostRepository implements PostRepository {
     @Override
     public Flux<FeedRow> findFeed(UUID viewerId, String hashtagFilter, int limit, int offset) {
         String sql = SELECT_FEED_ROW +
-                "WHERE (p.user_id = :viewer_id OR p.user_id IN (SELECT followee_id FROM follow WHERE follower_id = :viewer_id)) " +
+                "WHERE p.deleted_at IS NULL " +
+                "AND (p.user_id = :viewer_id OR p.user_id IN (SELECT followee_id FROM follow WHERE follower_id = :viewer_id)) " +
                 (hashtagFilter != null ? "AND p.hashtags @> :hashtag_arr " : "") +
                 "ORDER BY p.created_at DESC LIMIT :limit OFFSET :offset";
         DatabaseClient.GenericExecuteSpec spec = dbClient.sql(sql)
@@ -74,7 +77,8 @@ public class PostgresPostRepository implements PostRepository {
     @Override
     public Flux<FeedRow> findExplore(UUID viewerId, String hashtagFilter, int limit, int offset) {
         String sql = SELECT_FEED_ROW +
-                (hashtagFilter != null ? "WHERE p.hashtags @> :hashtag_arr " : "") +
+                "WHERE p.deleted_at IS NULL " +
+                (hashtagFilter != null ? "AND p.hashtags @> :hashtag_arr " : "") +
                 "ORDER BY p.created_at DESC LIMIT :limit OFFSET :offset";
         DatabaseClient.GenericExecuteSpec spec = dbClient.sql(sql)
                 .bind("viewer_id", viewerId)
@@ -90,7 +94,7 @@ public class PostgresPostRepository implements PostRepository {
     public Flux<FeedRow> findByUser(UUID targetUserId, UUID viewerId, int limit, int offset) {
         return dbClient.sql(
                 SELECT_FEED_ROW +
-                "WHERE p.user_id = :target_user_id " +
+                "WHERE p.deleted_at IS NULL AND p.user_id = :target_user_id " +
                 "ORDER BY p.created_at DESC LIMIT :limit OFFSET :offset")
                 .bind("viewer_id", viewerId)
                 .bind("target_user_id", targetUserId)
@@ -102,7 +106,7 @@ public class PostgresPostRepository implements PostRepository {
 
     @Override
     public Mono<FeedRow> findById(UUID postId, UUID viewerId) {
-        return dbClient.sql(SELECT_FEED_ROW + "WHERE p.id = :post_id")
+        return dbClient.sql(SELECT_FEED_ROW + "WHERE p.deleted_at IS NULL AND p.id = :post_id")
                 .bind("viewer_id", viewerId)
                 .bind("post_id", postId)
                 .map((row, meta) -> mapRow(row))
@@ -111,7 +115,7 @@ public class PostgresPostRepository implements PostRepository {
 
     @Override
     public Mono<Long> countByUser(UUID userId) {
-        return dbClient.sql("SELECT count(*) AS c FROM post WHERE user_id = :user_id")
+        return dbClient.sql("SELECT count(*) AS c FROM post WHERE user_id = :user_id AND deleted_at IS NULL")
                 .bind("user_id", userId)
                 .map((row, meta) -> row.get("c", Long.class))
                 .one()
@@ -120,7 +124,7 @@ public class PostgresPostRepository implements PostRepository {
 
     @Override
     public Mono<UUID> findAuthorId(UUID postId) {
-        return dbClient.sql("SELECT user_id FROM post WHERE id = :id")
+        return dbClient.sql("SELECT user_id FROM post WHERE id = :id AND deleted_at IS NULL")
                 .bind("id", postId)
                 .map((row, meta) -> row.get("user_id", UUID.class))
                 .one();

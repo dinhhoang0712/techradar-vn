@@ -1,18 +1,24 @@
+import gc
+import json
+import logging
+import os
+import re
+import time
+from datetime import datetime
+
+from kafka_producer import CrawlerKafkaProducer
 from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.common.exceptions import NoSuchElementException, StaleElementReferenceException, TimeoutException, WebDriverException
+from selenium.common.exceptions import (
+    NoSuchElementException,
+    StaleElementReferenceException,
+)
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
-import time
-import os
-from datetime import datetime
-import re
-import json
-import gc
 
-# Kafka producer integration
-from kafka_producer import CrawlerKafkaProducer
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
 
 
 def extract_publish_date(driver):
@@ -20,7 +26,11 @@ def extract_publish_date(driver):
     # GenK specific selectors
     for selector in ["time-source-detail", "kbwcm-time", "time", "span.date", "span.date-time", "div.date-time"]:
         try:
-            elements = driver.find_elements(By.CLASS_NAME, selector) if "." not in selector else driver.find_elements(By.CSS_SELECTOR, selector)
+            elements = (
+                driver.find_elements(By.CLASS_NAME, selector)
+                if "." not in selector
+                else driver.find_elements(By.CSS_SELECTOR, selector)
+            )
             for el in elements:
                 text = el.text.strip()
                 if text:
@@ -37,7 +47,7 @@ def extract_publish_date(driver):
 
 def load_processed_urls(url_cache_file):
     if os.path.exists(url_cache_file):
-        with open(url_cache_file, "r", encoding="utf-8") as f:
+        with open(url_cache_file, encoding="utf-8") as f:
             return set(line.strip() for line in f if line.strip())
     return set()
 
@@ -51,7 +61,7 @@ def load_existing_posts(output_file):
     """Load existing posts from JSON file to avoid duplicates."""
     if os.path.exists(output_file):
         try:
-            with open(output_file, "r", encoding="utf-8") as f:
+            with open(output_file, encoding="utf-8") as f:
                 data = json.load(f)
                 return data.get("post_detail", [])
         except (json.JSONDecodeError, Exception):
@@ -91,13 +101,13 @@ def main():
     try:
         kafka_enabled = kafka_producer.connect()
         if kafka_enabled:
-            print("✓ Kafka connected for GenK")
+            logger.info("Kafka connected for GenK")
         else:
-            print("⚠ Kafka not available, data will only be saved to JSON")
+            logger.warning("Kafka not available, data will only be saved to JSON")
     except Exception as e:
-        print(f"⚠ Kafka connection failed: {e}")
+        logger.warning("Kafka connection failed: %s", e)
         kafka_enabled = False
-    
+
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
@@ -126,32 +136,33 @@ def main():
     ]
 
     today_str = datetime.now().strftime("%d_%m_%Y")
-    # Changed: Save to data/raw/ instead of crawl/data/raw/
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # data/raw/ under the container's /app — matches the crawler_data:/app/data volume mount
+    # (docker-compose.yml), so output survives container restarts/recreates.
+    base_dir = os.path.dirname(os.path.abspath(__file__))
     output_dir = os.path.join(base_dir, "data", "raw", "genk")
     metadata_dir = os.path.join(output_dir, "metadata")
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(metadata_dir, exist_ok=True)
-    
+
     output_file = os.path.join(output_dir, f"{today_str}.json")
     url_cache_file = os.path.join(metadata_dir, f"{today_str}_urls.txt")
 
     processed_urls = load_processed_urls(url_cache_file)
-    print(f"Đã xử lý trước đó: {len(processed_urls)} bài")
-    
+    logger.info("Đã xử lý trước đó: %d bài", len(processed_urls))
+
     # Load existing posts
     existing_posts = load_existing_posts(output_file)
     existing_urls = {p.get("source_url") for p in existing_posts}
-    print(f"Bài đã có trong file: {len(existing_posts)} bài")
+    logger.info("Bài đã có trong file: %d bài", len(existing_posts))
 
-    print(f"File output: {output_file}")
+    logger.info("File output: %s", output_file)
 
     seen_links = set()
     posts_info = []
 
     for source_url in source_urls:
-        print(f"\n--- Cào: {source_url} ---")
-        
+        logger.info("--- Cào: %s ---", source_url)
+
         try:
             driver.get(source_url)
             time.sleep(2)
@@ -161,7 +172,7 @@ def main():
         max_scrolls = 50
         scroll_count = 0
         last_height = 0
-        
+
         while scroll_count < max_scrolls:
             visible, _ = _view_more_visible(driver)
             if visible:
@@ -179,7 +190,7 @@ def main():
 
         articles = driver.find_elements(By.CSS_SELECTOR, "div.elp-list")
         added = 0
-        
+
         for article in articles:
             if len(posts_info) >= MAX_ARTICLES:
                 break
@@ -190,7 +201,13 @@ def main():
                 link = link_els[0].get_attribute("href") if link_els else ""
                 title = title_els[0].text.strip() if title_els else ""
 
-                if not link or "eclick" in link or link in seen_links or link in processed_urls or link in existing_urls:
+                if (
+                    not link
+                    or "eclick" in link
+                    or link in seen_links
+                    or link in processed_urls
+                    or link in existing_urls
+                ):
                     continue
                 seen_links.add(link)
                 posts_info.append({"title": title, "link": link})
@@ -198,7 +215,7 @@ def main():
             except NoSuchElementException:
                 continue
 
-        print(f"  Thêm {added} bài")
+        logger.info("Thêm %d bài", added)
         del articles
         gc.collect()
 
@@ -206,17 +223,17 @@ def main():
             break
 
     posts_info = posts_info[:MAX_ARTICLES]
-    print(f"\nTổng: {len(posts_info)} bài sẽ cào")
+    logger.info("Tổng: %d bài sẽ cào", len(posts_info))
 
     if not posts_info:
-        print("Không tìm thấy bài viết mới!")
+        logger.info("Không tìm thấy bài viết mới!")
         driver.quit()
         exit(0)
 
     new_posts = []
-    
+
     for idx, post in enumerate(posts_info):
-        print(f"\n[{idx + 1}/{len(posts_info)}] {post['title'][:40] if post['title'] else '...'}...")
+        logger.info("[%d/%d] %s...", idx + 1, len(posts_info), post["title"][:40] if post["title"] else "...")
 
         try:
             driver.get(post["link"])
@@ -237,12 +254,12 @@ def main():
             "title": post["title"],
             "publish_date": publish_date,
             "content": content,
-            "source_url": post["link"]
+            "source_url": post["link"],
         }
-        
+
         new_posts.append(post_detail)
         save_processed_url(url_cache_file, post["link"])
-        
+
         # Send to Kafka
         if kafka_enabled:
             kafka_producer.send_article(
@@ -250,17 +267,17 @@ def main():
                 content=content,
                 source_url=post["link"],
                 source_platform="GenK",
-                publish_date=publish_date
+                publish_date=publish_date,
             )
-        
-        print(f"  ✓ Đã lưu (tổng: {len(new_posts)})")
-        
+
+        logger.info("Đã lưu (tổng: %d)", len(new_posts))
+
         del post_detail, content, paragraphs
         if idx % 10 == 0:
             gc.collect()
 
     driver.quit()
-    
+
     # Close Kafka producer
     if kafka_producer:
         kafka_producer.flush()
@@ -270,11 +287,11 @@ def main():
     all_posts = existing_posts + new_posts
     save_posts(output_file, all_posts)
 
-    print(f"\n{'='*50}")
-    print(f"Hoàn thành! Đã lưu: {len(new_posts)} bài mới")
-    print(f"Tổng cộng trong file: {len(all_posts)} bài")
-    print(f"File: {output_file}")
-    print(f"{'='*50}")
+    logger.info("=" * 50)
+    logger.info("Hoàn thành! Đã lưu: %d bài mới", len(new_posts))
+    logger.info("Tổng cộng trong file: %d bài", len(all_posts))
+    logger.info("File: %s", output_file)
+    logger.info("=" * 50)
 
 
 if __name__ == "__main__":

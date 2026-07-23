@@ -7,6 +7,7 @@ Chạy từ thư mục service (để `app` import được):
 
 Mock `generate` và `run_query` nên KHÔNG cần LLM hay Neo4j thật.
 """
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -39,10 +40,19 @@ def _mock_context(monkeypatch, rows):
 
 def test_returns_summary_and_highlights_when_company_has_job_data(client, monkeypatch):
     c, fake = client
-    _mock_context(monkeypatch, [{
-        "name": "Acme Corp", "location": "Hà Nội", "industry": "Fintech",
-        "size": "100-500", "tech_stack": ["Java", "Spring"], "job_count": 5,
-    }])
+    _mock_context(
+        monkeypatch,
+        [
+            {
+                "name": "Acme Corp",
+                "location": "Hà Nội",
+                "industry": "Fintech",
+                "size": "100-500",
+                "tech_stack": ["Java", "Spring"],
+                "job_count": 5,
+            }
+        ],
+    )
 
     res = c.post("/company-insight", json={"company_name": "Acme Corp"})
 

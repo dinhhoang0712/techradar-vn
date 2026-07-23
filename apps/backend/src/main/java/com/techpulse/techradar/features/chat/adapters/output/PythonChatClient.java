@@ -1,9 +1,9 @@
 package com.techpulse.techradar.features.chat.adapters.output;
 
-import com.techpulse.techradar.features.chat.adapters.input.dto.ChatHealthResponse;
-import com.techpulse.techradar.features.chat.adapters.input.dto.ChatMessageItem;
-import com.techpulse.techradar.features.chat.adapters.input.dto.ChatRequest;
-import com.techpulse.techradar.features.chat.adapters.input.dto.ChatResponse;
+import com.techpulse.techradar.features.chat.domain.ChatHealthResponse;
+import com.techpulse.techradar.features.chat.domain.ChatMessageItem;
+import com.techpulse.techradar.features.chat.domain.ChatRequest;
+import com.techpulse.techradar.features.chat.domain.ChatResponse;
 import com.techpulse.techradar.features.chat.ports.ChatPort;
 import com.techpulse.techradar.shared.client.PythonServiceWebClientFactory;
 import com.techpulse.techradar.shared.http.AbstractPythonServiceClient;

@@ -101,8 +101,15 @@
     padding: 24px;
     text-align: center;
     box-shadow: var(--shadow-sm);
-    transition: transform var(--t), border-color var(--t);
+    transition: transform var(--t), border-color var(--t), box-shadow var(--t);
     overflow: hidden;
+    /* Some stat cards render as a <button> (StatCard's onClick prop) so they're keyboard-focusable
+       and screen-reader-announced as actionable; reset default button chrome so they still look
+       identical to the plain, non-clickable cards. */
+    font: inherit;
+    width: 100%;
+    color: inherit;
+    cursor: default;
 }
 .stat-card::before {
     content: '';
@@ -126,11 +133,46 @@
     letter-spacing: 0.5px;
 }
 
+.stat-card-icon {
+    font-size: 1.15em;
+    margin-right: 8px;
+}
+
 .stat-value {
     font-size: 2.5rem;
     font-weight: 700;
     color: var(--text);
     margin: 0;
+}
+
+.stat-card-caption {
+    margin: 10px 0 0;
+    font-size: 0.8rem;
+    color: var(--text-3);
+}
+
+/* Accent color per metric semantics — swaps the top accent bar so a "healthy/positive" number
+   (green), a "needs attention" one (yellow), an error count (danger), or a community-flavored one
+   (accent purple) reads apart from the default brand-blue at a glance, instead of every card
+   looking identical regardless of what it means. */
+.stat-card--accent-primary::before { background: var(--gradient-brand); }
+.stat-card--accent-accent::before { background: var(--accent); }
+.stat-card--accent-green::before { background: var(--green); }
+.stat-card--accent-yellow::before { background: var(--yellow); }
+.stat-card--accent-danger::before { background: var(--danger); }
+
+.stat-card--clickable {
+    cursor: pointer;
+}
+
+.stat-card--clickable:hover {
+    border-color: var(--primary);
+    box-shadow: var(--shadow-primary);
+}
+
+.stat-card--clickable:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
 }
 
 .dashboard-grid {
@@ -267,3 +309,249 @@
     margin-bottom: 20px;
 }
 .model-quality-header h3 { margin: 0; }
+
+/* --- Live Metrics Panel: điểm nhấn chính, luôn hiển thị phía trên các tab --- */
+
+.live-metrics-panel {
+    position: relative;
+    background: linear-gradient(160deg, var(--surface) 0%, var(--surface-2) 100%);
+    border: 1px solid var(--border-2);
+    border-radius: var(--radius-xl);
+    padding: 24px 28px 28px;
+    box-shadow: var(--shadow-primary);
+    overflow: hidden;
+}
+
+.live-metrics-panel::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: var(--gradient-brand);
+}
+
+.live-metrics-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.live-metrics-header h2 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.live-metrics-icon {
+    font-size: 1.3rem;
+}
+
+.live-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--border-2);
+    background: var(--surface-2);
+    color: var(--text-3);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    transition: background var(--t), border-color var(--t), color var(--t);
+}
+
+.live-badge.connected {
+    background: var(--green-glow);
+    border-color: var(--green);
+    color: var(--green-light);
+}
+
+.live-badge-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+}
+
+.live-badge.connected .live-badge-dot {
+    animation: live-pulse 1.6s ease-in-out infinite;
+}
+
+.live-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+}
+
+.live-metric-tile {
+    background: var(--surface-glass);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    transition: transform var(--t), border-color var(--t), box-shadow var(--t);
+    /* The pending-reports/pipeline tiles are <button>s so they're keyboard-focusable and
+       screen-reader-announced as actionable; reset the browser's default button chrome so they
+       still look identical to the plain <div> tiles. */
+    font: inherit;
+    text-align: left;
+    width: 100%;
+    color: inherit;
+    cursor: default;
+}
+
+.live-metric-tile:hover {
+    transform: translateY(-3px);
+    border-color: var(--border-2);
+}
+
+.live-metric-tile--clickable {
+    cursor: pointer;
+}
+
+.live-metric-tile--clickable:hover {
+    border-color: var(--primary);
+    box-shadow: var(--shadow-primary);
+}
+
+.live-metric-tile--clickable:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.live-metric-tile--alert {
+    border-color: var(--danger);
+    background: var(--danger-glow);
+}
+
+.live-metric-tile--alert:hover {
+    border-color: var(--danger);
+    box-shadow: 0 4px 24px var(--danger-glow);
+}
+
+.live-metric-value--danger {
+    color: var(--danger-light);
+}
+
+.live-metric-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-2);
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-bottom: 10px;
+}
+
+.live-metric-icon {
+    font-size: 1.05rem;
+}
+
+.live-metric-value {
+    font-size: 2.1rem;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.1;
+}
+
+.live-metric-value-text {
+    font-size: 1rem;
+}
+
+.live-metric-caption {
+    margin-top: 10px;
+    color: var(--text-3);
+    font-size: 0.8rem;
+}
+
+.live-metric-caption-time {
+    color: var(--text-3);
+}
+
+.state-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    border: 1px solid transparent;
+}
+
+.state-pill-lg {
+    font-size: 0.95rem;
+    padding: 7px 16px;
+}
+
+.state-idle {
+    background: var(--green-glow);
+    color: var(--green-light);
+    border-color: var(--green);
+}
+
+.state-running {
+    background: var(--yellow-glow);
+    color: var(--yellow);
+    border-color: var(--yellow);
+}
+
+.state-unknown {
+    background: var(--surface-2);
+    color: var(--text-3);
+    border-color: var(--border-2);
+}
+
+.state-healthy {
+    background: var(--green-glow);
+    color: var(--green-light);
+    border-color: var(--green);
+}
+
+.state-error {
+    background: var(--danger-glow);
+    color: var(--danger-light);
+    border-color: var(--danger);
+}
+
+.state-pill-ping {
+    position: relative;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--yellow);
+    box-shadow: 0 0 0 0 var(--yellow-glow);
+    animation: live-pulse 1.2s ease-in-out infinite;
+}
+
+.state-pill-ping--error {
+    background: var(--danger);
+    box-shadow: 0 0 0 0 var(--danger-glow);
+}
+
+@keyframes live-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.45; transform: scale(1.4); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .live-badge.connected .live-badge-dot,
+    .state-pill-ping {
+        animation: none;
+    }
+}

@@ -30,8 +30,10 @@ Swagger: http://localhost:8001/docs
 | GET | `/clusters/{id}` | Chi tiết cluster + members |
 | GET | `/tech/{name}/cluster` | Tra cứu cluster của 1 tech |
 | POST | `/predict/batch` | Batch lookup nhiều tech |
+| PUT | `/clusters/{cluster_id}/label` | Admin override nhãn cluster |
 | POST | `/pipeline/trigger` | Khởi động retrain pipeline |
 | GET | `/pipeline/status` | Trạng thái pipeline |
+| GET | `/pipeline/runs` | Lịch sử các lần chạy pipeline |
 
 ---
 
@@ -40,7 +42,8 @@ Swagger: http://localhost:8001/docs
 ```
 Stage 1: EXTRACT    Neo4j → Parquet (technologies, jobs, articles, edges)
 Stage 2: FEATURES   Alias normalization + noise filter + embedding + UMAP
-Stage 3: TRAIN      HDBSCAN grid search (18 combos) → best Silhouette Score
+Stage 3: TRAIN      HDBSCAN grid search (18 combos) → best DBCV score (không phải Silhouette —
+                    DBCV phù hợp hơn cho density-based clustering như HDBSCAN)
 Stage 4: LABEL      GPT-4o-mini đặt tên + mô tả cho từng cluster
 Stage 5: WRITEBACK  Ghi cluster_id về Neo4j (không sử dụng)
 ```

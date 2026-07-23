@@ -1,20 +1,21 @@
 import asyncio
 import uuid
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.schemas import ChatRequest, ChatResponse, SourceItem
 from app.core.pipeline import answer
 from app.core.pipeline_stream import answer_stream
-from app.models.chat import ChatSession, ChatMessage
-from app.api.schemas import ChatRequest, ChatResponse, SourceItem
 from app.memory.user_context import increment_tech_interaction
+from app.models.chat import ChatMessage, ChatSession
 
 
 async def _track_interactions(user_id: uuid.UUID, entities: list[str]) -> None:
     """Fire-and-forget: tăng bộ đếm tech_interactions với fresh session."""
     from app.db.postgres_client import get_session_factory
+
     factory = get_session_factory()
     async with factory() as session:
         for tech in entities[:5]:
@@ -104,9 +105,7 @@ def _create_session(request: ChatRequest) -> ChatSession:
     )
 
 
-async def handle_chat_stream(
-    request: ChatRequest, db: AsyncSession
-) -> AsyncIterator[dict]:
+async def handle_chat_stream(request: ChatRequest, db: AsyncSession) -> AsyncIterator[dict]:
     """
     Streaming version của handle_chat. Yield events:
       - {"event": "token", "data": <chunk>}
@@ -161,10 +160,10 @@ async def handle_chat_stream(
     # 5. Build done event với session_id + query
     sources = [
         {
-            "title":          s.get("title"),
+            "title": s.get("title"),
             "published_date": str(s.get("published_date") or "")[:10] or None,
-            "source":         s.get("source"),
-            "rerank_score":   s.get("rerank_score"),
+            "source": s.get("source"),
+            "rerank_score": s.get("rerank_score"),
         }
         for s in (final_payload or {}).get("sources", [])
     ]
@@ -172,11 +171,11 @@ async def handle_chat_stream(
     yield {
         "event": "done",
         "data": {
-            "answer":     full_answer,
+            "answer": full_answer,
             "session_id": str(session_id),
-            "sources":    sources,
-            "entities":   (final_payload or {}).get("entities", []),
+            "sources": sources,
+            "entities": (final_payload or {}).get("entities", []),
             "job_titles": (final_payload or {}).get("job_titles", []),
-            "query":      request.query,
+            "query": request.query,
         },
     }

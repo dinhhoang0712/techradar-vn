@@ -14,16 +14,16 @@ KafkaNeo4jWriterService để hai đường ghi không tạo node trùng.
 
 Chạy: mỗi giờ, trước gold_pg_etl (cấu hình trong scheduler).
 """
+
 from __future__ import annotations
 
 import hashlib
 import re
 
-from loguru import logger
-
-from common.db import get_pg_conn, get_neo4j_driver, log_pipeline_run
+from common.db import get_neo4j_driver, get_pg_conn, log_pipeline_run
 from common.tech_keywords import extract_tech
 from config import Settings
+from loguru import logger
 
 _SELECT_JOBS = """
 SELECT id, source_url, source_platform, job_title, company_name,
@@ -104,9 +104,9 @@ def run(settings: Settings) -> int:
         rows_with_company = []
         for job in jobs:
             techs = set(job["technologies"] or [])
-            techs |= set(extract_tech(
-                f"{job['job_title'] or ''} {job['description'] or ''} {job['requirement'] or ''}"
-            ))
+            techs |= set(
+                extract_tech(f"{job['job_title'] or ''} {job['description'] or ''} {job['requirement'] or ''}")
+            )
 
             row = {
                 "id": _job_id(job["source_url"]),
@@ -124,14 +124,16 @@ def run(settings: Settings) -> int:
 
             company_name = (job["company_name"] or "").strip()
             if company_name:
-                rows_with_company.append({
-                    **row,
-                    "company_id": _slugify(company_name),
-                    "company_name": company_name,
-                    "company_location": job["company_location"],
-                    "company_industry": job["company_industry"],
-                    "company_size": job["company_size"],
-                })
+                rows_with_company.append(
+                    {
+                        **row,
+                        "company_id": _slugify(company_name),
+                        "company_name": company_name,
+                        "company_location": job["company_location"],
+                        "company_industry": job["company_industry"],
+                        "company_size": job["company_size"],
+                    }
+                )
 
         driver = get_neo4j_driver(settings)
         with driver.session() as session:
@@ -143,17 +145,14 @@ def run(settings: Settings) -> int:
                 session.run(_MERGE_COMPANIES, rows=rows_with_company)
         driver.close()
 
-        logger.info("Neo4j Job Sync: upserted {} jobs ({} with company)",
-                    len(rows), len(rows_with_company))
-        log_pipeline_run(pg_conn, "neo4j_job_sync", "success",
-                         rows_affected=len(rows), run_id=run_id)
+        logger.info("Neo4j Job Sync: upserted {} jobs ({} with company)", len(rows), len(rows_with_company))
+        log_pipeline_run(pg_conn, "neo4j_job_sync", "success", rows_affected=len(rows), run_id=run_id)
         return len(rows)
 
     except Exception as exc:
         logger.exception("Neo4j Job Sync failed")
         try:
-            log_pipeline_run(pg_conn, "neo4j_job_sync", "failed",
-                             error_msg=str(exc), run_id=run_id)
+            log_pipeline_run(pg_conn, "neo4j_job_sync", "failed", error_msg=str(exc), run_id=run_id)
         except Exception:
             pass
         raise

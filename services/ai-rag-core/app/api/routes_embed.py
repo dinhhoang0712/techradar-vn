@@ -23,17 +23,15 @@ async def _run_embed_job() -> None:
     global _embed_running
     try:
         from neo4j import AsyncGraphDatabase
+
         from app.core.embedder import embed_batch
-        from app.db.neo4j_client import run_query
 
         settings = get_settings()
         uri = settings.active_neo4j_uri
         if uri.startswith("neo4j+s://"):
             uri = uri.replace("neo4j+s://", "neo4j+ssc://", 1)
 
-        driver = AsyncGraphDatabase.driver(
-            uri, auth=(settings.active_neo4j_username, settings.active_neo4j_password)
-        )
+        driver = AsyncGraphDatabase.driver(uri, auth=(settings.active_neo4j_username, settings.active_neo4j_password))
 
         # 1. Lấy Article chưa embed
         async with driver.session() as session:
@@ -52,9 +50,7 @@ async def _run_embed_job() -> None:
 
         # 2. Embed
         texts = [f"{a.get('title') or ''} {a.get('content') or ''}".strip() for a in articles]
-        vectors = await asyncio.get_event_loop().run_in_executor(
-            None, lambda: embed_batch(texts, is_query=False)
-        )
+        vectors = await asyncio.get_event_loop().run_in_executor(None, lambda: embed_batch(texts, is_query=False))
 
         # 3. Ghi lên Neo4j
         rows = [{"eid": a["eid"], "embedding": vec} for a, vec in zip(articles, vectors)]

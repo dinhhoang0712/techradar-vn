@@ -33,6 +33,7 @@ def main(
       6. Return 0 nếu OK, exit code != 0 nếu lỗi.
     """
     from conf.config import load_params, snapshot_dir
+
     from src.data import neo4j_loader as loader
     from src.data.snapshot import take_snapshot
 
@@ -47,7 +48,7 @@ def main(
         logger.info("Neo4j connection OK")
     except Exception as exc:
         logger.error("Kết nối Neo4j thất bại: {}", exc)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from exc
 
     # 3. Handle force — xoá snapshot cũ nếu cần
     snap_dir = snapshot_dir(tag)
@@ -65,15 +66,15 @@ def main(
     except FileExistsError as exc:
         logger.error("{}", exc)
         logger.info("Dùng --force để ghi đè, hoặc đổi snapshot.tag trong params.yaml.")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from exc
     except Exception as exc:
         logger.error("take_snapshot thất bại: {}", exc)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from exc
 
     # 4. In tóm tắt
-    print(f"\n{'='*55}")
+    print(f"\n{'=' * 55}")
     print(f"  Snapshot '{tag}' hoàn tất")
-    print(f"{'='*55}")
+    print(f"{'=' * 55}")
     print(f"  Neo4j URI        : {meta.neo4j_uri}")
     print(f"  Created at       : {meta.created_at}")
     print(f"  Git commit       : {meta.git_commit or 'N/A'}")
@@ -86,12 +87,14 @@ def main(
     for rel, count in meta.edge_counts.items():
         print(f"    {rel:<20} {count:>6}")
     print()
-    print(f"  Article embedding: {meta.article_with_embedding}/{meta.node_counts.get('Article', '?')} bài có embedding ({meta.article_embedding_dim}d)")
+    print(
+        f"  Article embedding: {meta.article_with_embedding}/{meta.node_counts.get('Article', '?')} bài có embedding ({meta.article_embedding_dim}d)"
+    )
     print()
     print("  Files:")
     for fname, nrows in meta.rows_per_file.items():
         print(f"    {fname:<40} {nrows:>6} rows")
-    print(f"{'='*55}\n")
+    print(f"{'=' * 55}\n")
 
     # 5. Đóng driver
     loader.close_driver()

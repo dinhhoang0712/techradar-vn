@@ -6,22 +6,20 @@ Action: Ghi raw message vào MinIO dưới dạng gzip JSON, update catalog Post
 Dùng group-id riêng (bronze-writer) nên KHÔNG ảnh hưởng đến Spring Boot consumer.
 Raw data là IMMUTABLE — không bao giờ xoá hoặc ghi đè.
 """
+
 import gzip
 import hashlib
 import io
 import json
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-import psycopg2
-import psycopg2.extras
+from common.db import ensure_bronze_bucket, get_minio_client, get_pg_conn
+from config import Settings
 from kafka import KafkaConsumer
 from kafka.errors import NoBrokersAvailable
 from loguru import logger
 from minio import Minio
-
-from common.db import ensure_bronze_bucket, get_minio_client, get_pg_conn
-from config import Settings
 
 TOPICS = ["raw_articles", "raw_jobs"]
 GROUP_ID = "bronze-writer"
@@ -49,9 +47,17 @@ def _write_to_minio(client: Minio, path: str, raw_bytes: bytes) -> int:
     return len(compressed)
 
 
-def _update_catalog(conn, file_id: str, source_url: str, source_platform: str,
-                    content_type: str, minio_path: str, file_size: int,
-                    kafka_topic: str, kafka_offset: int) -> None:
+def _update_catalog(
+    conn,
+    file_id: str,
+    source_url: str,
+    source_platform: str,
+    content_type: str,
+    minio_path: str,
+    file_size: int,
+    kafka_topic: str,
+    kafka_offset: int,
+) -> None:
     with conn.cursor() as cur:
         cur.execute(
             """INSERT INTO dp_bronze_catalog
@@ -59,8 +65,7 @@ def _update_catalog(conn, file_id: str, source_url: str, source_platform: str,
                 minio_path, file_size_bytes, kafka_topic, kafka_offset)
                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                ON CONFLICT (id) DO NOTHING""",
-            (file_id, source_url, source_platform, content_type,
-             minio_path, file_size, kafka_topic, kafka_offset),
+            (file_id, source_url, source_platform, content_type, minio_path, file_size, kafka_topic, kafka_offset),
         )
     conn.commit()
 
@@ -107,11 +112,11 @@ def run(settings: Settings) -> None:
     while True:
         try:
             records = consumer.poll(timeout_ms=2000)
-            for tp, messages in records.items():
+            for _tp, messages in records.items():
                 for record in messages:
                     try:
                         msg = record.value
-                        now = datetime.now(timezone.utc)
+                        now = datetime.now(UTC)
                         source_platform = msg.get("source_platform", "unknown")
                         source_url = _extract_source_url(msg, record.topic)
 
@@ -124,9 +129,15 @@ def run(settings: Settings) -> None:
                         file_size = _write_to_minio(minio_client, minio_path, raw_bytes)
 
                         _update_catalog(
-                            pg_conn, file_id, source_url, source_platform,
-                            content_type, f"s3://{MINIO_BUCKET}/{minio_path}",
-                            file_size, record.topic, record.offset,
+                            pg_conn,
+                            file_id,
+                            source_url,
+                            source_platform,
+                            content_type,
+                            f"s3://{MINIO_BUCKET}/{minio_path}",
+                            file_size,
+                            record.topic,
+                            record.offset,
                         )
 
                         consumer.commit()

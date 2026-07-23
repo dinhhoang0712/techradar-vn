@@ -3,11 +3,10 @@ Kafka Producer utility for crawlers.
 Sends crawled data to Kafka topics for processing.
 """
 
-import os
 import json
 import logging
+import os
 from datetime import datetime
-from typing import Dict, Any, Optional
 
 from kafka import KafkaProducer
 from kafka.errors import KafkaError
@@ -17,35 +16,30 @@ logger = logging.getLogger(__name__)
 
 class CrawlerKafkaProducer:
     """Kafka producer for crawler data."""
-    
+
     def __init__(
-        self,
-        bootstrap_servers: Optional[str] = None,
-        topic_articles: str = "raw_articles",
-        topic_jobs: str = "raw_jobs"
+        self, bootstrap_servers: str | None = None, topic_articles: str = "raw_articles", topic_jobs: str = "raw_jobs"
     ):
         """
         Initialize Kafka producer.
-        
+
         Args:
             bootstrap_servers: Kafka broker addresses (comma-separated)
             topic_articles: Topic for article data
             topic_jobs: Topic for job data
         """
-        self.bootstrap_servers = bootstrap_servers or os.getenv(
-            "KAFKA_BOOTSTRAP_SERVERS", "localhost:9094"
-        )
+        self.bootstrap_servers = bootstrap_servers or os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9094")
         self.topic_articles = topic_articles
         self.topic_jobs = topic_jobs
         self.producer = None
-        
+
     def connect(self) -> bool:
         """Connect to Kafka broker."""
         try:
             self.producer = KafkaProducer(
                 bootstrap_servers=self.bootstrap_servers.split(","),
-                value_serializer=lambda v: json.dumps(v, ensure_ascii=False, default=str).encode('utf-8'),
-                key_serializer=lambda k: k.encode('utf-8') if k else None,
+                value_serializer=lambda v: json.dumps(v, ensure_ascii=False, default=str).encode("utf-8"),
+                key_serializer=lambda k: k.encode("utf-8") if k else None,
                 acks=1,
                 retries=3,
                 retry_backoff_ms=1000,
@@ -56,7 +50,7 @@ class CrawlerKafkaProducer:
         except KafkaError as e:
             logger.error(f"Failed to connect to Kafka: {e}")
             return False
-    
+
     def send_article(
         self,
         title: str,
@@ -64,11 +58,11 @@ class CrawlerKafkaProducer:
         source_url: str,
         source_platform: str,
         publish_date: str = "",
-        key: Optional[str] = None
+        key: str | None = None,
     ) -> bool:
         """
         Send article data to Kafka.
-        
+
         Args:
             title: Article title
             content: Article content
@@ -76,32 +70,23 @@ class CrawlerKafkaProducer:
             source_platform: Platform name (VNExpress, GenK, DanTri)
             publish_date: Publication date
             key: Optional message key
-            
+
         Returns:
             True if sent successfully
         """
         if not self.producer:
             logger.warning("Producer not connected, skipping Kafka send")
             return False
-        
+
         message = {
             "message_type": "article",
             "source_platform": source_platform,
             "crawled_at": datetime.utcnow().isoformat() + "Z",
-            "data": {
-                "title": title,
-                "publish_date": publish_date,
-                "content": content,
-                "source_url": source_url
-            }
+            "data": {"title": title, "publish_date": publish_date, "content": content, "source_url": source_url},
         }
-        
+
         try:
-            future = self.producer.send(
-                self.topic_articles,
-                key=key,
-                value=message
-            )
+            future = self.producer.send(self.topic_articles, key=key, value=message)
             # Wait for confirmation (optional, can be removed for async)
             future.get(timeout=10)
             logger.debug(f"Sent article to Kafka: {title[:50]}...")
@@ -109,7 +94,7 @@ class CrawlerKafkaProducer:
         except KafkaError as e:
             logger.error(f"Failed to send article to Kafka: {e}")
             return False
-    
+
     def send_job(
         self,
         job_title: str,
@@ -124,9 +109,9 @@ class CrawlerKafkaProducer:
         source_url: str,
         posted_date: str = "",
         source_platform: str = "TopCV",
-        key: Optional[str] = None,
+        key: str | None = None,
         company_size: str = "",
-        company_field: str = ""
+        company_field: str = "",
     ) -> bool:
         """
         Send job data to Kafka.
@@ -172,28 +157,24 @@ class CrawlerKafkaProducer:
                 "source_url": source_url,
                 "posted_date": posted_date,
                 "size": company_size,
-                "field": company_field
-            }
+                "field": company_field,
+            },
         }
-        
+
         try:
-            future = self.producer.send(
-                self.topic_jobs,
-                key=key,
-                value=message
-            )
+            future = self.producer.send(self.topic_jobs, key=key, value=message)
             future.get(timeout=10)
             logger.debug(f"Sent job to Kafka: {job_title[:50]}...")
             return True
         except KafkaError as e:
             logger.error(f"Failed to send job to Kafka: {e}")
             return False
-    
+
     def flush(self):
         """Flush pending messages."""
         if self.producer:
             self.producer.flush()
-    
+
     def close(self):
         """Close the producer."""
         if self.producer:

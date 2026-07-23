@@ -4,14 +4,14 @@ Lấy repos công khai từ các công ty tech Việt Nam nổi tiếng via GitH
 Không cần Selenium — dùng requests thuần.
 Đẩy metadata repo vào Kafka topic raw_articles (dạng tech article).
 """
+
 import json
 import logging
 import os
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 
 import requests
-
 from kafka_producer import CrawlerKafkaProducer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -23,20 +23,20 @@ GITHUB_API = "https://api.github.com"
 
 # Các công ty / tổ chức tech Việt Nam nổi tiếng trên GitHub
 VN_ORGS = [
-    "vngcloud",           # VNG Cloud
-    "zalopay",            # ZaloPay
-    "tiki-miniapp",       # Tiki
-    "momo-developer",     # MoMo
-    "shopee",             # Shopee (HQ SG nhưng lớn ở VN)
-    "fpt-corp",           # FPT
-    "sun-asterisk-vn",    # Sun Asterisk VN
-    "vnpay",              # VNPAY
+    "vngcloud",  # VNG Cloud
+    "zalopay",  # ZaloPay
+    "tiki-miniapp",  # Tiki
+    "momo-developer",  # MoMo
+    "shopee",  # Shopee (HQ SG nhưng lớn ở VN)
+    "fpt-corp",  # FPT
+    "sun-asterisk-vn",  # Sun Asterisk VN
+    "vnpay",  # VNPAY
     "techvify-software",  # TechVify
-    "got-it-global",      # Got It
-    "axon-active",        # Axon Active VN
-    "nashtech-global",    # NashTech
-    "nal-vn",             # NAL VN
-    "framgia",            # Framgia / Sun* VN
+    "got-it-global",  # Got It
+    "axon-active",  # Axon Active VN
+    "nashtech-global",  # NashTech
+    "nal-vn",  # NAL VN
+    "framgia",  # Framgia / Sun* VN
 ]
 
 # Query tìm repos trending về tech phổ biến tại VN
@@ -64,7 +64,7 @@ if _token:
 def _load_urls(path: str) -> set:
     if os.path.exists(path):
         with open(path, encoding="utf-8") as f:
-            return {l.strip() for l in f if l.strip()}
+            return {line.strip() for line in f if line.strip()}
     return set()
 
 
@@ -190,8 +190,10 @@ def main():
             processed.add(art["source_url"])
             if kafka_enabled:
                 kafka.send_article(
-                    title=art["title"], content=art["content"],
-                    source_url=art["source_url"], source_platform=SOURCE_PLATFORM,
+                    title=art["title"],
+                    content=art["content"],
+                    source_url=art["source_url"],
+                    source_platform=SOURCE_PLATFORM,
                     publish_date=art["publish_date"],
                 )
             total += 1
@@ -212,8 +214,10 @@ def main():
             processed.add(art["source_url"])
             if kafka_enabled:
                 kafka.send_article(
-                    title=art["title"], content=art["content"],
-                    source_url=art["source_url"], source_platform=SOURCE_PLATFORM,
+                    title=art["title"],
+                    content=art["content"],
+                    source_url=art["source_url"],
+                    source_platform=SOURCE_PLATFORM,
                     publish_date=art["publish_date"],
                 )
             total += 1
@@ -222,8 +226,7 @@ def main():
     kafka.close()
 
     with open(output_file, "w", encoding="utf-8") as f:
-        json.dump({"source_platform": SOURCE_PLATFORM, "post_detail": articles}, f,
-                  ensure_ascii=False, indent=2)
+        json.dump({"source_platform": SOURCE_PLATFORM, "post_detail": articles}, f, ensure_ascii=False, indent=2)
 
     logger.info("GitHub done: %d repos crawled", total)
 

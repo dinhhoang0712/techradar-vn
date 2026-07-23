@@ -1,11 +1,14 @@
 package com.techpulse.techradar.features.auth.application;
 
 import com.techpulse.techradar.config.JwtTokenProvider;
-import com.techpulse.techradar.features.auth.adapters.input.LoginResponse;
 import com.techpulse.techradar.features.auth.domain.User;
+import com.techpulse.techradar.features.auth.ports.RolePermissionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
+
+import java.util.List;
 
 /**
  * Issues access/refresh tokens for an authenticated {@link User} and assembles the
@@ -17,15 +20,24 @@ import org.springframework.stereotype.Component;
 public class TokenIssuer {
 
     private final JwtTokenProvider jwtTokenProvider;
+    private final RolePermissionRepository rolePermissionRepository;
 
     @Value("${app.jwt.expiration}")
     private long jwtExpiration;
 
-    public LoginResponse issueFor(User user) {
+    public Mono<LoginResponse> issueFor(User user) {
+        return rolePermissionRepository.findPermissionCodesByRole(user.getRole())
+                .collectList()
+                .map(permissions -> buildResponse(user, permissions));
+    }
+
+    private LoginResponse buildResponse(User user, List<String> permissions) {
         String accessToken = jwtTokenProvider.generateToken(
                 user.getId().toString(),
                 user.getEmail(),
-                user.getRole()
+                user.getRole(),
+                permissions,
+                user.getSecurityStamp().toString()
         );
         String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId().toString());
 

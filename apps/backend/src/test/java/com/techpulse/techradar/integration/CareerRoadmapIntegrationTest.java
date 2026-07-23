@@ -2,7 +2,6 @@ package com.techpulse.techradar.integration;
 
 import com.techpulse.techradar.features.aiproxy.ports.AiProxyPort;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import reactor.core.publisher.Mono;
@@ -20,7 +19,6 @@ import static org.mockito.Mockito.when;
  * run against a real (seeded) Neo4j so the {@code job_matches_needing_it} cross-reference is
  * exercised end-to-end.
  */
-@EnabledIfEnvironmentVariable(named = "POSTGRES_HOST", matches = ".+")
 class CareerRoadmapIntegrationTest extends IntegrationTestSupport {
 
     @MockitoBean

@@ -1,7 +1,6 @@
 package com.techpulse.techradar.integration;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.http.MediaType;
 
 import java.util.Map;
@@ -9,7 +8,6 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Chat session lifecycle: health, session create/list/delete, messages, ownership. */
-@EnabledIfEnvironmentVariable(named = "POSTGRES_HOST", matches = ".+")
 class ChatIntegrationTest extends IntegrationTestSupport {
 
     @Test

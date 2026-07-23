@@ -52,11 +52,9 @@ def main(
         loader.run_query("RETURN 1")
     except Exception as exc:
         logger.error("Kết nối Neo4j thất bại: {}", exc)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from exc
 
-    existing_names = {
-        r["name"] for r in loader.run_query("MATCH (t:Technology) RETURN t.name AS name")
-    }
+    existing_names = {r["name"] for r in loader.run_query("MATCH (t:Technology) RETURN t.name AS name")}
     logger.info("Neo4j hiện có {} Technology node.", len(existing_names))
 
     created = 0
@@ -74,9 +72,7 @@ def main(
         )
         created += 1
 
-    total = loader.run_query(
-        "MATCH (:Technology)-[:RELATED_TO]->(:Technology) RETURN count(*) AS c"
-    )[0]["c"]
+    total = loader.run_query("MATCH (:Technology)-[:RELATED_TO]->(:Technology) RETURN count(*) AS c")[0]["c"]
     loader.close_driver()
 
     print(f"\n{'=' * 55}")

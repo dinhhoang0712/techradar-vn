@@ -105,6 +105,7 @@ class GetCareerRoadmapUseCaseTest {
                 List.of("Docker"), List.of("Kubernetes"), 0.5);
         when(getJobMatchesUseCase.execute(eq("user-1"), isNull(), isNull(), anyInt()))
                 .thenReturn(Flux.just(jobMatch));
+        when(userProfileRepository.updateTargetSkills(eq("user-1"), any())).thenReturn(Mono.just(1L));
 
         when(roadAnalysisUseCase.execute("Docker", "Kubernetes")).thenReturn(Mono.just(GraphData.builder()
                 .nodes(List.of(
@@ -147,6 +148,7 @@ class GetCareerRoadmapUseCaseTest {
                 "recommendations", List.of(Map.<String, Object>of("tech_name", "Docker", "growth_rate", 10.0)))));
         when(aiProxyPort.forward(eq("/career"), any(), any())).thenReturn(Mono.just(Map.of()));
         when(getJobMatchesUseCase.execute(anyString(), any(), any(), anyInt())).thenReturn(Flux.empty());
+        when(userProfileRepository.updateTargetSkills(eq("user-1"), any())).thenReturn(Mono.just(1L));
 
         StepVerifier.create(useCase.execute("user-1"))
                 .assertNext(result -> assertThat(result.nextSkills().get(0)).doesNotContainKey("tech_path"))
@@ -165,12 +167,53 @@ class GetCareerRoadmapUseCaseTest {
         when(getJobMatchesUseCase.execute(anyString(), any(), any(), anyInt())).thenReturn(Flux.empty());
         when(roadAnalysisUseCase.execute("Docker", "Kubernetes"))
                 .thenReturn(Mono.error(new RuntimeException("neo4j unavailable")));
+        when(userProfileRepository.updateTargetSkills(eq("user-1"), any())).thenReturn(Mono.just(1L));
 
         StepVerifier.create(useCase.execute("user-1"))
                 .assertNext(result -> {
                     assertThat(result.nextSkills()).hasSize(1);
                     assertThat(result.nextSkills().get(0)).doesNotContainKey("tech_path");
                 })
+                .verifyComplete();
+    }
+
+    @Test
+    void execute_persistsTargetSkillsFromRecommendations() {
+        when(userProfileRepository.findByUserId("user-1"))
+                .thenReturn(Mono.just(UserProfile.builder().technologies(List.of("Docker")).build()));
+        when(aiProxyPort.forward(eq("/recommend"), any(), any())).thenReturn(Mono.just(Map.of(
+                "recommendations", List.of(
+                        Map.<String, Object>of("tech_name", "Kubernetes", "growth_rate", 10.0),
+                        Map.<String, Object>of("tech_name", "Helm", "growth_rate", 5.0)))));
+        when(aiProxyPort.forward(eq("/career"), any(), any())).thenReturn(Mono.just(Map.of()));
+        when(getJobMatchesUseCase.execute(anyString(), any(), any(), anyInt())).thenReturn(Flux.empty());
+        when(roadAnalysisUseCase.execute(anyString(), anyString())).thenReturn(Mono.just(GraphData.builder()
+                .nodes(List.of()).edges(List.of()).found(false).build()));
+        when(userProfileRepository.updateTargetSkills(eq("user-1"), eq(List.of("Kubernetes", "Helm"))))
+                .thenReturn(Mono.just(1L));
+
+        StepVerifier.create(useCase.execute("user-1"))
+                .expectNextCount(1)
+                .verifyComplete();
+
+        verify(userProfileRepository).updateTargetSkills("user-1", List.of("Kubernetes", "Helm"));
+    }
+
+    @Test
+    void execute_ignoresTargetSkillsPersistenceFailureAndStillReturnsResult() {
+        when(userProfileRepository.findByUserId("user-1"))
+                .thenReturn(Mono.just(UserProfile.builder().technologies(List.of("Docker")).build()));
+        when(aiProxyPort.forward(eq("/recommend"), any(), any())).thenReturn(Mono.just(Map.of(
+                "recommendations", List.of(Map.<String, Object>of("tech_name", "Kubernetes", "growth_rate", 10.0)))));
+        when(aiProxyPort.forward(eq("/career"), any(), any())).thenReturn(Mono.just(Map.of()));
+        when(getJobMatchesUseCase.execute(anyString(), any(), any(), anyInt())).thenReturn(Flux.empty());
+        when(roadAnalysisUseCase.execute(anyString(), anyString())).thenReturn(Mono.just(GraphData.builder()
+                .nodes(List.of()).edges(List.of()).found(false).build()));
+        when(userProfileRepository.updateTargetSkills(eq("user-1"), any()))
+                .thenReturn(Mono.error(new RuntimeException("db unavailable")));
+
+        StepVerifier.create(useCase.execute("user-1"))
+                .assertNext(result -> assertThat(result.nextSkills()).hasSize(1))
                 .verifyComplete();
     }
 

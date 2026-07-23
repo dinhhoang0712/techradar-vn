@@ -1,0 +1,48 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+extend-exclude = [
+    "mlruns",
+    "experiments/results",
+    "data",
+    "published",
+    ".dvc",
+    "**/migrations",
+    "**/*_pb2.py",
+]
+
+[tool.ruff.lint]
+# E/F/W: pycodestyle + pyflakes (unused imports, undefined names, bare `except:`, ...)
+# I: import sorting. B: bugbear (common bug patterns). UP: pyupgrade. T20: no stray print().
+select = ["E", "F", "W", "I", "B", "UP", "T20"]
+ignore = [
+    "E501",   # line-length is a formatter concern (ruff format), not a lint failure
+    # 20 call sites across the ml-clustering pipeline zip parallel arrays derived from the same
+    # dataframe/computation. Whether strict=True is safe depends on each call's data-shape
+    # invariant, which needs a per-site read, not a blanket flag flip — left as a follow-up.
+    "B905",
+]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's DI system is *designed* around `Depends(...)` as a default argument value — this is
+# the documented, idiomatic usage, not the mutable-default-arg footgun B008 otherwise guards against.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Body"]
+
+[tool.ruff.lint.per-file-ignores]
+# Scripts and notebooks-as-scripts legitimately print for CLI output.
+"**/scripts/**" = ["T20"]
+"**/tools/**" = ["T20"]
+# Typer CLI pipeline stages: `logger.*` already covers every operational/error event in these
+# files; the `print()` calls left are exclusively a final human-readable summary report (aligned
+# tables of counts/paths) meant to be read directly in the terminal — routing that through the
+# logger would just prefix every report line with a timestamp/level and break the alignment.
+"**/ml-clustering/pipelines/**" = ["T20"]
+"**/ml-clustering/experiments/**" = ["T20"]
+"**/ml-clustering/visualize_clusters.py" = ["T20"]
+# warnings.filterwarnings(...) must run before the imports that would otherwise emit at import time.
+"**/scripts/evaluate_rag.py" = ["E402"]
+# sys.path.insert(...) must run before importing the conf.* package it's making importable.
+"**/ml-clustering/tests/conftest.py" = ["E402"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "src"]

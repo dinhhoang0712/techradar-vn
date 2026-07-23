@@ -26,6 +26,11 @@
         <neo4j-driver.version>5.28.4</neo4j-driver.version>
         <jjwt.version>0.12.5</jjwt.version>
         <lombok.version>1.18.30</lombok.version>
+        <!-- Override Spring Boot 3.4.0's managed 1.20.4: its bundled docker-java can't negotiate
+             with newer Docker Engine API versions (this host runs Docker Engine 29.x / API 1.54,
+             min supported 1.40) - the ping probe in UnixSocketClientProviderStrategy hardcodes an
+             old API version and gets rejected outright. -->
+        <testcontainers.version>1.21.4</testcontainers.version>
     </properties>
 
     <dependencies>
@@ -45,6 +50,15 @@
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>r2dbc-postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- R2DBC connection pooling. Without this on the classpath, spring.r2dbc.pool.* below is a
+             no-op and every request opens a fresh Postgres connection instead of reusing one. Also
+             what emits the r2dbc_pool_* metrics consumed by the Grafana dashboard. -->
+        <dependency>
+            <groupId>io.r2dbc</groupId>
+            <artifactId>r2dbc-pool</artifactId>
             <scope>runtime</scope>
         </dependency>
 
@@ -112,6 +126,12 @@
         <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>context-propagation</artifactId>
+        </dependency>
+
+        <!-- Exposes /actuator/prometheus in Prometheus' text exposition format -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
 
         <!-- Validation -->
@@ -191,24 +211,22 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- R2DBC Test utilities -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-testcontainers</artifactId>
-            <scope>test</scope>
-        </dependency>
-
+        <!-- Testcontainers: real Postgres/Neo4j (+ GenericContainer for Redis, from the core
+             artifact these two pull in transitively) for IntegrationTestSupport, replacing the
+             old requirement to hand-start Postgres/Neo4j/Redis via the docker CLI and export
+             POSTGRES_HOST/NEO4J_URI/REDIS_HOST before running integration tests. Versions come
+             from spring-boot-dependencies' managed testcontainers-bom import. -->
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>postgresql</artifactId>
             <scope>test</scope>
         </dependency>
-
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>neo4j</artifactId>
             <scope>test</scope>
         </dependency>
+
     </dependencies>
 
     <build>

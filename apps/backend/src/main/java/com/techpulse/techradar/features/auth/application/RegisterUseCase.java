@@ -1,7 +1,5 @@
 package com.techpulse.techradar.features.auth.application;
 
-import com.techpulse.techradar.features.auth.adapters.input.LoginResponse;
-import com.techpulse.techradar.features.auth.adapters.input.RegisterRequest;
 import com.techpulse.techradar.features.auth.domain.User;
 import com.techpulse.techradar.features.auth.ports.UserRepository;
 import com.techpulse.techradar.shared.exception.ConflictException;
@@ -51,6 +49,6 @@ public class RegisterUseCase {
         return userRepository.save(newUser)
                 .doOnNext(user -> log.info("User registered: id={}, email={}, tier={}",
                         user.getId(), user.getEmail(), user.getSubscriptionTier()))
-                .map(tokenIssuer::issueFor);
+                .flatMap(tokenIssuer::issueFor);
     }
 }

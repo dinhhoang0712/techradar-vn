@@ -2,12 +2,12 @@
 Các scheduled job của Data Platform.
 Mỗi job được gọi bởi APScheduler và tự manage exception.
 """
+
 import time
 
 import requests
-from loguru import logger
-
 from config import Settings
+from loguru import logger
 
 
 def job_neo4j_article_sync(settings: Settings) -> None:
@@ -15,6 +15,7 @@ def job_neo4j_article_sync(settings: Settings) -> None:
     logger.info("=== JOB: neo4j_article_sync ===")
     try:
         from gold.neo4j_article_sync import run
+
         rows = run(settings)
         logger.info("neo4j_article_sync: {} articles synced", rows)
     except Exception:
@@ -26,6 +27,7 @@ def job_neo4j_job_sync(settings: Settings) -> None:
     logger.info("=== JOB: neo4j_job_sync ===")
     try:
         from gold.neo4j_job_sync import run
+
         rows = run(settings)
         logger.info("neo4j_job_sync: {} jobs synced", rows)
     except Exception:
@@ -37,6 +39,7 @@ def job_gold_pg_etl(settings: Settings) -> None:
     logger.info("=== JOB: gold_pg_etl ===")
     try:
         from gold.pg_etl import run
+
         rows = run(settings)
         logger.info("gold_pg_etl: {} rows upserted", rows)
     except Exception:
@@ -48,6 +51,7 @@ def job_neo4j_enricher(settings: Settings) -> None:
     logger.info("=== JOB: neo4j_enricher ===")
     try:
         from gold.neo4j_enricher import run
+
         results = run(settings)
         logger.info("neo4j_enricher: {}", results)
     except Exception:
@@ -62,6 +66,7 @@ def job_tech_dedup(settings: Settings) -> None:
     logger.info("=== JOB: tech_dedup ===")
     try:
         from gold.tech_dedup import run
+
         results = run(settings)
         logger.info("tech_dedup: {}", results)
     except Exception:
@@ -99,19 +104,34 @@ def job_retrain_clustering(settings: Settings) -> None:
         logger.info("retrain_clustering: {}", resp.json().get("message"))
     except requests.exceptions.ConnectionError:
         logger.warning("retrain_clustering: ml-clustering không reach được tại {}", trigger_url)
-        log_pipeline_run(pg_conn, "retrain_clustering", "failed",
-                         error_msg=f"ml-clustering không reach được tại {trigger_url}", run_id=run_id)
+        log_pipeline_run(
+            pg_conn,
+            "retrain_clustering",
+            "failed",
+            error_msg=f"ml-clustering không reach được tại {trigger_url}",
+            run_id=run_id,
+        )
         pg_conn.close()
         return
     except requests.exceptions.HTTPError as e:
         if e.response.status_code == 409:
             logger.warning("retrain_clustering: pipeline đang chạy, bỏ qua lần này")
-            log_pipeline_run(pg_conn, "retrain_clustering", "failed",
-                             error_msg="Bỏ qua: pipeline đã đang chạy từ lần trigger khác", run_id=run_id)
+            log_pipeline_run(
+                pg_conn,
+                "retrain_clustering",
+                "failed",
+                error_msg="Bỏ qua: pipeline đã đang chạy từ lần trigger khác",
+                run_id=run_id,
+            )
         else:
             logger.error("retrain_clustering: HTTP {} từ {}", e.response.status_code, trigger_url)
-            log_pipeline_run(pg_conn, "retrain_clustering", "failed",
-                             error_msg=f"HTTP {e.response.status_code} từ {trigger_url}", run_id=run_id)
+            log_pipeline_run(
+                pg_conn,
+                "retrain_clustering",
+                "failed",
+                error_msg=f"HTTP {e.response.status_code} từ {trigger_url}",
+                run_id=run_id,
+            )
         pg_conn.close()
         return
     except Exception as exc:
@@ -136,7 +156,9 @@ def job_retrain_clustering(settings: Settings) -> None:
             break
 
     if final_state is None:
-        msg = f"Timeout sau {settings.clustering_retrain_max_wait_s}s chờ pipeline hoàn tất — không rõ kết quả cuối cùng"
+        msg = (
+            f"Timeout sau {settings.clustering_retrain_max_wait_s}s chờ pipeline hoàn tất — không rõ kết quả cuối cùng"
+        )
         logger.warning("retrain_clustering: {}", msg)
         log_pipeline_run(pg_conn, "retrain_clustering", "failed", error_msg=msg, run_id=run_id)
     elif final_state["status"] == "success":
@@ -177,12 +199,14 @@ def job_embed_trigger(settings: Settings) -> None:
         log_pipeline_run(pg_conn, "embed_trigger", "success", run_id=run_id)
     except requests.exceptions.ConnectionError:
         logger.warning("embed_trigger: ai-rag-core không reach được tại {}", url)
-        log_pipeline_run(pg_conn, "embed_trigger", "failed",
-                         error_msg=f"ai-rag-core không reach được tại {url}", run_id=run_id)
+        log_pipeline_run(
+            pg_conn, "embed_trigger", "failed", error_msg=f"ai-rag-core không reach được tại {url}", run_id=run_id
+        )
     except requests.exceptions.HTTPError as e:
         logger.error("embed_trigger: HTTP {} từ {}", e.response.status_code, url)
-        log_pipeline_run(pg_conn, "embed_trigger", "failed",
-                         error_msg=f"HTTP {e.response.status_code} từ {url}", run_id=run_id)
+        log_pipeline_run(
+            pg_conn, "embed_trigger", "failed", error_msg=f"HTTP {e.response.status_code} từ {url}", run_id=run_id
+        )
     except Exception as exc:
         logger.exception("embed_trigger FAILED")
         log_pipeline_run(pg_conn, "embed_trigger", "failed", error_msg=str(exc), run_id=run_id)

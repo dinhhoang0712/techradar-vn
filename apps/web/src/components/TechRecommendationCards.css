@@ -44,6 +44,23 @@
 
 .rec-card:hover { border-color: var(--primary); }
 
+/* Deep-linked from a job-match notification (JobMatchDispatcher's /career?highlight=...) */
+.rec-card--highlighted {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-glow);
+}
+
+.rec-highlight-badge {
+    align-self: flex-start;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--primary);
+    background: var(--primary-glow);
+    border-radius: 10px;
+    padding: 2px 8px;
+    margin-bottom: 2px;
+}
+
 .rec-header {
     display: flex;
     align-items: center;
@@ -125,9 +142,59 @@
     white-space: nowrap;
 }
 
-.rec-path {
-    font-size: 0.75rem;
+/* ── Career GPS: tech_path visual route (start skill → ... → target skill) ── */
+.rec-path-gps {
+    display: flex;
+    align-items: center;
+    margin-top: 6px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--border);
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+
+.rec-path-step {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.rec-path-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-3);
+    flex-shrink: 0;
+}
+
+.rec-path-step--start .rec-path-dot {
+    background: var(--text-2);
+}
+
+.rec-path-step--target .rec-path-dot {
+    background: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-glow);
+}
+
+.rec-path-label {
+    font-size: 0.72rem;
     color: var(--text-3);
-    margin: 4px 0 0;
-    line-height: 1.4;
+    white-space: nowrap;
+    margin: 0 6px;
+}
+
+.rec-path-step--start .rec-path-label {
+    color: var(--text-2);
+}
+
+.rec-path-step--target .rec-path-label {
+    color: var(--primary);
+    font-weight: 600;
+}
+
+.rec-path-line {
+    width: 16px;
+    height: 1px;
+    background: var(--border);
+    flex-shrink: 0;
 }

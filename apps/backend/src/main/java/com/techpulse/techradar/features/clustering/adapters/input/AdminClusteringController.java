@@ -5,16 +5,20 @@ import com.techpulse.techradar.features.clustering.application.GetPipelineStatus
 import com.techpulse.techradar.features.clustering.application.TriggerPipelineUseCase;
 import com.techpulse.techradar.features.clustering.application.UpdateClusterLabelUseCase;
 import com.techpulse.techradar.shared.dto.ApiResponse;
+import com.techpulse.techradar.shared.redis.RedisLock;
 import com.techpulse.techradar.shared.security.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -28,14 +32,17 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AdminClusteringController {
 
+    private static final String TRIGGER_LOCK_KEY = "clustering:trigger:lock";
+
     private final GetPipelineStatusUseCase getPipelineStatusUseCase;
     private final TriggerPipelineUseCase triggerPipelineUseCase;
     private final GetPipelineRunsUseCase getPipelineRunsUseCase;
     private final UpdateClusterLabelUseCase updateClusterLabelUseCase;
+    private final ReactiveStringRedisTemplate redisTemplate;
 
     @Operation(summary = "Get the current clustering retrain pipeline status")
     @GetMapping("/pipeline/status")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('clustering:manage')")
     public Mono<ResponseEntity<ApiResponse<Map<String, Object>>>> pipelineStatus() {
         return getPipelineStatusUseCase.execute()
                 .map(status -> ResponseEntity.ok(ApiResponse.success(status, "Pipeline status retrieved")));
@@ -43,15 +50,26 @@ public class AdminClusteringController {
 
     @Operation(summary = "Trigger an immediate clustering retrain instead of waiting for the next schedule")
     @PostMapping("/pipeline/trigger")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('clustering:manage')")
     public Mono<ResponseEntity<ApiResponse<Map<String, Object>>>> triggerPipeline() {
-        return triggerPipelineUseCase.execute()
-                .map(result -> ResponseEntity.ok(ApiResponse.success(result, "Pipeline retrain started")));
+        // Debounce lock only — an in-flight run is still rejected downstream with 409 by the
+        // ml-clustering Python service itself; this just stops two rapid clicks from both
+        // reaching that check at once.
+        return RedisLock.tryAcquire(redisTemplate, TRIGGER_LOCK_KEY, Duration.ofSeconds(10))
+                .flatMap(acquired -> {
+                    if (!acquired) {
+                        return Mono.just(ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(
+                                ApiResponse.<Map<String, Object>>error(
+                                        "Vừa mới kích hoạt, vui lòng đợi vài giây rồi thử lại", "CLUSTERING_TRIGGER_DEBOUNCED")));
+                    }
+                    return triggerPipelineUseCase.execute()
+                            .map(result -> ResponseEntity.ok(ApiResponse.success(result, "Pipeline retrain started")));
+                });
     }
 
     @Operation(summary = "List past training runs (model quality metrics over time)")
     @GetMapping("/pipeline/runs")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('clustering:manage')")
     public Mono<ResponseEntity<ApiResponse<List<Map<String, Object>>>>> pipelineRuns() {
         return getPipelineRunsUseCase.execute()
                 .collectList()
@@ -60,7 +78,7 @@ public class AdminClusteringController {
 
     @Operation(summary = "Override an AI-generated cluster label")
     @PutMapping("/clusters/{clusterId}/label")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('clustering:manage')")
     public Mono<ResponseEntity<ApiResponse<Map<String, Object>>>> updateClusterLabel(
             @PathVariable String clusterId,
             @RequestBody UpdateClusterLabelRequest request

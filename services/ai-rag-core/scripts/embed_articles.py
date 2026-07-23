@@ -19,6 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from neo4j import AsyncGraphDatabase
+
 from app.config import get_settings
 from app.core.embedder import embed_batch
 
@@ -119,9 +120,7 @@ async def main() -> None:
 
         # Verify
         async with driver.session() as session:
-            result = await session.run(
-                "MATCH (a:Article) RETURN count(a) AS total, count(a.embedding) AS embedded"
-            )
+            result = await session.run("MATCH (a:Article) RETURN count(a) AS total, count(a.embedding) AS embedded")
             rec = await result.single()
             print(f"\nKiểm tra: {rec['embedded']} / {rec['total']} Article đã có embedding trong DB.")
 

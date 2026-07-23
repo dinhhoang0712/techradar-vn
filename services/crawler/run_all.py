@@ -4,7 +4,9 @@ Chạy tất cả crawlers tuần tự, sau đó sleep CRAWL_INTERVAL giờ rồ
 (hoặc chạy ngay nếu nhận được trigger thủ công từ admin qua Redis).
 Mỗi crawler chạy trong subprocess riêng để Chrome process không bị leak.
 """
+
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -14,11 +16,15 @@ from datetime import datetime
 
 import redis
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+
 CRAWL_INTERVAL_HOURS = int(os.getenv("CRAWL_INTERVAL_HOURS", "6"))
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 TRIGGER_CHANNEL = "crawler:trigger"
+COMPLETED_CHANNEL = "crawler:completed"
 STATUS_KEY = "crawler:status"
-STATUS_TTL_SECONDS = 36000  # comfortably above the worst-case 8 x 3600s sequential run
+STATUS_TTL_SECONDS = 36000  # comfortably above the worst-case 9 x 3600s sequential run
 
 CRAWLERS = [
     # Tin tức công nghệ
@@ -29,6 +35,12 @@ CRAWLERS = [
     # Việc làm IT
     "TopCV.py",
     "ITviec.py",
+    "VietnamWorks.py",
+    "JobsGO.py",
+    # TopDev.py: viết xong nhưng CHƯA đăng ký — topdev.vn (không www) chặn/treo
+    # kết nối từ container này, www.topdev.vn thì route /viec-lam-it redirect
+    # sang login-wall. Cần retry sau (mạng khác, hoặc liên hệ TopDev) trước khi
+    # đưa vào loop production. Xem TopDev.py để chạy thử lại.
     # API-based (không cần Selenium, chạy nhanh)
     "Viblo.py",
     "GitHub.py",
@@ -41,7 +53,7 @@ wake_event = threading.Event()
 
 
 def run_crawler(script: str) -> bool:
-    print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Starting {script}...", flush=True)
+    logger.info("Starting %s...", script)
     try:
         result = subprocess.run(
             [sys.executable, script],
@@ -49,21 +61,27 @@ def run_crawler(script: str) -> bool:
             cwd=os.path.dirname(os.path.abspath(__file__)),
         )
         if result.returncode == 0:
-            print(f"[OK] {script} finished successfully.", flush=True)
+            logger.info("%s finished successfully.", script)
             return True
         else:
-            print(f"[WARN] {script} exited with code {result.returncode}.", flush=True)
+            logger.warning("%s exited with code %d.", script, result.returncode)
             return False
     except subprocess.TimeoutExpired:
-        print(f"[WARN] {script} timed out after 60 minutes.", flush=True)
+        logger.warning("%s timed out after 60 minutes.", script)
         return False
-    except Exception as e:
-        print(f"[ERROR] {script} failed: {e}", flush=True)
+    except Exception:
+        logger.exception("%s failed", script)
         return False
 
 
-def _write_status(state: str, started_at: str, finished_at: str = None, results: dict = None,
-                   success_count: int = None, total: int = None) -> None:
+def _write_status(
+    state: str,
+    started_at: str,
+    finished_at: str = None,
+    results: dict = None,
+    success_count: int = None,
+    total: int = None,
+) -> None:
     payload = {
         "state": state,
         "started_at": started_at,
@@ -75,7 +93,7 @@ def _write_status(state: str, started_at: str, finished_at: str = None, results:
     try:
         redis_client.set(STATUS_KEY, json.dumps(payload), ex=STATUS_TTL_SECONDS)
     except redis.exceptions.RedisError as e:
-        print(f"[WARN] Could not write crawler status to Redis: {e}", flush=True)
+        logger.warning("Could not write crawler status to Redis: %s", e)
 
 
 def _listen_for_trigger() -> None:
@@ -88,38 +106,52 @@ def _listen_for_trigger() -> None:
         try:
             pubsub = redis_client.pubsub()
             pubsub.subscribe(TRIGGER_CHANNEL)
-            print(f"[INFO] Subscribed to '{TRIGGER_CHANNEL}' for on-demand crawl triggers.", flush=True)
+            logger.info("Subscribed to '%s' for on-demand crawl triggers.", TRIGGER_CHANNEL)
             for message in pubsub.listen():
                 if message["type"] == "message":
-                    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Manual trigger received, "
-                          f"waking crawl loop.", flush=True)
+                    logger.info("Manual trigger received, waking crawl loop.")
                     wake_event.set()
         except redis.exceptions.RedisError as e:
-            print(f"[WARN] Redis pubsub connection lost ({e}); retrying in 5s.", flush=True)
+            logger.warning("Redis pubsub connection lost (%s); retrying in 5s.", e)
             time.sleep(5)
 
 
 def main() -> None:
-    print(f"Crawler service starting. Interval: {CRAWL_INTERVAL_HOURS}h", flush=True)
+    logger.info("Crawler service starting. Interval: %dh", CRAWL_INTERVAL_HOURS)
     threading.Thread(target=_listen_for_trigger, daemon=True, name="redis-trigger-listener").start()
 
     while True:
         start = datetime.now()
-        print(f"\n{'='*60}", flush=True)
-        print(f"Crawl run started at {start.strftime('%Y-%m-%d %H:%M:%S')}", flush=True)
-        print(f"{'='*60}", flush=True)
+        logger.info("=" * 60)
+        logger.info("Crawl run started at %s", start.strftime("%Y-%m-%d %H:%M:%S"))
+        logger.info("=" * 60)
         _write_status("running", started_at=start.isoformat())
 
         results = {script: run_crawler(script) for script in CRAWLERS}
 
         success = sum(1 for ok in results.values() if ok)
         finished = datetime.now()
-        _write_status("idle", started_at=start.isoformat(), finished_at=finished.isoformat(),
-                       results=results, success_count=success, total=len(CRAWLERS))
-        print(f"\nCrawl run complete: {success}/{len(CRAWLERS)} crawlers succeeded.", flush=True)
+        _write_status(
+            "idle",
+            started_at=start.isoformat(),
+            finished_at=finished.isoformat(),
+            results=results,
+            success_count=success,
+            total=len(CRAWLERS),
+        )
+        # Fire-and-forget: an admin notification is a nice-to-have, must never block/fail the
+        # crawl loop itself.
+        try:
+            redis_client.publish(COMPLETED_CHANNEL, json.dumps({
+                "success_count": success,
+                "total": len(CRAWLERS),
+            }))
+        except redis.exceptions.RedisError as e:
+            logger.warning("Could not publish crawl completion to Redis: %s", e)
+        logger.info("Crawl run complete: %d/%d crawlers succeeded.", success, len(CRAWLERS))
 
         sleep_seconds = CRAWL_INTERVAL_HOURS * 3600
-        print(f"Next run in up to {CRAWL_INTERVAL_HOURS}h (or immediately if triggered from admin).", flush=True)
+        logger.info("Next run in up to %dh (or immediately if triggered from admin).", CRAWL_INTERVAL_HOURS)
         wake_event.wait(timeout=sleep_seconds)
         wake_event.clear()
 

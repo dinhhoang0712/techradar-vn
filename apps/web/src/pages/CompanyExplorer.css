@@ -216,6 +216,126 @@
     margin-bottom: 18px;
 }
 
+.tech-health-score {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 16px 18px;
+    margin-bottom: 18px;
+    border-radius: var(--radius, 12px);
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+}
+
+.tech-health-score--loading {
+    align-items: center;
+    justify-content: center;
+    min-height: 72px;
+}
+
+.tech-health-score--empty {
+    padding: 12px 18px;
+}
+
+.tech-health-empty-hint {
+    color: var(--text-3);
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+.tech-health-score-main {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.tech-health-score-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.tech-health-label {
+    margin: 0;
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--text);
+}
+
+.tech-health-score--good .tech-health-label {
+    color: var(--green);
+}
+
+.tech-health-score--risk .tech-health-label {
+    color: var(--danger-light);
+}
+
+.tech-health-coverage {
+    margin: 0;
+    color: var(--text-3);
+    font-size: 0.78rem;
+}
+
+.tech-health-ring--good stop {
+    stop-color: var(--green);
+}
+
+.tech-health-ring--neutral stop {
+    stop-color: var(--primary);
+}
+
+.tech-health-ring--risk stop {
+    stop-color: var(--danger);
+}
+
+.tech-health-highlights {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+}
+
+.tech-health-highlight-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.tech-health-highlight-label {
+    color: var(--text-2);
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    min-width: 78px;
+}
+
+.tech-health-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.tech-health-chip {
+    border-radius: 14px;
+    font-size: 0.78rem;
+    padding: 3px 10px;
+}
+
+.tech-health-chip--strength {
+    background: var(--green-glow);
+    border: 1px solid var(--green);
+    color: var(--green);
+}
+
+.tech-health-chip--risk {
+    background: var(--danger-glow);
+    border: 1px solid var(--danger);
+    color: var(--danger-light);
+}
+
 .company-detail-section {
     margin-bottom: 18px;
 }
@@ -471,17 +591,22 @@
     font-size: 0.78rem;
 }
 
-.company-pagination {
+.company-scroll-status {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 16px;
+    min-height: 40px;
     margin-top: 24px;
 }
 
-.pagination-page {
+.scroll-status-loading {
     color: var(--text-2);
-    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.scroll-status-end {
+    color: var(--text-3);
+    font-size: 0.85rem;
 }
 
 @media (max-width: 900px) {

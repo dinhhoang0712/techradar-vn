@@ -2,6 +2,7 @@ package com.techpulse.techradar.features.company.adapters.input;
 
 import com.techpulse.techradar.features.company.domain.CompanyMention;
 import com.techpulse.techradar.features.company.domain.CompanyProfile;
+import com.techpulse.techradar.features.company.domain.CompanyTechHealthScore;
 import com.techpulse.techradar.features.company.domain.SimilarCompany;
 import lombok.Builder;
 import lombok.Value;
@@ -70,6 +71,30 @@ public class CompanyDtos {
                     .location(s.location())
                     .sharedTechs(s.sharedTechs())
                     .score(s.score())
+                    .build();
+        }
+    }
+
+    @Value
+    @Builder
+    public static class CompanyTechHealthScoreResponse {
+        boolean available;
+        int score;
+        String label;
+        int stackSize;
+        int trackedCount;
+        List<String> strengths;
+        List<String> watchOuts;
+
+        public static CompanyTechHealthScoreResponse from(CompanyTechHealthScore s) {
+            return CompanyTechHealthScoreResponse.builder()
+                    .available(s.available())
+                    .score(s.score())
+                    .label(s.label())
+                    .stackSize(s.stackSize())
+                    .trackedCount(s.trackedCount())
+                    .strengths(s.strengths())
+                    .watchOuts(s.watchOuts())
                     .build();
         }
     }

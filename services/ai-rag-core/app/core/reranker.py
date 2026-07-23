@@ -86,10 +86,7 @@ def rerank(query: str, candidates: list[dict], top_k: int = 5) -> list[dict]:
 
     model = get_reranker()
 
-    pairs = [
-        (query, _build_passage(c))
-        for c in candidates
-    ]
+    pairs = [(query, _build_passage(c)) for c in candidates]
 
     scores = model.predict(pairs)
 
@@ -104,7 +101,7 @@ def rerank(query: str, candidates: list[dict], top_k: int = 5) -> list[dict]:
 
 def _build_passage(candidate: dict, max_chars: int = 1000) -> str:
     """Ghép title + content thành passage để cho reranker chấm điểm."""
-    title   = (candidate.get("title") or "").strip()
+    title = (candidate.get("title") or "").strip()
     content = (candidate.get("content") or "").strip()
     passage = f"{title} {content}".strip()
     return passage[:max_chars]

@@ -6,10 +6,10 @@ writer không làm được.
 
 Chạy: mỗi đêm lúc 5:00 AM.
 """
-from loguru import logger
 
 from common.db import get_neo4j_driver, get_pg_conn, log_pipeline_run
 from config import Settings
+from loguru import logger
 
 # (Company)-[:USES]->(Technology): suy ra từ bài viết đề cập cả company lẫn tech
 _COMPANY_USES_TECH = """
@@ -92,15 +92,13 @@ def run(settings: Settings) -> dict:
 
         total = sum(results.values())
         logger.info("Neo4j Enricher: done — {}", results)
-        log_pipeline_run(pg_conn, "neo4j_enricher", "success",
-                         rows_affected=total, run_id=run_id)
+        log_pipeline_run(pg_conn, "neo4j_enricher", "success", rows_affected=total, run_id=run_id)
         return results
 
     except Exception as exc:
         logger.exception("Neo4j Enricher failed")
         try:
-            log_pipeline_run(pg_conn, "neo4j_enricher", "failed",
-                             error_msg=str(exc), run_id=run_id)
+            log_pipeline_run(pg_conn, "neo4j_enricher", "failed", error_msg=str(exc), run_id=run_id)
         except Exception:
             pass
         raise

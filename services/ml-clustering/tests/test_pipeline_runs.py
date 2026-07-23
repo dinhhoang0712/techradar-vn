@@ -1,6 +1,7 @@
 """Kiểm tra GET /pipeline/runs — đọc lịch sử các lần train (is_best=true) từ MLflow,
 phục vụ biểu đồ chất lượng model theo thời gian ở admin (phát hiện model bị suy giảm
 qua các lần retrain thay vì chỉ nhìn thấy trạng thái "thành công/thất bại")."""
+
 import importlib.util
 import sys
 from pathlib import Path
@@ -47,9 +48,11 @@ def _mock_run(run_id, algorithm, metrics, start_time, end_time, parent_run_id="r
 
 def test_pipeline_runs_maps_mlflow_history_ordered_by_recency(client):
     best_run = _mock_run(
-        "run-best-1", "hdbscan",
+        "run-best-1",
+        "hdbscan",
         {"silhouette": 0.42, "dbcv": 0.31},
-        1_700_000_000_000, 1_700_000_060_000,
+        1_700_000_000_000,
+        1_700_000_060_000,
     )
     parent_run = MagicMock(data=MagicMock(tags={"snapshot": "2026-07-18-0900"}))
 
@@ -89,7 +92,12 @@ def test_pipeline_runs_returns_empty_list_when_experiment_missing(client):
 def test_pipeline_runs_tolerates_missing_parent_run(client):
     """Nếu không resolve được parent run (đã bị xoá/lỗi mạng) thì vẫn trả run, chỉ thiếu snapshot_tag."""
     best_run = _mock_run(
-        "run-best-2", "hdbscan", {"silhouette": 0.5}, 1_700_000_000_000, None, parent_run_id=None,
+        "run-best-2",
+        "hdbscan",
+        {"silhouette": 0.5},
+        1_700_000_000_000,
+        None,
+        parent_run_id=None,
     )
     fake_client = MagicMock()
     fake_client.get_experiment_by_name.return_value = MagicMock(experiment_id="exp-1")

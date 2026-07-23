@@ -28,6 +28,7 @@ EMB_DIM = 768
 EMB_COLS = [f"article_emb_{i}" for i in range(EMB_DIM)]
 _LAMBDA = 1 / 365  # decay rate cho weighted_by_recency
 
+
 def aggregate_article_embeddings(
     df_articles: pd.DataFrame,
     df_edges_mentions: pd.DataFrame,
@@ -44,9 +45,7 @@ def aggregate_article_embeddings(
     """
     # Chỉ giữ Article có embedding hợp lệ
     df_art = df_articles[df_articles["embedding"].notna()].copy()
-    df_art["embedding"] = df_art["embedding"].apply(
-        lambda e: np.array(e, dtype=np.float32)
-    )
+    df_art["embedding"] = df_art["embedding"].apply(lambda e: np.array(e, dtype=np.float32))
 
     # Join: article → tech qua edges
     merged = df_edges_mentions.merge(
@@ -61,16 +60,18 @@ def aggregate_article_embeddings(
     for tech_id, group in merged.groupby("tech_id"):
         n = len(group)
         if n < min_articles_per_tech:
-            results.append({
-                "tech_id": tech_id,
-                **dict(zip(EMB_COLS, np.zeros(EMB_DIM, dtype=np.float32))),
-                "content_n_articles": 0,
-            })
+            results.append(
+                {
+                    "tech_id": tech_id,
+                    **dict(zip(EMB_COLS, np.zeros(EMB_DIM, dtype=np.float32))),
+                    "content_n_articles": 0,
+                }
+            )
             continue
 
         # Stack embeddings → normalize L2 từng vector trước khi aggregate
-        embs = np.vstack(group["embedding"].values)           # (n, 768)
-        embs = normalize(embs, norm="l2")                      # cosine-safe
+        embs = np.vstack(group["embedding"].values)  # (n, 768)
+        embs = normalize(embs, norm="l2")  # cosine-safe
 
         if method == "weighted_by_recency":
             dates = pd.to_datetime(group["published_date"], errors="coerce")
@@ -82,23 +83,33 @@ def aggregate_article_embeddings(
         else:
             vec = embs.mean(axis=0)
 
-        results.append({
-            "tech_id": tech_id,
-            **dict(zip(EMB_COLS, vec.astype(np.float32))),
-            "content_n_articles": n,
-        })
+        results.append(
+            {
+                "tech_id": tech_id,
+                **dict(zip(EMB_COLS, vec.astype(np.float32))),
+                "content_n_articles": n,
+            }
+        )
 
-    df_result = pd.DataFrame(results)
+    # columns= explicit vì `results` có thể rỗng (VD snapshot chưa có edges_article_mentions_tech,
+    # hoặc không Article nào có embedding hợp lệ) — pd.DataFrame([]) không có cột nào, làm
+    # df_result["tech_id"] bên dưới raise KeyError thay vì rơi đúng nhánh "mọi tech đều thiếu".
+    df_result = pd.DataFrame(results, columns=["tech_id", *EMB_COLS, "content_n_articles"])
 
     # Đảm bảo đủ tất cả tech — tech thiếu → zero-vector
     present = set(df_result["tech_id"])
     missing = [t for t in all_tech_ids if t not in present]
     if missing:
-        zeros = pd.DataFrame([{
-            "tech_id": t,
-            **dict(zip(EMB_COLS, np.zeros(EMB_DIM, dtype=np.float32))),
-            "content_n_articles": 0,
-        } for t in missing])
+        zeros = pd.DataFrame(
+            [
+                {
+                    "tech_id": t,
+                    **dict(zip(EMB_COLS, np.zeros(EMB_DIM, dtype=np.float32))),
+                    "content_n_articles": 0,
+                }
+                for t in missing
+            ]
+        )
         df_result = pd.concat([df_result, zeros], ignore_index=True)
 
     df_result = df_result.set_index("tech_id").loc[all_tech_ids].reset_index()
@@ -115,6 +126,7 @@ def aggregate_article_embeddings(
 def _get_model(model_name: str):
     """Load SentenceTransformer — cache trong RAM, không reload mỗi lần gọi."""
     from sentence_transformers import SentenceTransformer
+
     logger.info("Loading embedder model: %s", model_name)
     return SentenceTransformer(model_name)
 
@@ -162,9 +174,10 @@ def fill_missing_content_with_name_embedding(
 
     fallback_embs = embed_tech_names_fallback(names)  # (N, 768)
 
-    for i, tech_id in enumerate(missing_ids):
-        idx = df.index[df["tech_id"] == tech_id][0]
-        df.loc[idx, EMB_COLS] = fallback_embs[i]
+    # `mask` giữ nguyên thứ tự hàng gốc của df, và missing_ids/fallback_embs
+    # được tạo từ chính `mask` đó → đã align 1-1 theo hàng, gán vector hoá
+    # trực tiếp thay vì lặp + linear scan `df["tech_id"] == tech_id` cho từng tech.
+    df.loc[mask, EMB_COLS] = fallback_embs
 
     # L2-normalize toàn bộ embedding sau khi merge
     emb_matrix = df[EMB_COLS].values.astype(np.float32)

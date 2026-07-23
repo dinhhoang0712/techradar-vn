@@ -1,6 +1,7 @@
 package com.techpulse.techradar.features.radar.etl;
 
 import com.techpulse.techradar.features.radar.application.RadarCacheKeys;
+import com.techpulse.techradar.features.radar.realtime.RadarBroadcaster;
 import com.techpulse.techradar.shared.redis.ReactiveRedisCache;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +21,7 @@ public class AnalyticsScheduler {
 
     private final RadarAnalyticsEtlService etlService;
     private final ReactiveRedisCache redisCache;
+    private final RadarBroadcaster radarBroadcaster;
 
     @Scheduled(cron = "${app.analytics.etl.cron:0 0 3 * * *}")
     public void scheduledRebuild() {
@@ -27,8 +29,9 @@ public class AnalyticsScheduler {
         etlService.rebuild()
                 .doOnSuccess(count -> log.info("Scheduled ETL done: {} rows, evicting radar cache", count))
                 .flatMap(count -> redisCache.evictByPattern(RadarCacheKeys.EVICT_ALL_PATTERN).thenReturn(count))
+                .flatMap(count -> radarBroadcaster.publishLatestSnapshot().thenReturn(count))
                 .subscribe(
-                        count -> log.info("Radar cache evicted after ETL"),
+                        count -> log.info("Radar cache evicted and live snapshot broadcast after ETL"),
                         err -> log.error("Scheduled ETL failed", err));
     }
 }

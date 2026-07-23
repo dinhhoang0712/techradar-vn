@@ -1,7 +1,5 @@
 package com.techpulse.techradar.features.auth.application;
 
-import com.techpulse.techradar.features.auth.adapters.input.LoginRequest;
-import com.techpulse.techradar.features.auth.adapters.input.LoginResponse;
 import com.techpulse.techradar.features.auth.domain.User;
 import com.techpulse.techradar.features.auth.ports.UserRepository;
 import com.techpulse.techradar.shared.exception.InvalidCredentialsException;
@@ -46,6 +44,6 @@ public class LoginUseCase {
                 throw new InvalidCredentialsException("User account is inactive");
             }
             return user;
-        }).map(tokenIssuer::issueFor);
+        }).flatMap(tokenIssuer::issueFor);
     }
 }

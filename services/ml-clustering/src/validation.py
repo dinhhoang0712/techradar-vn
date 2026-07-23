@@ -1,10 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Iterable
 
 import pandas as pd
-
 from conf.config import FeatureParams
 
 
@@ -143,10 +142,7 @@ def _check_foreign_key(
         return
 
     sample = sorted(map(str, missing))[:5]
-    message = (
-        f"{len(missing)} distinct {edge_col} values do not exist in {target_name}; "
-        f"sample={sample}"
-    )
+    message = f"{len(missing)} distinct {edge_col} values do not exist in {target_name}; sample={sample}"
     if error:
         report.add_error(f"{edge_name}.{edge_col}.foreign_key", message)
     else:
@@ -270,7 +266,13 @@ def validate_stage2_snapshot(
         report, "edges_article_mentions_tech", df_edges_mentions, "tech_id", "technologies", tech_ids, error=False
     )
     _check_foreign_key(
-        report, "edges_company_uses_tech", df_edges_company_uses_tech, "company_id", "companies", company_ids, error=True
+        report,
+        "edges_company_uses_tech",
+        df_edges_company_uses_tech,
+        "company_id",
+        "companies",
+        company_ids,
+        error=True,
     )
     _check_foreign_key(
         report, "edges_company_uses_tech", df_edges_company_uses_tech, "tech_id", "technologies", tech_ids, error=False
@@ -298,8 +300,7 @@ def validate_stage2_snapshot(
     _warn_duplicate_edges(report, "edges_tech_related_tech", df_edges_tech_related, ["tech_id_a", "tech_id_b"])
 
     require_article_embeddings = (
-        not feature_params.use_name_embedding
-        and feature_params.article_embedding_aggregation.enabled
+        not feature_params.use_name_embedding and feature_params.article_embedding_aggregation.enabled
     )
     _validate_article_embeddings(report, df_article, required=require_article_embeddings)
 

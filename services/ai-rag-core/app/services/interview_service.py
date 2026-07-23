@@ -9,6 +9,7 @@ Mock Interview Service — AI đóng vai người phỏng vấn kỹ thuật.
 Stateless: client gửi kèm toàn bộ lịch sử câu hỏi-trả lời mỗi lần gọi, không lưu
 phiên phỏng vấn ở đây (khác `/chat`, giống `/career`, `/recommend`).
 """
+
 import logging
 import re
 from pathlib import Path
@@ -106,11 +107,16 @@ async def handle(req: InterviewRequest) -> InterviewResponse:
     if len(history) == 0:
         job_context = await _find_job_context(target_role, req.target_company)
         prompt = _load_template("interview_opening_template.txt").format(
-            target_role=target_role, target_company=target_company, job_context=job_context,
+            target_role=target_role,
+            target_company=target_company,
+            job_context=job_context,
         )
         question = await generate([system_message, {"role": "user", "content": prompt}])
         return InterviewResponse(
-            next_question=question.strip(), feedback_on_last_answer=None, is_final=False, turn=1,
+            next_question=question.strip(),
+            feedback_on_last_answer=None,
+            is_final=False,
+            turn=1,
         )
 
     transcript_so_far = _format_transcript(history)
@@ -119,24 +125,33 @@ async def handle(req: InterviewRequest) -> InterviewResponse:
     # ── Giữa buổi: nhận xét câu trả lời vừa rồi + hỏi câu tiếp theo ──
     if len(history) < MAX_TURNS:
         prompt = _load_template("interview_turn_template.txt").format(
-            target_role=target_role, target_company=target_company,
-            transcript_so_far=transcript_so_far, latest_answer=latest_answer,
+            target_role=target_role,
+            target_company=target_company,
+            transcript_so_far=transcript_so_far,
+            latest_answer=latest_answer,
         )
         raw = await generate([system_message, {"role": "user", "content": prompt}])
         feedback, question = _split_turn_response(raw)
         return InterviewResponse(
-            next_question=question, feedback_on_last_answer=feedback,
-            is_final=False, turn=len(history) + 1,
+            next_question=question,
+            feedback_on_last_answer=feedback,
+            is_final=False,
+            turn=len(history) + 1,
         )
 
     # ── Đủ số lượt: chấm điểm tổng kết ──
     prompt = _load_template("interview_final_template.txt").format(
-        target_role=target_role, target_company=target_company,
-        transcript_so_far=transcript_so_far, latest_answer=latest_answer,
+        target_role=target_role,
+        target_company=target_company,
+        transcript_so_far=transcript_so_far,
+        latest_answer=latest_answer,
     )
     raw = await generate([system_message, {"role": "user", "content": prompt}])
     score, summary = _extract_score(raw)
     return InterviewResponse(
-        next_question=None, feedback_on_last_answer=None, is_final=True,
-        turn=len(history), final_summary=InterviewFinalSummary(score=score, summary=summary),
+        next_question=None,
+        feedback_on_last_answer=None,
+        is_final=True,
+        turn=len(history),
+        final_summary=InterviewFinalSummary(score=score, summary=summary),
     )

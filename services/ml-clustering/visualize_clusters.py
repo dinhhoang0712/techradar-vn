@@ -1,10 +1,11 @@
+import json
+from pathlib import Path
+
+import matplotlib.patches as mpatches
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import json
 import umap
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-from pathlib import Path
 
 TAG = "2026-05-10"
 BASE = Path(__file__).parent
@@ -44,18 +45,30 @@ for cid in cluster_ids:
     meta = cluster_meta[str(cid)]
     label_short = meta["label_en"][:30]
     color = colors[cid]
-    ax.scatter(group["x"], group["y"], c=[color], s=60, alpha=0.85,
-               edgecolors="white", linewidths=0.3, zorder=2)
+    ax.scatter(group["x"], group["y"], c=[color], s=60, alpha=0.85, edgecolors="white", linewidths=0.3, zorder=2)
     cx, cy = group["x"].mean(), group["y"].mean()
-    ax.annotate(f"C{cid}", (cx, cy), fontsize=7, color="white",
-                ha="center", va="center", fontweight="bold",
-                bbox=dict(boxstyle="round,pad=0.2", fc=color, alpha=0.7, ec="none"))
+    ax.annotate(
+        f"C{cid}",
+        (cx, cy),
+        fontsize=7,
+        color="white",
+        ha="center",
+        va="center",
+        fontweight="bold",
+        bbox=dict(boxstyle="round,pad=0.2", fc=color, alpha=0.7, ec="none"),
+    )
 
 name_col = "name" if "name" in df.columns else "tech_id"
 for _, row in df.iterrows():
-    ax.annotate(str(row[name_col])[:15], (row["x"], row["y"]),
-                fontsize=4, color="#aaaaaa", alpha=0.6,
-                xytext=(3, 3), textcoords="offset points")
+    ax.annotate(
+        str(row[name_col])[:15],
+        (row["x"], row["y"]),
+        fontsize=4,
+        color="#aaaaaa",
+        alpha=0.6,
+        xytext=(3, 3),
+        textcoords="offset points",
+    )
 
 patches = []
 for cid in cluster_ids:
@@ -65,14 +78,25 @@ for cid in cluster_ids:
     patches.append(mpatches.Patch(color=colors[cid], label=label_text))
 patches.append(mpatches.Patch(color="#444444", label=f"Noise (n={len(noise)})"))
 
-legend = ax.legend(handles=patches, loc="upper left", fontsize=7,
-                   framealpha=0.3, facecolor="#1a1a2e", edgecolor="#555",
-                   labelcolor="white", ncol=1)
+legend = ax.legend(
+    handles=patches,
+    loc="upper left",
+    fontsize=7,
+    framealpha=0.3,
+    facecolor="#1a1a2e",
+    edgecolor="#555",
+    labelcolor="white",
+    ncol=1,
+)
 
 noise_pct = len(noise) / len(df) * 100
-ax.set_title(f"Tech Cluster Visualization — UMAP 2D | {TAG}\n"
-             f"{n_clusters} clusters · {len(df)} techs · Noise: {len(noise)} ({noise_pct:.1f}%)",
-             color="white", fontsize=13, pad=15)
+ax.set_title(
+    f"Tech Cluster Visualization — UMAP 2D | {TAG}\n"
+    f"{n_clusters} clusters · {len(df)} techs · Noise: {len(noise)} ({noise_pct:.1f}%)",
+    color="white",
+    fontsize=13,
+    pad=15,
+)
 ax.tick_params(colors="#555")
 ax.spines[:].set_color("#333")
 

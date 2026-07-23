@@ -2,7 +2,6 @@ package com.techpulse.techradar.integration;
 
 import com.techpulse.techradar.features.system.ports.ActivityLogRepository;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 
@@ -11,7 +10,6 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** /status flags, admin settings/dashboard/users/CMS CRUD, and activity_log tracking. */
-@EnabledIfEnvironmentVariable(named = "POSTGRES_HOST", matches = ".+")
 class SystemAdminIntegrationTest extends IntegrationTestSupport {
 
     @Autowired
@@ -82,6 +80,48 @@ class SystemAdminIntegrationTest extends IntegrationTestSupport {
         String token = registerAndLogin("u4@test.vn");
         web.get().uri("/api/v1/admin/users").header("Authorization", bearer(token))
                 .exchange().expectStatus().isForbidden();
+    }
+
+    @Test
+    void nonAdmin_forbidden_acrossOtherPermissionCodes() {
+        // Broader regression net than nonAdmin_cannotAccessAdmin above: catches a permission
+        // mapping drifting back to a bare hasRole('ADMIN') (or the wrong code) on any of these,
+        // not just user:manage.
+        String token = registerAndLogin("perm-check@test.vn");
+
+        web.get().uri("/api/v1/admin/cms").header("Authorization", bearer(token))
+                .exchange().expectStatus().isForbidden(); // cms:manage
+
+        web.get().uri("/api/v1/admin/audit-log").header("Authorization", bearer(token))
+                .exchange().expectStatus().isForbidden(); // audit:view
+
+        web.post().uri("/api/v1/admin/analytics/rebuild").header("Authorization", bearer(token))
+                .exchange().expectStatus().isForbidden(); // analytics:manage
+
+        web.post().uri("/api/v1/admin/cache/companies/evict").header("Authorization", bearer(token))
+                .exchange().expectStatus().isForbidden(); // cache:manage
+    }
+
+    @Test
+    void moderatorRole_canModerateSocial_butCannotManageUsers() {
+        // Proves the RBAC design added in V24/V25 for real: "moderator" was added purely as data
+        // (V25__moderator_role.sql granting social:moderate + audit:view, nothing else) with zero
+        // code change, and it now behaves as a genuinely narrower role - not just a second flavor
+        // of "is admin".
+        String admin = adminToken();
+        web.post().uri("/api/v1/admin/users").header("Authorization", bearer(admin))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("email", "mod1@test.vn", "password", "Passw0rd!",
+                        "full_name", "Mod One", "role", "moderator", "status", "active"))
+                .exchange().expectStatus().isCreated();
+
+        String moderatorToken = login("mod1@test.vn", "Passw0rd!");
+
+        web.get().uri("/api/v1/admin/posts").header("Authorization", bearer(moderatorToken))
+                .exchange().expectStatus().isOk(); // social:moderate -> granted
+
+        web.get().uri("/api/v1/admin/users").header("Authorization", bearer(moderatorToken))
+                .exchange().expectStatus().isForbidden(); // user:manage -> not granted
     }
 
     @Test

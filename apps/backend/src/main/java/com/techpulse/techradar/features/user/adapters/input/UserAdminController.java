@@ -27,7 +27,7 @@ public class UserAdminController {
 
     @Operation(summary = "List all users")
     @GetMapping("/users")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('user:manage')")
     public Mono<ResponseEntity<ApiResponse<List<UserProfileResponse>>>> listUsers() {
         return userService.listUsers()
                 .map(UserProfileResponse::fromUser)
@@ -37,7 +37,7 @@ public class UserAdminController {
 
     @Operation(summary = "Create a new user")
     @PostMapping("/users")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('user:manage')")
     public Mono<ResponseEntity<ApiResponse<UserProfileResponse>>> insertUser(
             @Valid @RequestBody CreateUserRequest request
     ) {
@@ -55,7 +55,7 @@ public class UserAdminController {
 
     @Operation(summary = "Update an existing user")
     @PutMapping("/users/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('user:manage')")
     public Mono<ResponseEntity<ApiResponse<UserProfileResponse>>> alterUser(
             @PathVariable String id,
             @Valid @RequestBody UpdateUserRequest request
@@ -74,7 +74,7 @@ public class UserAdminController {
 
     @Operation(summary = "Delete a user")
     @DeleteMapping("/users/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('user:manage')")
     public Mono<ResponseEntity<ApiResponse<Void>>> deleteUser(
             @PathVariable String id
     ) {

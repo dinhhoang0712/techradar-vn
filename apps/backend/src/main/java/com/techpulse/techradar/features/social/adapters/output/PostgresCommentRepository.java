@@ -40,11 +40,25 @@ public class PostgresCommentRepository implements CommentRepository {
                 "FROM post_comment c " +
                 "JOIN users u ON u.id = c.user_id " +
                 "LEFT JOIN user_profile up ON up.user_id = c.user_id " +
-                "WHERE c.post_id = :post_id " +
+                "WHERE c.post_id = :post_id AND c.deleted_at IS NULL " +
                 "ORDER BY c.created_at ASC LIMIT :limit OFFSET :offset")
                 .bind("post_id", postId)
                 .bind("limit", limit)
                 .bind("offset", offset)
+                .map((row, meta) -> mapRow(row))
+                .all();
+    }
+
+    @Override
+    public Flux<CommentRow> findByUser(UUID userId) {
+        return dbClient.sql(
+                "SELECT c.id, c.user_id, u.full_name, up.avatar_url, c.content, c.parent_comment_id, c.created_at " +
+                "FROM post_comment c " +
+                "JOIN users u ON u.id = c.user_id " +
+                "LEFT JOIN user_profile up ON up.user_id = c.user_id " +
+                "WHERE c.user_id = :user_id AND c.deleted_at IS NULL " +
+                "ORDER BY c.created_at DESC")
+                .bind("user_id", userId)
                 .map((row, meta) -> mapRow(row))
                 .all();
     }
@@ -62,7 +76,7 @@ public class PostgresCommentRepository implements CommentRepository {
 
     @Override
     public Mono<Boolean> deleteById(UUID commentId) {
-        return dbClient.sql("DELETE FROM post_comment WHERE id = :id")
+        return dbClient.sql("UPDATE post_comment SET deleted_at = now() WHERE id = :id AND deleted_at IS NULL")
                 .bind("id", commentId)
                 .fetch().rowsUpdated()
                 .map(rows -> rows > 0);
@@ -70,7 +84,7 @@ public class PostgresCommentRepository implements CommentRepository {
 
     @Override
     public Mono<Long> countAll() {
-        return dbClient.sql("SELECT count(*) AS c FROM post_comment")
+        return dbClient.sql("SELECT count(*) AS c FROM post_comment WHERE deleted_at IS NULL")
                 .map((row, meta) -> row.get("c", Long.class))
                 .one()
                 .defaultIfEmpty(0L);

@@ -75,6 +75,11 @@ public class NotificationService {
         return repository.countUnread(userId);
     }
 
+    /** {@code type == null} behaves exactly like {@link #unreadCount(String)} (no filter). */
+    public Mono<Long> unreadCount(String userId, String type) {
+        return type == null ? repository.countUnread(userId) : repository.countUnreadByType(userId, type);
+    }
+
     public Mono<Void> markRead(String id, String userId) {
         return repository.markRead(id, userId).then();
     }

@@ -2,6 +2,7 @@
 Prometheus metrics cho ai-rag-core.
 Endpoint /metrics được register trong main.py.
 """
+
 from prometheus_client import Counter, Histogram
 
 ai_requests_total = Counter(

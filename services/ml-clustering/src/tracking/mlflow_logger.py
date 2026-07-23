@@ -15,16 +15,17 @@ import logging
 import pickle
 import subprocess
 import tempfile
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import mlflow
 import mlflow.sklearn
 import numpy as np
+from conf.config import MLflowParams
 from mlflow.exceptions import MlflowException
 
-from conf.config import MLflowParams
 from src.clustering.tuner import PrimaryMetric, TrialResult, normalize_metric_for_comparison
 
 logger = logging.getLogger(__name__)
@@ -57,9 +58,7 @@ def _flatten_params(data: Any, prefix: str) -> dict[str, str]:
 
 def _get_git_commit() -> str | None:
     try:
-        return subprocess.check_output(
-            ["git", "rev-parse", "--short", "HEAD"], text=True
-        ).strip()
+        return subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True).strip()
     except Exception:
         return None
 
@@ -98,19 +97,17 @@ def parent_run(
 
 def log_trial(trial: TrialResult, parent_run_id: str | None = None) -> str:
     """Log 1 trial vào nested MLflow run. Trả về run_id của trial."""
-    run_name = f"trial_{trial.algorithm}_" + "_".join(
-        f"{k}{v}" for k, v in list(trial.params.items())[:2]
-    )
+    run_name = f"trial_{trial.algorithm}_" + "_".join(f"{k}{v}" for k, v in list(trial.params.items())[:2])
     with mlflow.start_run(run_name=run_name, nested=True) as run:
         # Params
         mlflow.log_params({"algorithm": trial.algorithm, **trial.params})
 
         # Metrics — bỏ qua None/NaN
         metrics: dict[str, float] = {
-            "n_clusters":         float(trial.n_clusters),
-            "n_noise":            float(trial.n_noise),
-            "noise_ratio":        trial.noise_ratio,
-            "wall_seconds":       trial.wall_seconds,
+            "n_clusters": float(trial.n_clusters),
+            "n_noise": float(trial.n_noise),
+            "noise_ratio": trial.noise_ratio,
+            "wall_seconds": trial.wall_seconds,
             "passed_constraints": 1.0 if trial.passed_constraints else 0.0,
         }
         for key in ("silhouette", "davies_bouldin", "calinski_harabasz", "dbcv"):
@@ -147,8 +144,8 @@ def log_best_run(
         mlflow.log_params({"algorithm": best_trial.algorithm, **best_trial.params})
 
         metrics: dict[str, float] = {
-            "n_clusters":   float(best_trial.n_clusters),
-            "noise_ratio":  best_trial.noise_ratio,
+            "n_clusters": float(best_trial.n_clusters),
+            "noise_ratio": best_trial.noise_ratio,
             "wall_seconds": best_trial.wall_seconds,
         }
         for key in ("silhouette", "davies_bouldin", "calinski_harabasz", "dbcv"):
@@ -237,9 +234,7 @@ def register_best_model(
         client.set_registered_model_alias(registry_name, "champion", version)
         logger.info("Model registered: %s v%d — PROMOTED to champion (%s)", registry_name, version, reason)
     else:
-        logger.info(
-            "Model registered: %s v%d — KHÔNG promote, giữ champion cũ (%s)", registry_name, version, reason
-        )
+        logger.info("Model registered: %s v%d — KHÔNG promote, giữ champion cũ (%s)", registry_name, version, reason)
 
     return {"version": version, "promoted": promoted, "reason": reason}
 
@@ -253,9 +248,9 @@ def write_metrics_file(
     out.parent.mkdir(parents=True, exist_ok=True)
     # Chỉ giữ primitive values — loại NaN/None
     clean = {
-        k: v for k, v in metrics.items()
-        if isinstance(v, (int, float, str, bool))
-        and not (isinstance(v, float) and np.isnan(v))
+        k: v
+        for k, v in metrics.items()
+        if isinstance(v, (int, float, str, bool)) and not (isinstance(v, float) and np.isnan(v))
     }
     out.write_text(json.dumps(clean, indent=2), encoding="utf-8")
     logger.info("Metrics file: %s", out)

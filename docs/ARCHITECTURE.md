@@ -291,43 +291,55 @@ Cluster labels → serving
 Spring Boot backend được xây dựng theo mô hình **Hexagonal Architecture (Ports & Adapters)** kết hợp **Feature-Based Modular Architecture**.
 
 ```
-apps/backend/src/main/java/com/techpulse/
-├── features/                    # Feature modules
+apps/backend/src/main/java/com/techpulse/techradar/
+├── features/                    # Feature modules — mỗi module: domain/ports/application/
+│   │                              adapters/{input,output} (flat, KHÔNG có port/in|out hay adapter/in/web)
 │   ├── auth/
-│   │   ├── domain/             # Domain entities & business logic
-│   │   ├── application/
-│   │   │   ├── port/in/        # Input ports (use cases)
-│   │   │   ├── port/out/       # Output ports (repositories)
-│   │   │   └── service/        # Application services
-│   │   └── adapter/
-│   │       ├── in/web/         # REST controllers
-│   │       └── out/persistence # Repository implementations
+│   │   ├── domain/             # Domain entities & business logic (User, ...)
+│   │   ├── ports/              # Input/output ports (UserRepository, RolePermissionRepository...)
+│   │   ├── application/        # Use cases (LoginUseCase, RegisterUseCase, TokenIssuer...)
+│   │   └── adapters/
+│   │       ├── input/          # REST controllers (AuthController)
+│   │       └── output/         # Repository implementations (PostgresUserRepository...)
 │   ├── radar/
 │   ├── compare/
 │   ├── graph/                  # + salary/sentiment filter (SalaryOverlap, SentimentBand)
+│   │                              + graph analytics (PageRank/Louvain qua Neo4j GDS)
 │   ├── chat/
 │   ├── clustering/
 │   ├── salary/
 │   ├── notification/
-│   ├── company/                 # NEW — Company Explorer (Neo4j)
-│   ├── job/                     # NEW — Job Matching (Neo4j, ranks by skill overlap)
-│   ├── messaging/                # NEW — 1-1 direct messages (Postgres + SSE fan-out via Redis Pub/Sub)
-│   ├── social/                   # NEW — posts/follow/like/comment feed + content reports (Postgres)
+│   ├── company/                 # Company Explorer (Neo4j)
+│   ├── job/                     # Job Matching (Neo4j, ranks by skill overlap)
+│   ├── roadmap/                 # Career Roadmap + "what-if" skill simulation
+│   ├── messaging/                # 1-1 direct messages (Postgres + SSE fan-out via Redis Pub/Sub)
+│   ├── social/                   # posts/follow/like/comment feed + content reports (Postgres)
 │   ├── aiproxy/                  # Consolidates the old career/forecast/recommend/report/
 │   │                              # summarize/agent modules into ONE generic forwarder
 │   │                              # (AiProxyRequestHandler + single PythonAiProxyClient);
 │   │                              # thin controllers still expose /career /forecast /recommend
-│   │                              # /report /interview /agent /chat/summarize
+│   │                              # /report /interview /agent /chat/summarize /company-insight
 │   ├── user/
-│   ├── system/
-│   ├── health/
+│   ├── system/                   # settings, admin dashboard, activity log, CMS, health/status
 │   └── kafka/
 │
-├── shared/                      # Shared infrastructure
-│   ├── config/
+├── config/                       # Security, JWT, Kafka, Redis, Postgres, Neo4j, Jackson config
+│   ├── JwtTokenProvider.java
+│   ├── SecurityConfig.java
+│   ├── security/                 # JwtReactiveAuthenticationManager, converters
+│   └── ...
+│
+├── shared/                       # Shared infrastructure (no feature-specific logic)
+│   ├── client/                   # WebClient factories for Python services
+│   ├── dto/                      # ApiResponse envelope
+│   ├── exception/                # ErrorCode, custom exceptions, GlobalExceptionHandler
+│   ├── http/
+│   ├── logging/
+│   ├── neo4j/                    # Neo4jReadTemplate
+│   ├── paging/
+│   ├── redis/                    # ReactiveRedisCache, rate limiters, RedisJsonStatus
 │   ├── security/
-│   ├── exception/
-│   └── common/
+│   └── util/
 │
 └── TechRadarApplication.java   # Main entry point
 ```
@@ -414,45 +426,52 @@ dp_bronze_catalog / dp_processed_articles / dp_processed_jobs / dp_pipeline_runs
 |----------|-----------|
 | **Framework** | React 19 |
 | **Build Tool** | Vite 7 |
-| **Language** | JavaScript (ES6+) |
+| **Language** | TypeScript (strict, `allowJs: false`) |
 | **Routing** | React Router DOM 7 |
 | **Charts** | Recharts 3 |
-| **Graph Visualization** | D3.js 7, react-force-graph-2d |
+| **Graph Visualization** | react-force-graph-2d (dùng d3-force nội bộ) |
 | **HTTP Client** | Fetch API |
 | **Testing** | Vitest, Testing Library |
-| **Styling** | CSS Modules |
+| **Styling** | Plain CSS per component |
 
 ### 6.2 Page Structure
 
 ```
 apps/web/src/pages/
 ├── auth/
-│   ├── LoginPage.jsx
-│   ├── RegisterPage.jsx
-│   └── ForgotPasswordPage.jsx
-├── TrendDashboard.jsx          # Tech radar dashboard
-├── GraphExplorer.jsx            # Knowledge graph (Explore / Road Analysis / Browse Filters)
-├── ChatbotPage.jsx              # Graph RAG chat + Agent mode toggle
-├── ClusterDashboard.jsx         # Technology clustering visualization
-├── ComparePage.jsx              # Technology comparison
-├── CareerPage.jsx               # Career path assistant + job-match card
-├── InterviewPage.jsx            # NEW — AI mock interview (turn-based, /interview)
-├── ReportPage.jsx               # Trend reports
-├── SalaryPage.jsx               # Salary analytics
-├── CompanyExplorer.jsx          # NEW — company directory + similar-company panel
-├── FeedPage.jsx                 # NEW — social feed (posts/likes/comments)
-├── MessagesPage.jsx             # NEW — direct messaging (SSE)
-├── PublicProfilePage.jsx        # NEW — public profile (/users/:id), follow + message entry point
-├── UserProfile.jsx              # User profile management (own profile)
+│   ├── LoginPage.tsx
+│   └── RegisterPage.tsx
+├── TrendDashboard.tsx          # Tech radar dashboard
+├── GraphExplorer.tsx            # Knowledge graph (Explore / Road Analysis / Browse Filters / Graph Analytics)
+├── ChatbotPage.tsx              # Graph RAG chat + Agent mode toggle
+├── ClusterDashboard.tsx         # Technology clustering visualization
+├── ComparePage.tsx              # Technology comparison
+├── CareerPage.tsx               # Career path assistant + job-match card
+├── InterviewPage.tsx            # AI mock interview (turn-based, /interview)
+├── ReportPage.tsx               # Trend reports
+├── SalaryPage.tsx               # Salary analytics
+├── CompanyExplorer.tsx          # Company directory + similar-company panel
+├── FeedPage.tsx                 # Social feed (posts/likes/comments)
+├── MessagesPage.tsx             # Direct messaging (SSE)
+├── NotificationsPage.tsx        # Notification center
+├── PublicProfilePage.tsx        # Public profile (/users/:id), follow + message entry point
+├── UserProfile.tsx              # User profile management (own profile)
+├── ForbiddenPage.tsx            # 403
+├── NotFoundPage.tsx             # 404
 ├── admin/
-│   ├── AdminDashboard.jsx        # + Social Engagement / Job Market / Pipeline Health / Messaging Volume tabs (NEW)
-│   ├── AdminModeration.jsx       # NEW — view/delete any post/comment
-│   ├── AdminReports.jsx          # NEW — content_report moderation queue (dismiss)
-│   ├── AdminUsers.jsx
-│   ├── AdminCMS.jsx
-│   └── AdminSettings.jsx
-└── MaintenancePage.jsx          # Maintenance mode
+│   ├── AdminDashboard.tsx        # Social Engagement / Job Market / Pipeline Health / Messaging Volume tabs
+│   ├── AdminAutomation.tsx       # Manual job triggers (crawler, analytics, clustering, graph analytics, data-platform)
+│   ├── AdminModeration.tsx       # View/delete any post/comment
+│   ├── AdminReports.tsx          # content_report moderation queue (dismiss)
+│   ├── AdminClusters.tsx         # Cluster label override
+│   ├── AdminUsers.tsx
+│   ├── AdminCMS.tsx
+│   └── AdminSettings.tsx
+└── MaintenancePage.tsx          # Maintenance mode
 ```
+
+Không có `ForgotPasswordPage` riêng — reset mật khẩu nằm trong luồng `LoginPage`/API `POST
+/auth/forgot-password` (`AuthController`), không phải trang riêng.
 
 ### 6.3 Component Architecture
 
@@ -521,13 +540,15 @@ services/ai-rag-core/app/
 │   ├── security.py              # require_internal_auth
 │   ├── routes_chat.py           # /chat endpoints
 │   ├── routes_embed.py          # /embed/trigger
-│   ├── routes_internal.py       # /internal/ai/*
+│   ├── routes_internal.py       # /internal/ai/* (llm-summary, moderation-suggestion)
 │   ├── routes_recommend.py      # /recommend
 │   ├── routes_forecast.py       # /forecast
 │   ├── routes_career.py         # /career
 │   ├── routes_summarize.py      # /summarize
 │   ├── routes_report.py         # /report
-│   ├── routes_interview.py      # /interview — NEW, stateless AI mock-interview turn machine
+│   ├── routes_interview.py      # /interview — stateless AI mock-interview turn machine
+│   ├── routes_company_insight.py # /company-insight — AI narrative về hồ sơ tuyển dụng/tech stack công ty
+│   ├── routes_health.py         # /health
 │   └── routes_agent.py          # /agent (LangChain)
 ├── core/
 │   ├── pipeline.py              # RAG orchestrator
@@ -540,7 +561,8 @@ services/ai-rag-core/app/
 │   ├── entity_extractor.py      # NER pipeline
 │   ├── reranker.py              # BGE reranker
 │   ├── prompt_builder.py        # Prompt templates
-│   └── generator.py             # LLM factory
+│   ├── generator.py             # LLM factory (OpenAI/Gemini/Groq)
+│   └── generator_stream.py      # Streaming LLM generation
 ├── services/
 │   ├── chat_service.py
 │   ├── recommend_service.py
@@ -548,7 +570,8 @@ services/ai-rag-core/app/
 │   ├── career_service.py
 │   ├── summarize_service.py
 │   ├── report_service.py
-│   └── interview_service.py     # NEW — opening/turn/final state machine (stateless, driven by history[])
+│   ├── company_insight_service.py # tóm tắt hồ sơ công ty bằng AI (/company-insight)
+│   └── interview_service.py     # opening/turn/final state machine (stateless, driven by history[])
 ├── agent/
 │   ├── executor.py              # LangChain AgentExecutor
 │   └── tools.py                 # 4 tools
@@ -588,22 +611,24 @@ services/ai-rag-core/app/
 ```
 services/ml-clustering/
 ├── app/
-│   ├── main.py                  # FastAPI app
-│   ├── config.py                # Settings
-│   └── api/
-│       ├── routes_pipeline.py   # /pipeline/*
-│       └── routes_serving.py    # /clusters/*
-├── pipelines/
+│   ├── main.py                  # FastAPI app (cluster serving routes + /pipeline/*)
+│   ├── routes_pipeline.py       # POST /pipeline/trigger, GET /pipeline/status, /pipeline/runs
+│   ├── schemas.py, security.py, store.py
+├── conf/
+│   └── config.py                # Settings
+├── pipelines/                   # 5 DVC stages
 │   ├── stage_01_extract.py      # Neo4j → Parquet
 │   ├── stage_02_features.py     # Feature engineering
-│   ├── stage_03_train.py        # HDBSCAN grid search
-│   ├── stage_04_evaluate.py     # Evaluation metrics
-│   └── stage_05_promote.py      # Promote to serving
+│   ├── stage_03_train.py        # HDBSCAN grid search (DBCV, không phải silhouette)
+│   ├── stage_04_label.py        # Gán nhãn AI (LLM)
+│   ├── stage_05_writeback.py    # Ghi kết quả (Neo4j + serving store)
+│   └── graph_writeback_utils.py
 ├── src/
-│   ├── clustering.py            # HDBSCAN wrapper
-│   ├── embeddings.py             # E5-base embeddings
-│   ├── features.py              # Feature extraction
-│   └── utils.py
+│   ├── clustering/               # trainer.py, tuner.py, evaluator.py
+│   ├── data/                     # neo4j_loader.py, snapshot.py
+│   ├── features/                 # feature_pipeline.py, graph_features.py, gds_features.py (disabled), ...
+│   ├── labeling/                 # llm_labeler.py
+│   └── tracking/                 # mlflow_logger.py
 ├── dvc.yaml                     # DVC pipeline definition
 ├── params.yaml                   # Hyperparameters
 └── visualize_clusters.py        # Visualization script
@@ -617,24 +642,28 @@ services/ml-clustering/
 
 **Node Types:**
 - `Article`: title, content, source, published_date, sentiment_score, embedding (768d)
-- `Technology`: name, category, subcategory, description, trend_score, demand_score
+- `Technology`: name, category, subcategory, description, trend_score, demand_score,
+  article_count, job_count (derived), pagerank_score, community_id, degree_centrality (derived —
+  Neo4j GDS, ghi bởi `apps/backend` `Neo4jGraphAnalyticsAdapter`, admin-triggered)
 - `Skill`: name, category, demand_score
 - `Company`: name, field, size, location, rating
 - `Job`: title, description, requirement, benefit, salary, due_date, source_url
-- `Person`: name, role
 
 **Relationship Types:**
-- `MENTIONS`: Article → Technology/Company/Person
+- `MENTIONS`: Article → Technology/Company
 - `REQUIRES`: Job → Technology/Skill — dùng bởi backend **Job Matching** (`features/job`)
-- `HIRES_FOR`: Job → Company — dùng bởi backend **Company Explorer** (`features/company`) và
-  làm ngữ cảnh cho **AI Interview** (`ai-rag-core` `graph_queries.JOBS_BY_TITLE_AND_COMPANY`)
+- `POSTED_BY`: Job → Company — **cạnh sống**, ghi real-time bởi Kafka pipeline
+  (`features/kafka`) và batch bởi `data-platform/gold/neo4j_job_sync.py`; dùng bởi backend
+  **Company Explorer** (`features/company`) và **Job Matching**
+- `HIRES_FOR`: Job → Company — **không còn được ghi mới** (tạo bởi batch importer
+  `knowledge-graph/` cũ, đã xoá khỏi repo); các job cũ có thể chỉ có cạnh này, nên
+  `Neo4jCompanyRepository`/`Neo4jJobRepository` match cả `POSTED_BY|HIRES_FOR` để không bỏ sót
 - `USES`: Company → Technology (derived, ghi bởi `data-platform/gold/neo4j_enricher.py`) —
   **lưu ý:** backend hiện KHÔNG đọc quan hệ này; `features/company` tự suy ra tech stack của
-  công ty gián tiếp qua `Company<-[HIRES_FOR]-Job-[REQUIRES]->Technology`. Chi tiết + phân tích
-  sự khác biệt này ở [`docs/DATABASE.md`](./DATABASE.md) §4.1.
-- `RELATED_TO`: Technology → Technology (derived)
-- `WORKS_AT`: Person → Company (derived)
-- `WROTE`: Person → Article (derived)
+  công ty gián tiếp qua `Company<-[POSTED_BY|HIRES_FOR]-Job-[REQUIRES]->Technology`. Chi tiết +
+  phân tích sự khác biệt này ở [`docs/DATABASE.md`](./DATABASE.md) §4.1.
+- `RELATED_TO`: Technology → Technology (derived, co-mention count — dùng làm trọng số cho
+  PageRank/Louvain GDS ở trên)
 
 ### 8.2 Modules
 
@@ -642,7 +671,7 @@ Không còn thư mục `knowledge-graph/` riêng (đã xoá — đó là bản �
 của pipeline này). Việc ghi vào graph hiện nằm ở:
 
 - `services/crawler/` — crawl 8 nguồn (VNExpress, GenK, DanTri, ICTNews, TopCV, ITviec, Viblo, GitHub), publish Kafka.
-- `apps/backend` (`features/kafka/KafkaNeo4jWriterService.java`) — consume Kafka real-time, MERGE node gốc + cạnh trực tiếp. Tên công nghệ đã được `EntityExtractionService`/`TechAliasCache` canonical hoá trước đó (xem §4.1 footnote **).
+- `apps/backend` (`features/kafka/adapters/input/KafkaNeo4jWriterService.java`) — consume Kafka real-time, MERGE node gốc + cạnh trực tiếp qua port `ExtractionWriter` (impl `features/kafka/adapters/output/Neo4jExtractionWriter.java`). Tên công nghệ đã được `features/kafka/domain/EntityExtractionService.java` canonical hoá trước đó qua port `TechAliasResolver` (impl `features/kafka/adapters/output/TechAliasCache.java`) — xem §4.1 footnote **.
 - `data-platform/gold/{neo4j_article_sync,neo4j_job_sync}.py` — batch/nightly, MERGE lại cùng loại node/cạnh. Đọc từ Silver Postgres nên cũng đã nhận tech name đã canonical hoá.
 - `data-platform/gold/neo4j_enricher.py` — cạnh derived (`USES`, `RELATED_TO`) + stats.
 - `data-platform/gold/tech_dedup.py` — dọn node `:Technology` trùng lặp còn sót lại trong graph (alias map đã biết + LLM discovery cho case chưa biết), 5:30 AM daily.
@@ -739,10 +768,11 @@ Spring Boot → Python services communication:
 
 ### 10.4 Token Management
 
-- **Access Token**: 15 minutes expiry
-- **Refresh Token**: 7 days expiry
+- **Access Token**: 24 hours expiry (`app.jwt.expiration`, env `JWT_EXPIRATION`, default `86400000`ms)
+- **Refresh Token**: 7 days expiry (`app.jwt.refresh-expiration`, env `JWT_REFRESH_EXPIRATION`, default `604800000`ms)
 - **Blacklist**: Redis stores revoked refresh tokens
 - **Rotation**: New refresh token issued on refresh
+- **Security stamp**: token bị vô hiệu hoá ngay lập tức khi admin đổi role/khoá tài khoản (`users.security_stamp`), không cần chờ hết hạn
 
 ---
 

@@ -14,12 +14,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from app.core.entity_extractor import extract_query_entities
+from app.core.generator import generate
+from app.core.prompt_builder import build_messages
+from app.core.reranker import rerank
 from app.core.retriever import vector_search
 from app.core.retriever_graph import graph_search
-from app.core.reranker import rerank
-from app.core.prompt_builder import build_messages
-from app.core.generator import generate
-from app.core.entity_extractor import extract_query_entities
 from app.db.neo4j_client import close_driver
 
 TEST_QUERIES = [
@@ -57,16 +57,12 @@ async def run_timed(query: str) -> dict:
     t_retrieve = time.perf_counter() - t
     print(f"[2] Retrieval (vector ∥ graph)  : {_fmt(t_retrieve)}")
     print(f"    → vector candidates: {len(candidates)}")
-    print(f"    → graph jobs: {len(graph_data.get('jobs', []))}, "
-          f"companies: {len(graph_data.get('companies', []))}")
+    print(f"    → graph jobs: {len(graph_data.get('jobs', []))}, companies: {len(graph_data.get('companies', []))}")
 
     # --- Rerank ---
     t = time.perf_counter()
     loop = asyncio.get_event_loop()
-    top_articles = (
-        await loop.run_in_executor(None, lambda: rerank(query, candidates, top_k=5))
-        if candidates else []
-    )
+    top_articles = await loop.run_in_executor(None, lambda: rerank(query, candidates, top_k=5)) if candidates else []
     t_rerank = time.perf_counter() - t
     print(f"[3] Rerank                      : {_fmt(t_rerank)}")
     print(f"    → top articles: {len(top_articles)}")
@@ -92,7 +88,7 @@ async def run_timed(query: str) -> dict:
     for j, src in enumerate(top_articles, 1):
         score = src.get("rerank_score", 0)
         title = src.get("title", "N/A")
-        date  = str(src.get("published_date", ""))[:10]
+        date = str(src.get("published_date", ""))[:10]
         print(f"  [{j}] (score={score:.3f}) {title} — {date}")
 
     return {
@@ -101,12 +97,12 @@ async def run_timed(query: str) -> dict:
         "entities": graph_data.get("entities", []),
         "job_titles": graph_data.get("job_titles", []),
         "timings": {
-            "entity_ms":   round(t_entity * 1000),
+            "entity_ms": round(t_entity * 1000),
             "retrieve_ms": round(t_retrieve * 1000),
-            "rerank_ms":   round(t_rerank * 1000),
-            "prompt_ms":   round(t_prompt * 1000),
+            "rerank_ms": round(t_rerank * 1000),
+            "prompt_ms": round(t_prompt * 1000),
             "generate_ms": round(t_gen * 1000),
-            "total_ms":    round(total * 1000),
+            "total_ms": round(total * 1000),
         },
     }
 
@@ -124,8 +120,10 @@ async def main():
         print("TIMING SUMMARY (ms)")
         print(f"{'Query':<4} {'Entity':>8} {'Retrieve':>10} {'Rerank':>8} {'Generate':>10} {'Total':>8}")
         for i, t in enumerate(all_timings, 1):
-            print(f"  {i:<3} {t['entity_ms']:>8} {t['retrieve_ms']:>10} "
-                  f"{t['rerank_ms']:>8} {t['generate_ms']:>10} {t['total_ms']:>8}")
+            print(
+                f"  {i:<3} {t['entity_ms']:>8} {t['retrieve_ms']:>10} "
+                f"{t['rerank_ms']:>8} {t['generate_ms']:>10} {t['total_ms']:>8}"
+            )
 
     await close_driver()
 

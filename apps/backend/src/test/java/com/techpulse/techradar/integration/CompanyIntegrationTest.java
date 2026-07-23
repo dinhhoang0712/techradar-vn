@@ -1,12 +1,10 @@
 package com.techpulse.techradar.integration;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import java.util.UUID;
 
 /** Company profile: industry/size fields and Article-[:MENTIONS]->Company news feed. */
-@EnabledIfEnvironmentVariable(named = "POSTGRES_HOST", matches = ".+")
 class CompanyIntegrationTest extends IntegrationTestSupport {
 
     @Test
@@ -46,7 +44,7 @@ class CompanyIntegrationTest extends IntegrationTestSupport {
                 .expectStatus().isOk()
                 .expectBody()
                 .jsonPath("$.data[0].title").isEqualTo("Newer news")
-                .jsonPath("$.data[0].sourcePlatform").isEqualTo("GenK")
+                .jsonPath("$.data[0].source_platform").isEqualTo("GenK")
                 .jsonPath("$.data[1].title").isEqualTo("Older news");
     }
 

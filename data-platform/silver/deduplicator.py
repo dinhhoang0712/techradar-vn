@@ -4,6 +4,7 @@ URL dedup (exact): ON CONFLICT (source_url) DO NOTHING — handled by SQL.
 Content dedup (near): MD5 of normalised title+content stored as content_hash.
   Nếu content_hash đã tồn tại trong DB → đánh dấu is_duplicate=True.
 """
+
 import hashlib
 import re
 

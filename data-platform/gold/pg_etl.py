@@ -7,16 +7,15 @@ thay vì từ Spring Boot gateway.
 
 Chạy: mỗi đêm lúc 3:00 AM (cấu hình trong scheduler).
 """
+
 from __future__ import annotations
 
-import psycopg2
-from datetime import date
 from collections import defaultdict
-from loguru import logger
-from neo4j import GraphDatabase
+from datetime import date
 
-from common.db import get_pg_conn, get_neo4j_driver, log_pipeline_run
+from common.db import get_neo4j_driver, get_pg_conn, log_pipeline_run
 from config import Settings
+from loguru import logger
 
 _ARTICLE_Q = """
 MATCH (t:Technology)<-[:MENTIONS]-(a:Article)
@@ -102,6 +101,7 @@ def run(settings: Settings) -> int:
 
         # Inject snapshot vào tháng hiện tại
         from datetime import datetime
+
         current_ym = datetime.now().strftime("%Y-%m")
         for tech, cnt in snapshot.items():
             data[tech][current_ym][0] = max(data[tech][current_ym][0], cnt)
@@ -114,10 +114,7 @@ def run(settings: Settings) -> int:
         with pg_conn.cursor() as cur:
             for tech, months in data.items():
                 # activity per month = job_count nếu có, không thì article_count
-                activity = {
-                    ym: (counts[0] if counts[0] > 0 else counts[1])
-                    for ym, counts in months.items()
-                }
+                activity = {ym: (counts[0] if counts[0] > 0 else counts[1]) for ym, counts in months.items()}
                 for ym_str, counts in months.items():
                     month_date = _parse_ym(ym_str)
                     if not month_date:
@@ -154,8 +151,7 @@ def run(settings: Settings) -> int:
 
         pg_conn.commit()
         logger.info("Gold PG ETL: upserted {} rows into tech_analytics", rows_upserted)
-        log_pipeline_run(pg_conn, "gold_pg_etl", "success",
-                         rows_affected=rows_upserted, run_id=run_id)
+        log_pipeline_run(pg_conn, "gold_pg_etl", "success", rows_affected=rows_upserted, run_id=run_id)
         return rows_upserted
 
     except Exception as exc:

@@ -1,0 +1,50 @@
+.job-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.job-history-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+}
+
+.job-history-badge {
+    flex-shrink: 0;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 10px;
+    white-space: nowrap;
+}
+
+.job-history-badge--success {
+    color: #00d68f;
+    background: rgba(0, 214, 143, 0.12);
+    border: 1px solid rgba(0, 214, 143, 0.3);
+}
+
+.job-history-badge--failed {
+    color: var(--danger-light);
+    background: var(--danger-glow);
+    border: 1px solid var(--danger);
+}
+
+.job-history-details { flex: 1; }
+
+.job-history-time {
+    margin: 0 0 2px;
+    color: var(--text);
+    font-size: 0.88rem;
+}
+
+.job-history-duration {
+    color: var(--text-3);
+}

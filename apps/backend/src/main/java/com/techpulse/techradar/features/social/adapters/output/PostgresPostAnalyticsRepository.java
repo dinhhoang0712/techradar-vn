@@ -18,7 +18,7 @@ public class PostgresPostAnalyticsRepository implements PostAnalyticsRepository 
 
     @Override
     public Mono<Long> countAll() {
-        return dbClient.sql("SELECT count(*) AS c FROM post")
+        return dbClient.sql("SELECT count(*) AS c FROM post WHERE deleted_at IS NULL")
                 .map((row, meta) -> row.get("c", Long.class))
                 .one()
                 .defaultIfEmpty(0L);
@@ -26,7 +26,7 @@ public class PostgresPostAnalyticsRepository implements PostAnalyticsRepository 
 
     @Override
     public Mono<Long> countCreatedSince(LocalDateTime since) {
-        return dbClient.sql("SELECT count(*) AS c FROM post WHERE created_at >= :since")
+        return dbClient.sql("SELECT count(*) AS c FROM post WHERE created_at >= :since AND deleted_at IS NULL")
                 .bind("since", since)
                 .map((row, meta) -> row.get("c", Long.class))
                 .one()
@@ -46,6 +46,7 @@ public class PostgresPostAnalyticsRepository implements PostAnalyticsRepository 
         return dbClient.sql(
                 "SELECT p.user_id, u.full_name, count(*) AS post_count " +
                 "FROM post p JOIN users u ON u.id = p.user_id " +
+                "WHERE p.deleted_at IS NULL " +
                 "GROUP BY p.user_id, u.full_name " +
                 "ORDER BY post_count DESC LIMIT :limit")
                 .bind("limit", limit)

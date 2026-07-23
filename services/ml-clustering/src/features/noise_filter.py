@@ -9,11 +9,10 @@ Lọc noise Technology nodes trước khi build feature matrix.
 
 from __future__ import annotations
 
-import re
 import logging
+import re
 
 import pandas as pd
-
 from conf.config import NoiseFilterParams
 
 logger = logging.getLogger(__name__)
@@ -21,28 +20,87 @@ logger = logging.getLogger(__name__)
 # Whitelist các tên kỹ thuật ngắn hợp lệ mà heuristic có thể nhầm
 _SHORT_TECH_WHITELIST = {
     # Ngôn ngữ & runtime
-    "c", "r", "go",
+    "c",
+    "r",
+    "go",
     # AI/ML
-    "ai", "ml", "dl", "llm", "rag", "nlp", "ocr", "gpt",
+    "ai",
+    "ml",
+    "dl",
+    "llm",
+    "rag",
+    "nlp",
+    "ocr",
+    "gpt",
     # Frontend
-    "js", "ts", "css", "vue", "ios",
+    "js",
+    "ts",
+    "css",
+    "vue",
+    "ios",
     # Backend / DB
-    "sql", "api", "git", "net", "orm", "xml", "rpc", "gin",
+    "sql",
+    "api",
+    "git",
+    "net",
+    "orm",
+    "xml",
+    "rpc",
+    "gin",
     # Data
-    "etl", "dwh", "dbt", "sas", "elk", "dvc",
+    "etl",
+    "dwh",
+    "dbt",
+    "sas",
+    "elk",
+    "dvc",
     # DevOps / Cloud
-    "aws", "gcp", "sdk", "ide", "svn",
+    "aws",
+    "gcp",
+    "sdk",
+    "ide",
+    "svn",
     # Hardware
-    "gpu", "cpu", "tpu", "npu", "iot", "nfc",
+    "gpu",
+    "cpu",
+    "tpu",
+    "npu",
+    "iot",
+    "nfc",
     # Networking / Security
-    "vpc", "vpn", "dns", "ssh", "tcp", "udp", "http", "rest",
-    "bgp", "nat", "sip", "sse", "rpc",
-    "soc", "ips", "waf", "ids", "jwt", "otp",
+    "vpc",
+    "vpn",
+    "dns",
+    "ssh",
+    "tcp",
+    "udp",
+    "http",
+    "rest",
+    "bgp",
+    "nat",
+    "sip",
+    "sse",
+    "soc",
+    "ips",
+    "waf",
+    "ids",
+    "jwt",
+    "otp",
     # Business / Other
-    "ui", "ux", "qa", "it", "rpa", "erp", "crm",
-    "stt", "qr", "kyc", "mes",
+    "ui",
+    "ux",
+    "qa",
+    "it",
+    "rpa",
+    "erp",
+    "crm",
+    "stt",
+    "qr",
+    "kyc",
+    "mes",
     # Vendor / Platform
-    "sap", "php", "ios",
+    "sap",
+    "php",
 }
 
 
@@ -70,11 +128,7 @@ def filter_noise(
 
     # 1. min_job_count — loại tech quá hiếm
     if params.min_job_count > 1:
-        job_counts = (
-            df_edges_job_requires_tech.groupby("tech_id")["job_id"]
-            .nunique()
-            .rename("job_count")
-        )
+        job_counts = df_edges_job_requires_tech.groupby("tech_id")["job_id"].nunique().rename("job_count")
         df_with_count = df_tech.join(job_counts, on="tech_id")
         too_rare = df_with_count["job_count"].fillna(0) < params.min_job_count
         n_rare = too_rare.sum()
@@ -113,6 +167,8 @@ def filter_noise(
     removed = original_count - len(df_filtered)
     logger.info(
         "noise_filter hoàn tất: %s → %s tech (loại %s noise)",
-        original_count, len(df_filtered), removed,
+        original_count,
+        len(df_filtered),
+        removed,
     )
     return df_filtered

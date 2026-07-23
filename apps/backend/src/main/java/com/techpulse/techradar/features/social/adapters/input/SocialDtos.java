@@ -1,5 +1,6 @@
 package com.techpulse.techradar.features.social.adapters.input;
 
+import com.techpulse.techradar.features.social.application.ImageInput;
 import com.techpulse.techradar.features.social.domain.FeedPost;
 import com.techpulse.techradar.features.social.domain.PostComment;
 import com.techpulse.techradar.features.social.domain.ProfileSummary;
@@ -151,14 +152,6 @@ public class SocialDtos {
                     .following(p.isFollowing())
                     .build();
         }
-    }
-
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class ImageInput {
-        private String contentType;   // e.g. image/png
-        private String dataBase64;    // raw base64 or data URL
     }
 
     @Data

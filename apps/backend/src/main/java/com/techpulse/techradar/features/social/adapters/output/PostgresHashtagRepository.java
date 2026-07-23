@@ -20,7 +20,7 @@ public class PostgresHashtagRepository implements HashtagRepository {
         // `hashtags @> ARRAY[:tag]` filter, not this aggregation.
         return dbClient.sql(
                 "SELECT unnest(hashtags) AS tag, count(*) AS post_count " +
-                "FROM post WHERE created_at > :since AND hashtags IS NOT NULL " +
+                "FROM post WHERE created_at > :since AND hashtags IS NOT NULL AND deleted_at IS NULL " +
                 "GROUP BY tag ORDER BY post_count DESC LIMIT :limit")
                 .bind("since", since)
                 .bind("limit", limit)

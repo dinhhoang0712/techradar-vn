@@ -77,7 +77,31 @@ public class GetCareerRoadmapUseCase {
                 .collectList();
 
         return Mono.zip(recommendMono, careerMono, jobMatchesMono)
-                .flatMap(tuple -> assembleWithPaths(technologies, tuple.getT1(), tuple.getT2(), tuple.getT3()));
+                .flatMap(tuple -> assembleWithPaths(technologies, tuple.getT1(), tuple.getT2(), tuple.getT3()))
+                .flatMap(result -> persistTargetSkills(userId, result));
+    }
+
+    /**
+     * Best-effort: persists the recommended skill names so {@code JobMatchDispatcher} can also
+     * alert on new jobs matching a skill the user is learning next, not just their current
+     * technologies. A failure here must never break the roadmap response, so it's swallowed the
+     * same way as the /recommend, /career and road_analysis calls above.
+     */
+    private Mono<RoadmapResult> persistTargetSkills(String userId, RoadmapResult result) {
+        List<String> skillNames = result.nextSkills().stream()
+                .map(m -> SkillRecommendation.fromMap(m).techName())
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (skillNames.isEmpty()) {
+            return Mono.just(result);
+        }
+        return userProfileRepository.updateTargetSkills(userId, skillNames)
+                .onErrorResume(e -> {
+                    log.warn("Roadmap: failed to persist target_skills for user {}", userId, e);
+                    return Mono.empty();
+                })
+                .thenReturn(result);
     }
 
     @SuppressWarnings("unchecked")

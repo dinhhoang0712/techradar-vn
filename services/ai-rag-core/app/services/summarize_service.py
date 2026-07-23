@@ -2,8 +2,9 @@
 Summarization Service — tóm tắt xu hướng công nghệ từ bài viết Neo4j.
 Dùng MapReduce để tránh token overflow khi có nhiều articles.
 """
+
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.api.schemas import SummarizeRequest, SummarizeResponse
@@ -28,7 +29,8 @@ def _parse_period(period: str | None) -> tuple[str, str]:
     """
     if not period:
         from datetime import timedelta
-        end = datetime.now(tz=timezone.utc)
+
+        end = datetime.now(tz=UTC)
         start = end - timedelta(days=90)
         return start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
 
@@ -37,7 +39,7 @@ def _parse_period(period: str | None) -> tuple[str, str]:
         q = int(q)
         month_start = (q - 1) * 3 + 1
         month_end = q * 3
-        return f"{year}-{month_start:02d}-01", f"{year}-{month_end:02d}-{'30' if month_end in [6,9,11] else '31'}"
+        return f"{year}-{month_start:02d}-01", f"{year}-{month_end:02d}-{'30' if month_end in [6, 9, 11] else '31'}"
 
     if len(period) == 7:  # YYYY-MM
         year, month = period.split("-")
@@ -87,8 +89,7 @@ async def handle(req: SummarizeRequest) -> SummarizeResponse:
 
     # 2. Build articles text (truncate để tránh token overflow)
     articles_text = "\n\n".join(
-        f"[{i+1}] {a.get('title', '')}\n{str(a.get('content', ''))[:600]}"
-        for i, a in enumerate(articles)
+        f"[{i + 1}] {a.get('title', '')}\n{str(a.get('content', ''))[:600]}" for i, a in enumerate(articles)
     )
 
     # 3. LLM summarize
@@ -115,7 +116,7 @@ async def handle(req: SummarizeRequest) -> SummarizeResponse:
     key_points_messages = [
         {
             "role": "system",
-            "content": "Trích 3-5 điểm nổi bật nhất từ tóm tắt. Trả về JSON array: [\"điểm 1\", \"điểm 2\", ...]",
+            "content": 'Trích 3-5 điểm nổi bật nhất từ tóm tắt. Trả về JSON array: ["điểm 1", "điểm 2", ...]',
         },
         {"role": "user", "content": f"Tóm tắt:\n{summary_text}"},
     ]
@@ -123,7 +124,9 @@ async def handle(req: SummarizeRequest) -> SummarizeResponse:
     key_points: list[str] = []
     try:
         raw = await generate(key_points_messages)
-        import json, re
+        import json
+        import re
+
         match = re.search(r"\[.*\]", raw, re.DOTALL)
         if match:
             key_points = json.loads(match.group())

@@ -5,6 +5,7 @@ The Spring gateway sends the header `X-Internal-Auth: <internal_api_token>`. Whe
 `internal_api_token` is empty (the default) the check is skipped so local dev/tests keep working;
 set it in the environment to lock these endpoints down to the gateway only.
 """
+
 import secrets
 
 from fastapi import Header, HTTPException

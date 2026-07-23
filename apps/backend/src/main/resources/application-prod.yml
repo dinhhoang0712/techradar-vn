@@ -8,3 +8,11 @@ logging:
   level:
     root: WARN
     com.techpulse: INFO
+
+# Swagger UI / OpenAPI docs expose the full API surface (every endpoint, DTO, response shape) —
+# fine for dev, not something to serve publicly in production.
+springdoc:
+  swagger-ui:
+    enabled: false
+  api-docs:
+    enabled: false

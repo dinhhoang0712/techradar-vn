@@ -253,9 +253,7 @@ def canonicalize_technology_snapshot(
             n_merged=0,
         )
 
-    tech_id_map, canonical_name_map, group_sizes = _choose_representatives(
-        df_tech, df_edges_job_requires_tech
-    )
+    tech_id_map, canonical_name_map, group_sizes = _choose_representatives(df_tech, df_edges_job_requires_tech)
     canonical_ids = set(tech_id_map.values())
     n_merged = len(df_tech) - len(canonical_ids)
 

@@ -1,6 +1,5 @@
 package com.techpulse.techradar.features.auth.application;
 
-import com.techpulse.techradar.features.auth.adapters.input.LoginResponse;
 import com.techpulse.techradar.features.auth.ports.TokenValidator;
 import com.techpulse.techradar.features.auth.ports.UserRepository;
 import com.techpulse.techradar.shared.exception.InvalidCredentialsException;
@@ -45,7 +44,13 @@ public class RefreshTokenUseCase {
                             log.warn("Refresh token failed: user not found userId={}", userId);
                             return Mono.error(new InvalidCredentialsException("User not found"));
                         }))
-                        .map(tokenIssuer::issueFor)
+                        // Without this check a banned/deactivated user could keep calling
+                        // /auth/refresh to mint brand-new, fully valid access tokens (with the
+                        // current security stamp already embedded) for as long as their refresh
+                        // token remains unexpired - completely bypassing the ban.
+                        .flatMap(user -> user.isActive()
+                                ? tokenIssuer.issueFor(user)
+                                : Mono.error(new InvalidCredentialsException("User account is inactive")))
         )
         .doOnSuccess(response -> log.info("Access token refreshed for userId={}", response.getUserId()))
         .doOnError(InvalidCredentialsException.class,

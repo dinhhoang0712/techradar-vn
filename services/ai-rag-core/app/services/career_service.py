@@ -5,6 +5,7 @@ Career Assistant Service — tư vấn lộ trình học tập / career path.
   3. PostgreSQL: job demand cho skills trên path
   4. LLM: sinh roadmap cụ thể
 """
+
 import logging
 import uuid
 from pathlib import Path
@@ -111,10 +112,10 @@ async def handle(req: CareerRequest, db: AsyncSession) -> CareerResponse:
 
     # 5. LLM roadmap
     skill_gap_lines = "\n".join(f"- {s}" for s in gap_skills) or "(Không tìm thấy)"
-    analytics_lines = "\n".join(
-        f"- {name}: {d.get('job_count', 0)} việc làm"
-        for name, d in analytics_map.items()
-    ) or "(Không có dữ liệu)"
+    analytics_lines = (
+        "\n".join(f"- {name}: {d.get('job_count', 0)} việc làm" for name, d in analytics_map.items())
+        or "(Không có dữ liệu)"
+    )
 
     template = _load_template("career_template.txt")
     prompt = template.format(

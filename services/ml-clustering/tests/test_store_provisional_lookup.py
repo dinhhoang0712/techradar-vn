@@ -1,5 +1,6 @@
 """Kiểm tra AppStore.find_nearest_known_tech — provisional lookup cho tech chưa
 có trong snapshot (bằng difflib, không cần embedding model — xem app/store.py)."""
+
 from app.store import AppStore
 
 

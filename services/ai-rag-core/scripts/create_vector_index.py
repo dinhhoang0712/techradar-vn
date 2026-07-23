@@ -14,6 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from neo4j import AsyncGraphDatabase
+
 from app.config import get_settings
 
 
@@ -27,7 +28,7 @@ async def main() -> None:
         uri = uri.replace("neo4j+s://", "neo4j+ssc://", 1)
 
     index_name = settings.neo4j_vector_index  # "article_embedding_index"
-    dim = settings.embedding_dim              # 768
+    dim = settings.embedding_dim  # 768
 
     print(f"Kết nối Neo4j: {uri}")
     print(f"Sẽ tạo index: {index_name}  (dim={dim}, similarity=cosine)")
@@ -36,7 +37,6 @@ async def main() -> None:
 
     try:
         async with driver.session() as session:
-
             # Kiểm tra đã tồn tại chưa
             result = await session.run(
                 "SHOW INDEXES WHERE type = 'VECTOR' AND name = $name",

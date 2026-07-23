@@ -1,7 +1,8 @@
 package com.techpulse.techradar.features.radar.etl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.techpulse.techradar.features.kafka.KafkaTopicConstants;
-import com.techpulse.techradar.features.kafka.producer.KafkaProducerService;
+import com.techpulse.techradar.features.kafka.adapters.output.KafkaProducerService;
 import com.techpulse.techradar.features.notification.event.TrendAlertEvent;
 import com.techpulse.techradar.features.radar.domain.TechAnalyticsRow;
 import com.techpulse.techradar.features.radar.domain.TechCount;
@@ -14,6 +15,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
+import org.springframework.data.redis.core.ReactiveValueOperations;
 import org.springframework.test.util.ReflectionTestUtils;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -23,7 +26,10 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -50,11 +56,14 @@ class RadarAnalyticsEtlServiceTest {
     @Mock
     private KafkaProducerService kafkaProducer;
 
+    @Mock
+    private ReactiveStringRedisTemplate redisTemplate;
+
     private RadarAnalyticsEtlService service;
 
     @BeforeEach
     void setUp() {
-        service = new RadarAnalyticsEtlService(graphReadPort, writePort, kafkaProducer);
+        service = new RadarAnalyticsEtlService(graphReadPort, writePort, kafkaProducer, redisTemplate, new ObjectMapper());
         ReflectionTestUtils.setField(service, "trendThreshold", THRESHOLD);
     }
 
@@ -132,5 +141,40 @@ class RadarAnalyticsEtlServiceTest {
         StepVerifier.create(service.rebuild()).expectNext(2L).verifyComplete();
 
         verifyNoInteractions(kafkaProducer);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void rebuild_writesRunningThenIdleStatusToRedis() {
+        ReactiveValueOperations<String, String> valueOps = mock(ReactiveValueOperations.class);
+        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        when(valueOps.set(eq("radar:status"), anyString())).thenReturn(Mono.just(true));
+        when(graphReadPort.findArticleMentionDates()).thenReturn(List.of());
+        when(graphReadPort.findJobPostingDates()).thenReturn(List.of());
+        when(graphReadPort.findJobDemandSnapshot()).thenReturn(List.of());
+
+        StepVerifier.create(service.rebuild()).expectNext(0L).verifyComplete();
+
+        ArgumentCaptor<String> jsonCaptor = ArgumentCaptor.forClass(String.class);
+        verify(valueOps, times(2)).set(eq("radar:status"), jsonCaptor.capture());
+        assertThat(jsonCaptor.getAllValues().get(0)).contains("\"state\":\"running\"");
+        assertThat(jsonCaptor.getAllValues().get(1))
+                .contains("\"state\":\"idle\"")
+                .contains("\"rowsUpserted\":0");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void rebuild_stillWritesIdleStatus_whenTheEtlItselfFails() {
+        ReactiveValueOperations<String, String> valueOps = mock(ReactiveValueOperations.class);
+        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        when(valueOps.set(eq("radar:status"), anyString())).thenReturn(Mono.just(true));
+        when(graphReadPort.findArticleMentionDates()).thenThrow(new RuntimeException("Neo4j unreachable"));
+
+        StepVerifier.create(service.rebuild()).expectError(RuntimeException.class).verify();
+
+        ArgumentCaptor<String> jsonCaptor = ArgumentCaptor.forClass(String.class);
+        verify(valueOps, timeout(1000).times(2)).set(eq("radar:status"), jsonCaptor.capture());
+        assertThat(jsonCaptor.getAllValues().get(1)).contains("\"state\":\"idle\"").contains("\"rowsUpserted\":null");
     }
 }

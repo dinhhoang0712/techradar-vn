@@ -3,7 +3,9 @@ package com.techpulse.techradar.features.radar.adapters.input;
 import com.techpulse.techradar.features.radar.application.GetTopTechnologiesUseCase;
 import com.techpulse.techradar.features.radar.application.SearchTrendUseCase;
 import com.techpulse.techradar.features.radar.domain.MonthlyCount;
-import com.techpulse.techradar.features.radar.domain.TechSnapshot;
+import com.techpulse.techradar.features.radar.domain.RadarExporter;
+import com.techpulse.techradar.features.radar.realtime.RadarBroadcaster;
+import com.techpulse.techradar.features.radar.realtime.RadarSnapshotEvent;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -11,9 +13,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -32,13 +37,13 @@ public class RadarController {
     private final GetTopTechnologiesUseCase getTopTechnologiesUseCase;
     private final SearchTrendUseCase searchTrendUseCase;
     private final RadarExporter radarExporter;
+    private final RadarBroadcaster radarBroadcaster;
 
     @Operation(summary = "Get top 4 growing technologies")
     @GetMapping("/top4")
     public Mono<ResponseEntity<ApiResponse<List<RadarDtos.Top4Item>>>> getTop4() {
         return getTopTechnologiesUseCase.execute(4)
-                .map(t -> new RadarDtos.Top4Item(
-                        t.name(), t.growthRate(), t.jobCount(), t.momRate(), t.jobsThisMonth()))
+                .map(RadarDtos.Top4Item::from)
                 .collectList()
                 .map(items -> ResponseEntity.ok(ApiResponse.success(items, "Top 4 technologies")));
     }
@@ -47,9 +52,20 @@ public class RadarController {
     @GetMapping("/top10")
     public Mono<ResponseEntity<ApiResponse<List<RadarDtos.Top10Item>>>> getTop10() {
         return getTopTechnologiesUseCase.execute(10)
-                .map(t -> new RadarDtos.Top10Item(t.name(), t.jobCount()))
+                .map(RadarDtos.Top10Item::from)
                 .collectList()
                 .map(items -> ResponseEntity.ok(ApiResponse.success(items, "Top 10 technologies")));
+    }
+
+    @Operation(summary = "Realtime radar stream (SSE) — fresh top4/top10 snapshot after every ETL rebuild")
+    @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<ServerSentEvent<RadarSnapshotEvent>> stream() {
+        Flux<ServerSentEvent<RadarSnapshotEvent>> events = radarBroadcaster.stream()
+                .map(snapshot -> ServerSentEvent.builder(snapshot).event("radar-snapshot").build());
+        // Heartbeat keeps the connection alive through proxies that time out idle streams.
+        Flux<ServerSentEvent<RadarSnapshotEvent>> heartbeat = Flux.interval(Duration.ofSeconds(25))
+                .map(i -> ServerSentEvent.<RadarSnapshotEvent>builder().comment("ping").build());
+        return Flux.merge(events, heartbeat);
     }
 
     @Operation(summary = "Monthly trend for one or more technologies")

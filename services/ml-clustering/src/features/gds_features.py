@@ -26,7 +26,6 @@ from __future__ import annotations
 import logging
 import time
 
-import numpy as np
 import pandas as pd
 from neo4j import Driver
 
@@ -64,6 +63,7 @@ def _fill_missing_tech(
 # Embedding methods
 # ---------------------------------------------------------------------------
 
+
 def compute_fastrp(
     driver: Driver,
     graph_name: str,
@@ -78,7 +78,8 @@ def compute_fastrp(
     weights = iteration_weights or [0.0, 1.0, 1.0, 1.0]
     t0 = time.time()
 
-    rows = _run(driver,
+    rows = _run(
+        driver,
         """
         CALL gds.fastRP.stream($graph_name, {
             embeddingDimension:       $dim,
@@ -90,14 +91,11 @@ def compute_fastrp(
         WHERE n:Technology
         RETURN elementId(n) AS tech_id, embedding
         """,
-        {"graph_name": graph_name, "dim": embedding_dim,
-         "weights": weights, "norm": normalization_strength},
+        {"graph_name": graph_name, "dim": embedding_dim, "weights": weights, "norm": normalization_strength},
     )
 
     cols = [f"fastrp_{i}" for i in range(embedding_dim)]
-    df = pd.DataFrame(
-        [{"tech_id": r["tech_id"], **dict(zip(cols, r["embedding"]))} for r in rows]
-    )
+    df = pd.DataFrame([{"tech_id": r["tech_id"], **dict(zip(cols, r["embedding"]))} for r in rows])
     logger.info("compute_fastrp: %d rows, %.1fs", len(df), time.time() - t0)
     return df
 
@@ -113,7 +111,8 @@ def compute_node2vec(
     gds.node2vec.stream → DataFrame index tech_id, columns node2vec_0…node2vec_{D-1}.
     """
     t0 = time.time()
-    rows = _run(driver,
+    rows = _run(
+        driver,
         """
         CALL gds.node2vec.stream($graph_name, {
             embeddingDimension: $dim,
@@ -125,14 +124,11 @@ def compute_node2vec(
         WHERE n:Technology
         RETURN elementId(n) AS tech_id, embedding
         """,
-        {"graph_name": graph_name, "dim": embedding_dim,
-         "walk_length": walk_length, "walks_per_node": walks_per_node},
+        {"graph_name": graph_name, "dim": embedding_dim, "walk_length": walk_length, "walks_per_node": walks_per_node},
     )
 
     cols = [f"node2vec_{i}" for i in range(embedding_dim)]
-    df = pd.DataFrame(
-        [{"tech_id": r["tech_id"], **dict(zip(cols, r["embedding"]))} for r in rows]
-    )
+    df = pd.DataFrame([{"tech_id": r["tech_id"], **dict(zip(cols, r["embedding"]))} for r in rows])
     logger.info("compute_node2vec: %d rows, %.1fs", len(df), time.time() - t0)
     return df
 
@@ -140,6 +136,7 @@ def compute_node2vec(
 # ---------------------------------------------------------------------------
 # Centrality
 # ---------------------------------------------------------------------------
+
 
 def compute_pagerank(
     driver: Driver,
@@ -152,7 +149,8 @@ def compute_pagerank(
     Không clip outlier — feature_pipeline xử lý log-scale.
     """
     t0 = time.time()
-    rows = _run(driver,
+    rows = _run(
+        driver,
         """
         CALL gds.pageRank.stream($graph_name, {
             dampingFactor:  $damping,
@@ -179,7 +177,8 @@ def compute_degree_centrality(
     Projection UNDIRECTED nên degree_in == degree_out — vẫn export cả 3.
     """
     t0 = time.time()
-    rows = _run(driver,
+    rows = _run(
+        driver,
         """
         CALL gds.degree.stream($graph_name)
         YIELD nodeId, score
@@ -201,6 +200,7 @@ def compute_degree_centrality(
 # Community
 # ---------------------------------------------------------------------------
 
+
 def compute_louvain(
     driver: Driver,
     graph_name: str,
@@ -211,7 +211,8 @@ def compute_louvain(
     Community id là số nguyên raw — feature_pipeline sẽ one-hot top-K.
     """
     t0 = time.time()
-    rows = _run(driver,
+    rows = _run(
+        driver,
         """
         CALL gds.louvain.stream($graph_name, {maxLevels: $max_levels})
         YIELD nodeId, communityId
@@ -235,7 +236,8 @@ def compute_wcc(
     Phát hiện component rời rạc trong đồ thị.
     """
     t0 = time.time()
-    rows = _run(driver,
+    rows = _run(
+        driver,
         """
         CALL gds.wcc.stream($graph_name)
         YIELD nodeId, componentId

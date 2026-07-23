@@ -6,15 +6,16 @@ Chạy 4 thành phần song song:
   Thread 3 — Job Trigger Listener (Redis Pub/Sub → chạy ngay 1 job APScheduler)
   Main     — APScheduler          (Gold ETL + Enricher + Embed trigger)
 """
+
 import signal
 import sys
 import threading
 import time
-
-from loguru import logger
+from datetime import datetime
 
 from common.logger import configure_logging
 from config import get_settings
+from loguru import logger
 
 
 def main() -> None:
@@ -75,7 +76,7 @@ def main() -> None:
     if settings.run_jobs_on_start:
         logger.info("RUN_JOBS_ON_START=true — triggering all jobs immediately for initial seed...")
         for job in scheduler.get_jobs():
-            scheduler.modify_job(job.id, next_run_time=__import__("datetime").datetime.now())
+            scheduler.modify_job(job.id, next_run_time=datetime.now(scheduler.timezone))
 
     # ── Graceful shutdown ──────────────────────────────────────────────────
     stop_event = threading.Event()

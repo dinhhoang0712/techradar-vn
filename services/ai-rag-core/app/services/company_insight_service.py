@@ -2,6 +2,7 @@
 Company Insight Service — sinh nhận định AI ngắn gọn về 1 công ty dựa trên tech stack/quy mô
 tuyển dụng suy ra từ Neo4j. Cùng cấu trúc với summarize_service nhưng theo entity Company.
 """
+
 import json
 import logging
 import re
@@ -54,7 +55,7 @@ async def handle(req: CompanyInsightRequest) -> CompanyInsightResponse:
         {
             "role": "system",
             "content": "Bạn là chuyên gia phân tích thị trường tuyển dụng IT. Nhận định ngắn gọn, "
-                       "dựa hoàn toàn vào dữ liệu được cung cấp.",
+            "dựa hoàn toàn vào dữ liệu được cung cấp.",
         },
         {"role": "user", "content": prompt},
     ]
@@ -64,8 +65,7 @@ async def handle(req: CompanyInsightRequest) -> CompanyInsightResponse:
     highlights_messages = [
         {
             "role": "system",
-            "content": "Trích 2-3 điểm nổi bật nhất từ nhận định. Trả về JSON array: "
-                       "[\"điểm 1\", \"điểm 2\"]",
+            "content": 'Trích 2-3 điểm nổi bật nhất từ nhận định. Trả về JSON array: ["điểm 1", "điểm 2"]',
         },
         {"role": "user", "content": f"Nhận định:\n{summary_text}"},
     ]

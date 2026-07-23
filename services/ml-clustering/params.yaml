@@ -158,7 +158,7 @@ mlflow:
   registry_model_name: "tech_clusterer"
 
 labeling:
-  provider: "openai"              # "openai" | "gemini"
+  provider: "groq"                # "openai" | "gemini" | "groq"
   openai_model: "gpt-4o-mini"
   gemini_model: "gemini-2.5-flash"
   max_members_in_prompt: 25
@@ -166,6 +166,6 @@ labeling:
   cache_dir: "data/labels/.llm_cache"
 
 writeback:
-  enabled: false             # bật khi đã chốt model & labels
+  enabled: true              # bật khi đã chốt model & labels
   apoc_batch_size: 500
   clean_before_write: false  # xoá :BELONGS_TO|:NEAR_CLUSTER cũ trước khi ghi mới

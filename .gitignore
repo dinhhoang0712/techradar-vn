@@ -80,3 +80,5 @@ mlflow.db
 
 
 infrastructure/backup/infrastructure/backup/
+
+/db-dump/

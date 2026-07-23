@@ -200,6 +200,10 @@ def _run_pipeline() -> None:
                 # mà stage_03_train (2 stage trước) vừa log — --run-id là tham số bắt buộc, không
                 # có default, nên phải tự resolve rồi truyền vào đây.
                 cmd += ["--run-id", _resolve_best_run_id(load_params())]
+                # CLI mặc định --dry-run (an toàn cho chạy tay), nhưng qua HTTP trigger thì phải
+                # ghi thật — thiếu cờ này khiến stage luôn no-op (chỉ in preview, exit 0) dù
+                # writeback.enabled=true, nên Neo4j không bao giờ có :Cluster/:BELONGS_TO thật.
+                cmd.append("--no-dry-run")
 
             result = subprocess.run(
                 cmd,

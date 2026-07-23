@@ -62,9 +62,10 @@ export default function ClusterGrid({
                                 Tin cậy
                             </span>
                         </div>
-                        {cluster.overridden && (
+                        {(cluster.overridden || cluster.is_coherent === false) && (
                             <div className="cluster-card-badges">
-                                <span className="badge badge-primary">Đã chỉnh sửa</span>
+                                {cluster.overridden && <span className="badge badge-primary">Đã chỉnh sửa</span>}
+                                {cluster.is_coherent === false && <span className="badge badge-down">Chưa mạch lạc</span>}
                             </div>
                         )}
                     </button>

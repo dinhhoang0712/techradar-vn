@@ -2,11 +2,16 @@
 // đồng nhất (cùng ngưỡng màu theo tỉ lệ lương, cùng cách viết tắt "triệu").
 export const SALARY_COLORS: string[] = ['#00d68f', '#54C5F8', '#6C63FF', '#ffc94d', '#FF6584'];
 
-export function salaryColor(value: number | undefined | null, max: number | undefined | null): string {
-    if (!value || !max) return 'var(--text-3)';
-    const ratio = value / max;
-    if (ratio > 0.75) return 'var(--green)';
-    if (ratio > 0.45) return '#54C5F8';
+// Chia 3 mức lương (cao/vừa/thấp) theo tam phân vị của chính tập giá trị đang hiển thị,
+// thay vì theo tỉ lệ cố định so với max — vì chart chỉ vẽ top-N (đã lọc sẵn nhóm lương cao),
+// nên ngưỡng cố định theo % của max khiến mức "thấp" gần như không bao giờ xuất hiện.
+export function salaryColor(value: number | undefined | null, sortedDesc: number[]): string {
+    if (!value || sortedDesc.length === 0) return 'var(--text-3)';
+    const n = sortedDesc.length;
+    const highCut = sortedDesc[Math.max(0, Math.ceil(n / 3) - 1)];
+    const midCut = sortedDesc[Math.max(0, Math.ceil((2 * n) / 3) - 1)];
+    if (value >= highCut) return 'var(--green)';
+    if (value >= midCut) return '#54C5F8';
     return 'var(--yellow)';
 }
 

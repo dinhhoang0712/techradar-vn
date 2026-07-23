@@ -60,8 +60,17 @@ export default function SalaryPage() {
         return list;
     }, [safeData, search, sortBy]);
 
-    const topMedian = useMemo(() => Math.max(0, ...filtered.map(d => d.median_salary_mvnd)), [filtered]);
     const chartData = useMemo(() => filtered.slice(0, 20), [filtered]);
+    // Tam phân vị riêng cho chart (chỉ top 20) và cho bảng (toàn bộ filtered) — 2 tập giá trị
+    // khác kích thước nên ngưỡng màu cũng khác nhau, mỗi nơi vẫn tự chia đủ 3 mức trong tập của nó.
+    const chartMedians = useMemo(
+        () => chartData.map(d => d.median_salary_mvnd).sort((a, b) => b - a),
+        [chartData],
+    );
+    const filteredMedians = useMemo(
+        () => filtered.map(d => d.median_salary_mvnd).sort((a, b) => b - a),
+        [filtered],
+    );
 
     if (loading) return (
         <div className="salary-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300 }}>
@@ -113,15 +122,21 @@ export default function SalaryPage() {
                 {/* Chart */}
                 <div className="card salary-chart-card">
                     <h2 className="section-title">Top 20 — Median Salary (triệu VND)</h2>
-                    <ResponsiveContainer width="100%" height={320}>
-                        <BarChart data={chartData} layout="vertical" margin={{ top: 4, right: 40, left: 80, bottom: 4 }}>
+                    <ResponsiveContainer width="100%" height={Math.max(320, chartData.length * 28)}>
+                        <BarChart data={chartData} layout="vertical" margin={{ top: 4, right: 40, left: 8, bottom: 4 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
                             <XAxis type="number" tick={{ fill: 'var(--text-3)', fontSize: 11 }} unit="M" />
-                            <YAxis type="category" dataKey="tech_name" tick={{ fill: 'var(--text-2)', fontSize: 11 }} width={78} />
+                            <YAxis
+                                type="category"
+                                dataKey="tech_name"
+                                tick={{ fill: 'var(--text-2)', fontSize: 11 }}
+                                width={110}
+                                interval={0}
+                            />
                             <Tooltip content={<SalaryTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
                             <Bar dataKey="median_salary_mvnd" radius={[0, 4, 4, 0]} maxBarSize={18}>
                                 {chartData.map((entry) => (
-                                    <Cell key={entry.tech_name} fill={salaryColor(entry.median_salary_mvnd, topMedian)} />
+                                    <Cell key={entry.tech_name} fill={salaryColor(entry.median_salary_mvnd, chartMedians)} />
                                 ))}
                             </Bar>
                         </BarChart>
@@ -167,10 +182,10 @@ export default function SalaryPage() {
                                         >
                                             <td className="rank-cell">{i + 1}</td>
                                             <td className="tech-cell">
-                                                <span className="tech-dot" style={{ background: salaryColor(item.median_salary_mvnd, topMedian) }} />
+                                                <span className="tech-dot" style={{ background: salaryColor(item.median_salary_mvnd, filteredMedians) }} />
                                                 {item.tech_name}
                                             </td>
-                                            <td className="salary-cell" style={{ color: salaryColor(item.median_salary_mvnd, topMedian) }}>
+                                            <td className="salary-cell" style={{ color: salaryColor(item.median_salary_mvnd, filteredMedians) }}>
                                                 {formatM(item.median_salary_mvnd)}
                                             </td>
                                             <td className="range-cell">{item.salary_range}</td>

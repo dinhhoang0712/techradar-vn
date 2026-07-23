@@ -15,6 +15,7 @@ export default function ClusterDashboard() {
     const notify = useToast();
     const fgRef = useRef<ClusterFgMethods | undefined>(undefined);
     const [searchQuery, setSearchQuery] = useState('');
+    const [showIncoherent, setShowIncoherent] = useState(false);
     const [selectedClusterId, setSelectedClusterId] = useState<number | null>(null);
     const [hoveredNode, setHoveredNode] = useState<NodeObject<ClusterGraphNode> | null>(null);
     const [techLookupLoading, setTechLookupLoading] = useState(false);
@@ -23,13 +24,13 @@ export default function ClusterDashboard() {
     // useAsync tự bỏ qua response trả về muộn — tránh race condition khi đổi cụm được chọn nhanh.
     const { data: clusterData, loading, error } = useAsync<ClusterSummary[]>(
         async () => {
-            const response = await getClusters();
+            const response = await getClusters(showIncoherent ? null : true);
             // Depending on the backend response structure, it could be response.data or response directly.
             // It also could be an object mapping or an array.
             const data = ('data' in response ? response.data : response) as ClusterSummary[] | Record<string, ClusterSummary>;
             return Array.isArray(data) ? data : Object.values(data);
         },
-        [],
+        [showIncoherent],
         { initialData: [], onError: (err) => console.error('Error fetching clusters:', err) },
     );
 
@@ -247,14 +248,24 @@ export default function ClusterDashboard() {
 
                 {/* Chỉ hiện ô tìm kiếm ở màn hình Grid (hoặc có thể giữ lại tùy ý) */}
                 {selectedClusterId === null && (
-                    <div className="cluster-search-wrap">
-                        <input
-                            type="text"
-                            className="cluster-search-input"
-                            placeholder="Tìm kiếm cụm hoặc công nghệ..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                        />
+                    <div className="cluster-header-controls">
+                        <div className="cluster-search-wrap">
+                            <input
+                                type="text"
+                                className="cluster-search-input"
+                                placeholder="Tìm kiếm cụm hoặc công nghệ..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                        </div>
+                        <label className="cluster-incoherent-toggle">
+                            <input
+                                type="checkbox"
+                                checked={showIncoherent}
+                                onChange={(e) => setShowIncoherent(e.target.checked)}
+                            />
+                            Hiện cả cụm chưa mạch lạc
+                        </label>
                     </div>
                 )}
             </div>

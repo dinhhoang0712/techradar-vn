@@ -26,6 +26,29 @@
     max-width: 480px;
 }
 
+/* .form-input trùng với CareerPage.css/UserProfile.css vì trang này không import chúng
+   (route lazy-load riêng, CSS chunk của trang kia chưa chắc đã load). */
+.form-input {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    font-family: inherit;
+}
+
+.form-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-glow);
+}
+
+.form-input::placeholder {
+    color: var(--text-3);
+}
+
 .company-toolbar {
     display: flex;
     align-items: center;
@@ -154,6 +177,32 @@
     width: 56px;
     height: 22px;
     border-radius: 20px;
+}
+
+/* Skill chips trong company card — trùng với CareerPage.css vì trang này không import
+   CareerPage.css (route lazy-load riêng, CSS chunk của CareerPage chưa chắc đã load). */
+.skills-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.skill-chip {
+    border-radius: 14px;
+    font-size: 0.78rem;
+    padding: 3px 10px;
+}
+
+.skill-chip--have {
+    background: var(--green-glow);
+    border: 1px solid var(--green);
+    color: var(--green);
+}
+
+.skill-chip--missing {
+    background: var(--surface-2, rgba(128, 128, 128, 0.12));
+    border: 1px solid var(--border);
+    color: var(--text-3);
 }
 
 /* Detail panel */

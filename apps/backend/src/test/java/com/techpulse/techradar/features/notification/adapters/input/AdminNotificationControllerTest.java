@@ -1,6 +1,7 @@
 package com.techpulse.techradar.features.notification.adapters.input;
 
 import com.techpulse.techradar.features.notification.application.SendAdminNotificationUseCase;
+import com.techpulse.techradar.features.system.application.AuditLogService;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -13,8 +14,11 @@ import reactor.test.StepVerifier;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -22,12 +26,15 @@ class AdminNotificationControllerTest {
 
     @Mock
     private SendAdminNotificationUseCase sendAdminNotificationUseCase;
+    @Mock
+    private AuditLogService auditLogService;
 
     private AdminNotificationController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new AdminNotificationController(sendAdminNotificationUseCase);
+        controller = new AdminNotificationController(sendAdminNotificationUseCase, auditLogService);
+        lenient().when(auditLogService.record(any(), any(), any(), any())).thenReturn(Mono.empty());
     }
 
     @Test
@@ -48,6 +55,8 @@ class AdminNotificationControllerTest {
                     assertThat(body.getMessage()).contains("37");
                 })
                 .verifyComplete();
+
+        verify(auditLogService).record(eq("NOTIFICATION_SEND"), eq("notification"), isNull(), any());
     }
 
     @Test

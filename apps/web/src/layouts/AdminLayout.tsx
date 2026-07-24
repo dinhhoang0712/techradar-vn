@@ -1,6 +1,7 @@
 import { Outlet, Navigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import AdminSidebar from '../components/layout/AdminSidebar';
+import NotificationBell from '../components/notifications/NotificationBell';
 import { getCurrentUser } from '../api/authService';
 import type { User } from '../types/auth';
 import type { ApiResponse } from '../types/api';
@@ -42,13 +43,15 @@ export default function AdminLayout() {
                 onToggle={() => setCollapsed(!collapsed)}
             />
             <div className={`admin-main ${collapsed ? 'expanded' : ''}`}>
-                <header className="admin-mobile-header show-mobile">
-                    <button className="mobile-menu-btn" onClick={() => document.querySelector('.sidebar')?.classList.toggle('mobile-open')}>
+                <header className="admin-topbar">
+                    <button className="mobile-menu-btn show-mobile" onClick={() => document.querySelector('.sidebar')?.classList.toggle('mobile-open')}>
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M3 12h18M3 6h18M3 18h18"></path>
                         </svg>
                     </button>
-                    <span className="logo-text">Admin <span className="logo-accent">Panel</span></span>
+                    <span className="logo-text show-mobile">Admin <span className="logo-accent">Panel</span></span>
+                    <div className="admin-topbar-spacer" />
+                    <NotificationBell />
                 </header>
                 <main className="admin-content">
                     <Outlet />

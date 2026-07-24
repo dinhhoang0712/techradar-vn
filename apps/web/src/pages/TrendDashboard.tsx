@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import Select from 'react-select';
 import type { StylesConfig, MultiValue } from 'react-select';
-import { getRadarSearch, getRadarTop4, getRadarTop10, streamRadar } from '../api/trendService';
+import { getRadarSearch, getRadarTop4, getRadarTop10, streamRadar, downloadRadarTopPng, downloadRadarTopCsv } from '../api/trendService';
 import type { RadarSearchResponse, RadarTop4Item, RadarTop10Item, RadarSnapshotEvent } from '../types/trend';
 import { getForecast } from '../api/forecastService';
 import type { Forecast } from '../types/forecast';
@@ -136,6 +136,7 @@ export default function TrendDashboard() {
     const [loadingSummary, setLoadingSummary] = useState(false);
     const [summaryTech, setSummaryTech] = useState<string | null>(null);
     const [summaryError, setSummaryError] = useState('');
+    const [downloadingRanking, setDownloadingRanking] = useState<'png' | 'csv' | null>(null);
     const notify = useToast();
 
     // useAsync tự bỏ qua response trả về muộn khi selectedTechs/timeRange đổi nhanh, tránh
@@ -283,6 +284,19 @@ export default function TrendDashboard() {
         });
     }, [notify]);
 
+    const handleDownloadRankingExport = useCallback(async (kind: 'png' | 'csv') => {
+        setDownloadingRanking(kind);
+        try {
+            if (kind === 'png') await downloadRadarTopPng();
+            else await downloadRadarTopCsv();
+        } catch (err) {
+            console.error(`[TrendDashboard] Download ranking ${kind} failed:`, err);
+            notify({ title: `Không thể tải bảng xếp hạng (${kind.toUpperCase()})`, body: 'Vui lòng thử lại.', variant: 'error' });
+        } finally {
+            setDownloadingRanking(null);
+        }
+    }, [notify]);
+
     if (loadingTop) return <div className="dashboard-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300 }}><div className="loading-spinner"></div><span style={{ color: 'var(--text-2)', marginLeft: 12 }}>Đang tải dữ liệu...</span></div>;
 
     if (error) {
@@ -384,6 +398,22 @@ export default function TrendDashboard() {
                 <div className="controls-right">
                     <button className="btn btn-secondary" onClick={handleExportPNG}>Export PNG</button>
                     <button className="btn btn-primary" onClick={handleExportCSV}>Export CSV</button>
+                    <button
+                        className="btn btn-ghost"
+                        onClick={() => handleDownloadRankingExport('png')}
+                        disabled={downloadingRanking === 'png'}
+                        title="Xuất ảnh Top 20 công nghệ tăng trưởng mạnh nhất (server render)"
+                    >
+                        {downloadingRanking === 'png' ? 'Đang tải...' : 'Bảng xếp hạng (PNG)'}
+                    </button>
+                    <button
+                        className="btn btn-ghost"
+                        onClick={() => handleDownloadRankingExport('csv')}
+                        disabled={downloadingRanking === 'csv'}
+                        title="Xuất CSV Top 50 công nghệ tăng trưởng mạnh nhất"
+                    >
+                        {downloadingRanking === 'csv' ? 'Đang tải...' : 'Bảng xếp hạng (CSV)'}
+                    </button>
                 </div>
             </div>
 

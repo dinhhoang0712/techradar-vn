@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
-import { getUserProfile, updateUserProfile, uploadAvatar } from '../api/userService';
+import { useNavigate } from 'react-router-dom';
+import { getUserProfile, updateUserProfile, uploadAvatar, exportUserData, deleteAccount } from '../api/userService';
 import { getRecommendations } from '../api/recommendService';
 import { useToast } from '../components/common/toastContext';
 import { fileToBase64 } from '../utils/fileToBase64';
@@ -9,6 +10,7 @@ import ProfileEditForm from '../components/profile/ProfileEditForm';
 import type { ProfileFormState } from '../components/profile/ProfileEditForm';
 import ProfileViewDetails from '../components/profile/ProfileViewDetails';
 import type { ProfileViewData } from '../components/profile/ProfileViewDetails';
+import Modal from '../components/common/Modal';
 import type { UserProfileData, UpdateProfilePayload } from '../types/userProfile';
 import type { NextSkill } from '../types/career';
 import './UserProfile.css';
@@ -38,7 +40,12 @@ export default function UserProfile() {
     const [recommendations, setRecommendations] = useState<NextSkill[]>([]);
     const [recsBasedOn, setRecsBasedOn] = useState<string[]>([]);
     const [loadingRecs, setLoadingRecs] = useState(false);
+    const [exportingData, setExportingData] = useState(false);
+    const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+    const [deleteAccountPassword, setDeleteAccountPassword] = useState('');
+    const [deletingAccount, setDeletingAccount] = useState(false);
     const notify = useToast();
+    const navigate = useNavigate();
 
     useEffect(() => {
         loadProfile();
@@ -166,6 +173,41 @@ export default function UserProfile() {
         }
     };
 
+    const handleExportData = async () => {
+        setExportingData(true);
+        try {
+            const res = await exportUserData();
+            const blob = new Blob([JSON.stringify(res?.data ?? res, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'techradar_du_lieu_ca_nhan.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            showToast('error', (err as Error).message || 'Xuất dữ liệu thất bại. Vui lòng thử lại.');
+        } finally {
+            setExportingData(false);
+        }
+    };
+
+    const handleDeleteAccount = async () => {
+        if (!deleteAccountPassword) {
+            showToast('error', 'Vui lòng nhập mật khẩu hiện tại để xác nhận.');
+            return;
+        }
+        setDeletingAccount(true);
+        try {
+            await deleteAccount(deleteAccountPassword);
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            navigate('/login');
+        } catch (err) {
+            showToast('error', (err as Error).message || 'Xóa tài khoản thất bại. Vui lòng kiểm tra lại mật khẩu.');
+            setDeletingAccount(false);
+        }
+    };
+
     return (
         <div className="user-profile-page">
             <div className="profile-container">
@@ -231,6 +273,30 @@ export default function UserProfile() {
                         )}
                     </div>
                 )}
+
+                {!loading && (
+                    <div className="profile-danger-zone">
+                        <h3>Vùng nguy hiểm</h3>
+                        <div className="profile-danger-row">
+                            <div>
+                                <strong>Xuất dữ liệu của tôi</strong>
+                                <p>Tải xuống toàn bộ dữ liệu cá nhân (tài khoản, hồ sơ, bài viết, bình luận) dạng JSON.</p>
+                            </div>
+                            <button className="btn btn-secondary" onClick={handleExportData} disabled={exportingData}>
+                                {exportingData ? 'Đang xuất...' : 'Xuất dữ liệu'}
+                            </button>
+                        </div>
+                        <div className="profile-danger-row">
+                            <div>
+                                <strong>Xóa tài khoản</strong>
+                                <p>Xóa vĩnh viễn tài khoản và toàn bộ dữ liệu liên quan. Hành động này không thể hoàn tác.</p>
+                            </div>
+                            <button className="btn btn-danger" onClick={() => setShowDeleteAccountModal(true)}>
+                                Xóa tài khoản
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Recommendations section */}
@@ -239,6 +305,38 @@ export default function UserProfile() {
                 basedOn={recsBasedOn}
                 loading={loadingRecs}
             />
+
+            {showDeleteAccountModal && (
+                <Modal
+                    title="Xác nhận xóa tài khoản"
+                    onClose={() => { setShowDeleteAccountModal(false); setDeleteAccountPassword(''); }}
+                    width="420px"
+                >
+                    <p className="modal-body-text">
+                        Nhập mật khẩu hiện tại để xác nhận xóa vĩnh viễn tài khoản. Hành động này không thể hoàn tác.
+                    </p>
+                    <input
+                        type="password"
+                        className="profile-danger-password-input"
+                        placeholder="Mật khẩu hiện tại"
+                        value={deleteAccountPassword}
+                        onChange={e => setDeleteAccountPassword(e.target.value)}
+                        autoFocus
+                    />
+                    <div className="modal-actions">
+                        <button
+                            className="btn btn-ghost"
+                            onClick={() => { setShowDeleteAccountModal(false); setDeleteAccountPassword(''); }}
+                            disabled={deletingAccount}
+                        >
+                            Hủy bỏ
+                        </button>
+                        <button className="btn btn-danger" onClick={handleDeleteAccount} disabled={deletingAccount}>
+                            {deletingAccount ? 'Đang xóa...' : 'Xóa vĩnh viễn'}
+                        </button>
+                    </div>
+                </Modal>
+            )}
         </div>
     );
 }

@@ -62,7 +62,7 @@ _QUERY_TECH_ALIASES: dict[str, str] = {
 }
 
 
-def _normalize_tech_entities(entities: list[str]) -> list[str]:
+def normalize_tech_entities(entities: list[str]) -> list[str]:
     """Resolve query-time tech aliases to canonical graph names and deduplicate."""
     seen: dict[str, bool] = {}
     result: list[str] = []
@@ -75,9 +75,13 @@ def _normalize_tech_entities(entities: list[str]) -> list[str]:
     return result
 
 
-async def graph_search(query: str) -> dict:
+async def graph_search(query: str, extracted: dict | None = None) -> dict:
     """
     Trích entity từ query (dictionary + NER model, không dùng LLM) → graph traversal trên Job / Company / Technology.
+
+    extracted: kết quả extract_query_entities(query) nếu đã có sẵn (VD: strategy_selector đã
+               gọi trước ở pipeline.py) — truyền vào để tránh chạy lại NER lần 2. None thì tự
+               trích như cũ (giữ tương thích ngược cho caller/test hiện có).
 
     Trả về dict:
     {
@@ -88,10 +92,11 @@ async def graph_search(query: str) -> dict:
         "related_tech": list[dict],  # tech liên quan qua RELATED_TO
     }
     """
-    loop = asyncio.get_event_loop()
-    extracted = await loop.run_in_executor(None, extract_query_entities, query)
+    if extracted is None:
+        loop = asyncio.get_event_loop()
+        extracted = await loop.run_in_executor(None, extract_query_entities, query)
 
-    tech_entities = _normalize_tech_entities(extracted["technologies"])
+    tech_entities = normalize_tech_entities(extracted["technologies"])
     job_title_kws = extracted["job_titles"]
     company_names = extracted["companies"]
     locations = extracted["locations"]

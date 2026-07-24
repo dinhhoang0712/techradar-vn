@@ -1,3 +1,4 @@
+import MarkdownContent from '../common/MarkdownContent';
 import type { TechSummary } from '../../types/summarize';
 
 interface SummaryPanelProps {
@@ -26,12 +27,12 @@ export default function SummaryPanel({ tech, loading, summary, error, onClose }:
                     {summary.period && (
                         <span className="forecast-confidence">Giai đoạn: {summary.period} • {summary.sources_used ?? 0} nguồn tin</span>
                     )}
-                    {summary.summary && <p className="forecast-reasoning">{summary.summary}</p>}
+                    {summary.summary && <MarkdownContent className="forecast-reasoning">{summary.summary}</MarkdownContent>}
                     {summary.key_points && summary.key_points.length > 0 && (
                         <div className="forecast-signals">
                             {summary.key_points.map((p, i) => (
                                 <div key={i} className="forecast-signal">
-                                    <span className="signal-label">{p}</span>
+                                    <MarkdownContent className="signal-label">{p}</MarkdownContent>
                                 </div>
                             ))}
                         </div>

@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { runInterviewTurn } from '../api/interviewService';
 import RingGauge from '../components/common/RingGauge';
-import { renderMarkdown } from '../utils/markdown';
+import MarkdownContent from '../components/common/MarkdownContent';
+import CopyButton from '../components/common/CopyButton';
+import { exportElementToPdf } from '../utils/exportPdf';
 import type { InterviewTurn, InterviewFinalSummary } from '../types/interview';
 import './InterviewPage.css';
 
@@ -33,6 +35,24 @@ export default function InterviewPage() {
     const [turn, setTurn] = useState(1);
     const [isFinal, setIsFinal] = useState(false);
     const [finalSummary, setFinalSummary] = useState<InterviewFinalSummary | null>(null);
+    const [exportingPdf, setExportingPdf] = useState(false);
+    const transcriptRef = useRef<HTMLDivElement>(null);
+
+    // Chụp toàn bộ transcript (câu hỏi/trả lời/feedback từng câu) + khối điểm số/nhận xét cuối
+    // thành PDF — dùng chung utils/exportPdf.ts với ReportPage.
+    const handleExportPDF = async () => {
+        const el = transcriptRef.current;
+        if (!el) return;
+        setExportingPdf(true);
+        try {
+            await exportElementToPdf(el, `phong-van-thu-${targetRole.trim().replace(/\s+/g, '-') || 'ket-qua'}.pdf`);
+        } catch (err) {
+            console.error('[InterviewPage] Export PDF failed:', err);
+            setError('Không thể xuất PDF. Vui lòng thử lại.');
+        } finally {
+            setExportingPdf(false);
+        }
+    };
 
     const handleStart = async () => {
         if (!targetRole.trim() || loading) return;
@@ -145,7 +165,7 @@ export default function InterviewPage() {
                     {error && <div className="interview-error">{error}</div>}
                 </div>
             ) : (
-                <div className="card interview-chat-card">
+                <div className="card interview-chat-card" ref={transcriptRef}>
                     {!isFinal && (
                         <div className="interview-progress">
                             <span>Câu {turn}/{MAX_TURNS}</span>
@@ -162,7 +182,11 @@ export default function InterviewPage() {
                                     <div className="user-avatar">B</div>
                                     <div className="chat-bubble user"><div className="bubble-content">{h.answer}</div></div>
                                 </div>
-                                {h.feedback && <div className="interview-feedback-note">💡 {h.feedback}</div>}
+                                {h.feedback && (
+                                    <div className="interview-feedback-note">
+                                        💡 <MarkdownContent className="interview-feedback-md">{h.feedback}</MarkdownContent>
+                                    </div>
+                                )}
                             </div>
                         ))}
 
@@ -218,7 +242,18 @@ export default function InterviewPage() {
                                     className="interview-score-gauge"
                                 />
                             </div>
-                            <div className="interview-summary-text">{renderMarkdown(finalSummary?.summary || '')}</div>
+                            <MarkdownContent className="interview-summary-text">{finalSummary?.summary || ''}</MarkdownContent>
+                            <div className="interview-result-actions">
+                                {finalSummary?.summary && <CopyButton text={finalSummary.summary} label="Copy đánh giá" />}
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    onClick={handleExportPDF}
+                                    disabled={exportingPdf}
+                                >
+                                    {exportingPdf ? <><span className="btn-spinner" /> Đang xuất PDF...</> : 'Xuất PDF'}
+                                </button>
+                            </div>
                             <button type="button" className="btn btn-secondary" onClick={handleReset}>
                                 Phỏng vấn lại
                             </button>

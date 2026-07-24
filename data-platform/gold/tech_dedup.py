@@ -38,20 +38,28 @@ tắt, viết hoa/thường khác, đồng nghĩa).
 Danh sách:
 {names}
 
-Tìm các NHÓM tên mà bạn CHẮC CHẮN là cùng 1 công nghệ (ví dụ "K8s" và \
+Nhiệm vụ 1 — Gộp trùng: Tìm các NHÓM tên mà bạn CHẮC CHẮN là cùng 1 công nghệ (ví dụ "K8s" và \
 "Kubernetes" là CÙNG 1 thứ). Chỉ nhóm khi chắc chắn tuyệt đối — KHÔNG nhóm \
 các công nghệ chỉ đơn thuần liên quan/cùng lĩnh vực (ví dụ "React" và "Vue" \
 KHÔNG được nhóm, dù cùng là frontend framework — đó là 2 công nghệ khác nhau).
+
+Nhiệm vụ 2 — Phân loại: Với MỖI tên trong danh sách (kể cả tên không nằm trong nhóm nào ở \
+Nhiệm vụ 1), gán đúng 1 category trong số: "language", "framework", "tool", "cloud", \
+"database", "other".
 
 Trả về CHỈ JSON, đúng format:
 {{
   "groups": [
     {{"names": ["K8s", "Kubernetes"], "canonical": "Kubernetes", "confidence": "high", "reasoning": "..."}},
     {{"names": ["Postgres", "PostgreSQL"], "canonical": "PostgreSQL", "confidence": "low", "reasoning": "..."}}
+  ],
+  "categories": [
+    {{"name": "Kubernetes", "category": "tool"}},
+    {{"name": "Python", "category": "language"}}
   ]
 }}
 confidence "high" nếu chắc chắn tuyệt đối, "low" nếu có khả năng nhưng không chắc 100%.
-Nếu không có nhóm nào, trả {{"groups": []}}.
+Nếu không có nhóm nào, trả groups rỗng — nhưng categories PHẢI có đủ cho MỌI tên trong danh sách.
 """
 
 
@@ -89,6 +97,26 @@ def _save_review_queue(conn, entries: list[dict]) -> None:
     conn.commit()
 
 
+def _save_categories(conn, categories: dict[str, str]) -> None:
+    """
+    categories: {canonical_name: category}. Dùng canonical_name (không phải alias) làm khoá
+    — mọi alias của cùng 1 công nghệ chia sẻ 1 category duy nhất, tránh trùng lặp/lệch dữ
+    liệu giữa các dòng alias của cùng 1 tech (xem docs/DATABASE.md §4.1, dp_tech_category
+    hoàn thiện field `category` đã document nhưng chưa từng có writer nào ghi).
+    """
+    if not categories:
+        return
+    with conn.cursor() as cur:
+        for canonical_name, category in categories.items():
+            cur.execute(
+                """INSERT INTO dp_tech_category (canonical_name, category, source)
+                   VALUES (%s, %s, 'llm_auto')
+                   ON CONFLICT (canonical_name) DO UPDATE SET category = EXCLUDED.category, updated_at = now()""",
+                (canonical_name, category),
+            )
+    conn.commit()
+
+
 def _fetch_technology_names(driver) -> list[str]:
     with driver.session() as session:
         result = session.run("MATCH (t:Technology) RETURN DISTINCT t.name AS name")
@@ -101,14 +129,19 @@ def _fetch_technology_names(driver) -> list[str]:
 # từng loại quan hệ thay vì merge "mọi loại" chung chung.
 _INCOMING_REL_TYPES = ["MENTIONS", "REQUIRES", "USES", "IS_TECHNOLOGY"]
 
+# Quan hệ Technology là NGUỒN (trỏ RA) ngoài RELATED_TO — ghi bởi
+# ml-clustering/stage_05_writeback.py. Phải redirect khi merge, nếu không
+# node phụ bị xoá sẽ kéo theo mất luôn cluster assignment của nó.
+_OUTGOING_REL_TYPES = ["BELONGS_TO", "NEAR_CLUSTER"]
+
 
 def _merge_duplicate_node(driver, duplicate_name: str, canonical_name: str) -> bool:
     """
-    Merge node 'duplicate_name' vào 'canonical_name': chuyển hướng từng loại
-    quan hệ đã biết (xem _INCOMING_REL_TYPES + RELATED_TO 2 chiều) sang
-    canonical, sau đó DETACH DELETE node phụ (dọn luôn quan hệ loại lạ nếu
-    có, dù không redirect được — tradeoff chấp nhận được vì schema đã biết
-    trước, không đổi thường xuyên).
+    Merge node 'duplicate_name' vào 'canonical_name' theo TÊN — dùng cho biến
+    thể chính tả/hoa-thường khác nhau (2 tên KHÁC NHAU cùng 1 công nghệ, vd
+    "Go"/"Golang"). KHÔNG dùng được khi 2 node trùng y hệt cùng 1 chuỗi tên —
+    trường hợp đó phải dùng _merge_duplicate_node_by_id (xem hàm đó để biết
+    lý do match theo tên không phân biệt được node nào là node nào).
 
     Trả False nếu 1 trong 2 tên không tồn tại hoặc trùng nhau — không raise,
     an toàn để gọi lặp lại (idempotent, dùng MERGE khi tạo lại cạnh).
@@ -135,6 +168,18 @@ def _merge_duplicate_node(driver, duplicate_name: str, canonical_name: str) -> b
                 MATCH (canonical:Technology {{name: $canonical_name}})
                 WHERE elementId(canonical) <> elementId(dup)
                 MERGE (other)-[:{rel_type}]->(canonical)
+                DELETE r
+                """,
+                {"canonical_name": canonical_name, "dup_name": duplicate_name},
+            )
+
+        for rel_type in _OUTGOING_REL_TYPES:
+            session.run(
+                f"""
+                MATCH (dup:Technology {{name: $dup_name}})-[r:{rel_type}]->(other)
+                MATCH (canonical:Technology {{name: $canonical_name}})
+                WHERE elementId(canonical) <> elementId(dup)
+                MERGE (canonical)-[:{rel_type}]->(other)
                 DELETE r
                 """,
                 {"canonical_name": canonical_name, "dup_name": duplicate_name},
@@ -169,20 +214,144 @@ def _merge_duplicate_node(driver, duplicate_name: str, canonical_name: str) -> b
     return True
 
 
-def _parse_llm_response(raw: str) -> list[dict]:
-    """Bóc markdown fence nếu có + parse JSON → list group. Tách riêng khỏi
-    _call_llm để test được mà không cần gọi API thật."""
+def _find_exact_duplicate_groups(driver) -> list[dict]:
+    """
+    Tìm các nhóm node :Technology trùng Y HỆT `name` (khác elementId) — loại
+    trùng lặp mà _merge_duplicate_node (match theo tên) không bao giờ phát
+    hiện được, vì {name: $dup_name} khớp CẢ HAI node cùng lúc. Sinh ra do
+    MERGE (t:Technology {name: ...}) race giữa nhiều writer khi Neo4j KHÔNG
+    có unique constraint trên Technology.name (xem docs/DATABASE.md §4).
+    """
+    with driver.session() as session:
+        result = session.run(
+            """
+            MATCH (t:Technology)
+            WHERE t.name IS NOT NULL
+            WITH t.name AS name, collect(elementId(t)) AS ids
+            WHERE size(ids) > 1
+            RETURN name, ids
+            """
+        )
+        return [{"name": r["name"], "ids": r["ids"]} for r in result]
+
+
+def _merge_duplicate_node_by_id(driver, duplicate_id: str, canonical_id: str) -> bool:
+    """
+    Giống _merge_duplicate_node nhưng match theo elementId — dùng khi 2 node
+    có CÙNG name (nên không thể phân biệt bằng {name: ...} trong Cypher).
+    """
+    with driver.session() as session:
+        exists = list(
+            session.run(
+                """
+                MATCH (canonical) WHERE elementId(canonical) = $canonical_id
+                MATCH (dup) WHERE elementId(dup) = $dup_id
+                RETURN count(*) AS c
+                """,
+                {"canonical_id": canonical_id, "dup_id": duplicate_id},
+            )
+        )
+        if not exists or exists[0]["c"] == 0:
+            return False
+
+        for rel_type in _INCOMING_REL_TYPES:
+            session.run(
+                f"""
+                MATCH (other)-[r:{rel_type}]->(dup) WHERE elementId(dup) = $dup_id
+                MATCH (canonical) WHERE elementId(canonical) = $canonical_id
+                MERGE (other)-[:{rel_type}]->(canonical)
+                DELETE r
+                """,
+                {"canonical_id": canonical_id, "dup_id": duplicate_id},
+            )
+
+        for rel_type in _OUTGOING_REL_TYPES:
+            session.run(
+                f"""
+                MATCH (dup)-[r:{rel_type}]->(other) WHERE elementId(dup) = $dup_id
+                MATCH (canonical) WHERE elementId(canonical) = $canonical_id
+                MERGE (canonical)-[:{rel_type}]->(other)
+                DELETE r
+                """,
+                {"canonical_id": canonical_id, "dup_id": duplicate_id},
+            )
+
+        session.run(
+            """
+            MATCH (dup)-[r:RELATED_TO]->(other) WHERE elementId(dup) = $dup_id
+            MATCH (canonical) WHERE elementId(canonical) = $canonical_id AND elementId(other) <> $canonical_id
+            MERGE (canonical)-[:RELATED_TO]->(other)
+            DELETE r
+            """,
+            {"canonical_id": canonical_id, "dup_id": duplicate_id},
+        )
+        session.run(
+            """
+            MATCH (other)-[r:RELATED_TO]->(dup) WHERE elementId(dup) = $dup_id
+            MATCH (canonical) WHERE elementId(canonical) = $canonical_id AND elementId(other) <> $canonical_id
+            MERGE (other)-[:RELATED_TO]->(canonical)
+            DELETE r
+            """,
+            {"canonical_id": canonical_id, "dup_id": duplicate_id},
+        )
+
+        session.run(
+            "MATCH (dup) WHERE elementId(dup) = $dup_id DETACH DELETE dup",
+            {"dup_id": duplicate_id},
+        )
+    return True
+
+
+def _dedup_exact_duplicates(driver) -> int:
+    """
+    Gộp mọi nhóm node :Technology trùng y hệt name (xem
+    _find_exact_duplicate_groups) — giữ lại node có elementId nhỏ nhất
+    (node cũ nhất) làm canonical, merge phần còn lại vào đó. Chạy TRƯỚC
+    Giai đoạn A/B vì các giai đoạn sau làm việc trên DISTINCT name nên
+    không thấy được loại trùng lặp này.
+    """
+    merged = 0
+    for group in _find_exact_duplicate_groups(driver):
+        ids = sorted(group["ids"])
+        canonical_id, dup_ids = ids[0], ids[1:]
+        for dup_id in dup_ids:
+            if _merge_duplicate_node_by_id(driver, dup_id, canonical_id):
+                merged += 1
+                logger.info(
+                    "Tech Dedup: merged node trùng tên '{}' (elementId {} -> {})",
+                    group["name"],
+                    dup_id,
+                    canonical_id,
+                )
+    return merged
+
+
+def _strip_markdown_fence(raw: str) -> str:
     raw = raw.strip()
     if raw.startswith("```"):
         lines = raw.splitlines()
         end = len(lines) - 1 if lines[-1].strip() == "```" else len(lines)
         raw = "\n".join(lines[1:end])
+    return raw
 
-    data = json.loads(raw)
+
+def _parse_llm_response(raw: str) -> list[dict]:
+    """Bóc markdown fence nếu có + parse JSON → list group. Tách riêng khỏi
+    _call_llm để test được mà không cần gọi API thật."""
+    data = json.loads(_strip_markdown_fence(raw))
     return data.get("groups", [])
 
 
-def _call_llm(names: list[str], settings: Settings) -> list[dict]:
+def _parse_llm_categories(raw: str) -> list[dict]:
+    """Parse cùng response JSON của _call_llm để lấy phần category — tách hàm riêng khỏi
+    _parse_llm_response để không đổi contract của hàm đó (đã có test riêng cho phần groups)."""
+    data = json.loads(_strip_markdown_fence(raw))
+    return data.get("categories", [])
+
+
+def _call_llm(names: list[str], settings: Settings) -> str:
+    """Trả raw text từ LLM (chưa parse) — dùng chung cho cả _parse_llm_response (groups) lẫn
+    _parse_llm_categories (categories), vì 2 nhiệm vụ này nằm trong cùng 1 lần gọi LLM."""
     provider = settings.tech_dedup_llm_provider
     prompt = _LLM_PROMPT_TEMPLATE.format(names="\n".join(f"- {n}" for n in names))
 
@@ -196,7 +365,7 @@ def _call_llm(names: list[str], settings: Settings) -> list[dict]:
             response_format={"type": "json_object"},
             messages=[{"role": "user", "content": prompt}],
         )
-        raw = response.choices[0].message.content
+        return response.choices[0].message.content
     elif provider == "groq":
         from groq import Groq
 
@@ -207,7 +376,7 @@ def _call_llm(names: list[str], settings: Settings) -> list[dict]:
             response_format={"type": "json_object"},
             messages=[{"role": "user", "content": prompt}],
         )
-        raw = response.choices[0].message.content
+        return response.choices[0].message.content
     else:
         import google.generativeai as genai
 
@@ -216,19 +385,24 @@ def _call_llm(names: list[str], settings: Settings) -> list[dict]:
             model_name=settings.tech_dedup_gemini_model,
             generation_config=genai.GenerationConfig(temperature=0.0, response_mime_type="application/json"),
         )
-        raw = model.generate_content(prompt).text
-
-    return _parse_llm_response(raw)
+        return model.generate_content(prompt).text
 
 
 def run(settings: Settings) -> dict:
     logger.info("Tech Dedup: starting...")
     pg_conn = get_pg_conn(settings)
     run_id = log_pipeline_run(pg_conn, "tech_dedup", "running")
-    results = {"merged_known_alias": 0, "merged_llm_high_confidence": 0, "sent_to_review": 0}
+    results = {"merged_exact_duplicates": 0, "merged_known_alias": 0, "merged_llm_high_confidence": 0, "sent_to_review": 0}
 
     try:
         driver = get_neo4j_driver(settings)
+
+        # Giai đoạn 0 — gộp node trùng Y HỆT name (2 node vật lý khác nhau nhưng
+        # cùng 1 chuỗi tên) — TRƯỚC Giai đoạn A/B vì các giai đoạn đó làm việc
+        # trên DISTINCT name nên mù trước loại trùng lặp này (xem docstring
+        # _find_exact_duplicate_groups).
+        results["merged_exact_duplicates"] = _dedup_exact_duplicates(driver)
+
         alias_map = _load_alias_map(pg_conn)
         names = _fetch_technology_names(driver)
         logger.info("Tech Dedup: {} Technology name(s) hiện có, {} alias đã biết", len(names), len(alias_map))
@@ -248,9 +422,12 @@ def run(settings: Settings) -> dict:
 
         if len(unresolved) >= 2:
             logger.info("Tech Dedup: {} tên chưa có alias, hỏi LLM...", len(unresolved))
-            groups = _call_llm(unresolved, settings)
+            raw = _call_llm(unresolved, settings)
+            groups = _parse_llm_response(raw)
+            categories = _parse_llm_categories(raw)
             new_aliases: dict[str, str] = {}
             review_entries: list[dict] = []
+            name_to_canonical: dict[str, str] = {}
 
             for group in groups:
                 group_names = group.get("names", [])
@@ -258,6 +435,9 @@ def run(settings: Settings) -> dict:
                 confidence = group.get("confidence", "low")
                 if not canonical or len(group_names) < 2:
                     continue
+
+                for n in group_names:
+                    name_to_canonical[n] = canonical
 
                 if confidence == "high":
                     for n in group_names:
@@ -282,6 +462,19 @@ def run(settings: Settings) -> dict:
 
             _save_new_aliases(pg_conn, new_aliases)
             _save_review_queue(pg_conn, review_entries)
+
+            # Category cho tên MỚI phát hiện (MVP đi tới) — tên nằm trong group thì lưu
+            # category dưới canonical, tránh mỗi alias 1 category lệch nhau.
+            category_by_canonical: dict[str, str] = {}
+            for c in categories:
+                name = c.get("name")
+                category = c.get("category")
+                if not name or not category:
+                    continue
+                canonical = name_to_canonical.get(name, name)
+                category_by_canonical.setdefault(canonical, category)
+            _save_categories(pg_conn, category_by_canonical)
+            results["categorized"] = len(category_by_canonical)
         else:
             logger.info("Tech Dedup: không còn tên nào cần hỏi LLM.")
 

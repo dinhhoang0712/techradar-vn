@@ -2,6 +2,7 @@ package com.techpulse.techradar.features.system.adapters.input;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.techpulse.techradar.features.system.application.AuditLogService;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import com.techpulse.techradar.shared.redis.RedisLock;
 import io.swagger.v3.oas.annotations.Operation;
@@ -46,6 +47,7 @@ public class CrawlerAdminController {
     private final ReactiveStringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
     private final RedisTriggerPublisher redisTriggerPublisher;
+    private final AuditLogService auditLogService;
 
     @Operation(summary = "Trigger an immediate crawl run instead of waiting for the crawler's own schedule")
     @PostMapping("/trigger")
@@ -64,7 +66,8 @@ public class CrawlerAdminController {
                                     ApiResponse.<Map<String, Object>>error(
                                             "Đang có một lượt cào dữ liệu chạy, vui lòng đợi", "CRAWL_IN_PROGRESS")));
                         }
-                        return publishTrigger();
+                        return auditLogService.record("CRAWLER_TRIGGER", "crawler", null, null)
+                                .then(publishTrigger());
                     });
                 });
     }

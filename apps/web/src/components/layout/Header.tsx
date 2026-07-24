@@ -82,10 +82,43 @@ export default function Header() {
             <div className="header-inner">
                 {/* Logo */}
                 <NavLink to="/dashboard" className="header-logo">
-                    <span className="logo-ping" aria-hidden="true">
-                        <span className="ping-ring"></span>
-                        <span className="ping-dot"></span>
-                    </span>
+                    <svg className="logo-mark" viewBox="0 0 64 64" aria-hidden="true">
+                        <defs>
+                            <linearGradient id="logoGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+                                <stop offset="0%" stopColor="#4f9dff" />
+                                <stop offset="100%" stopColor="#9b8cff" />
+                            </linearGradient>
+                            <filter id="logoGlow" x="-60%" y="-60%" width="220%" height="220%">
+                                <feGaussianBlur stdDeviation="1.3" result="blur" />
+                                <feMerge>
+                                    <feMergeNode in="blur" />
+                                    <feMergeNode in="SourceGraphic" />
+                                </feMerge>
+                            </filter>
+                        </defs>
+
+                        {/* radar dial */}
+                        <circle cx="30" cy="36" r="22" fill="none" stroke="#6b74a0" strokeWidth="3" opacity="0.5" />
+
+                        {/* rotating sweep */}
+                        <g className="logo-sweep">
+                            <path d="M30,36 L26.18,14.33 A22,22 0 0,1 35.69,14.75 Z" fill="url(#logoGrad)" opacity="0.18" />
+                            <line x1="30" y1="36" x2="35.69" y2="14.75" stroke="url(#logoGrad)" strokeWidth="2" strokeLinecap="round" opacity="0.9" />
+                            <circle cx="35.69" cy="14.75" r="2" fill="#f4f7ff" />
+                        </g>
+
+                        {/* breakout trend line */}
+                        <g filter="url(#logoGlow)">
+                            <path d="M16,46 L30,36 L44,22 L54,10" fill="none" stroke="url(#logoGrad)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+                            <circle className="logo-ping-ring" cx="54" cy="10" r="5" fill="none" stroke="#bdb2ff" strokeWidth="1.4" />
+                            <circle className="logo-ping-ring logo-ping-ring--delay" cx="54" cy="10" r="5" fill="none" stroke="#bdb2ff" strokeWidth="1.4" />
+                            <circle cx="16" cy="46" r="2.8" fill="#4f9dff" />
+                            <circle cx="30" cy="36" r="3.2" fill="#82c0ff" />
+                            <circle cx="44" cy="22" r="3.8" fill="#bdb2ff" />
+                            <circle cx="54" cy="10" r="9" fill="#9b8cff" opacity="0.32" />
+                            <circle cx="54" cy="10" r="5" fill="#f4f7ff" />
+                        </g>
+                    </svg>
                     <span className="logo-text">Tech<span className="logo-accent">Radar</span></span>
                 </NavLink>
 

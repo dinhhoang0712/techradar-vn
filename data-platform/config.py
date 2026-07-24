@@ -47,17 +47,17 @@ class Settings(BaseSettings):
     tech_dedup_groq_model: str = "llama-3.3-70b-versatile"
 
     # Scheduler cron (hour, minute in Asia/Ho_Chi_Minh)
-    article_sync_hour: int = 2
+    article_sync_hour: int = 0
     article_sync_minute: int = 0
-    job_sync_hour: int = 2
+    job_sync_hour: int = 0
     job_sync_minute: int = 30
-    gold_etl_hour: int = 3
+    gold_etl_hour: int = 1
     gold_etl_minute: int = 0
-    embed_trigger_hour: int = 4
+    embed_trigger_hour: int = 2
     embed_trigger_minute: int = 0
-    neo4j_enricher_hour: int = 5
+    neo4j_enricher_hour: int = 3
     neo4j_enricher_minute: int = 0
-    tech_dedup_hour: int = 5
+    tech_dedup_hour: int = 3
     tech_dedup_minute: int = 30
     # Clustering retrain: chạy sau neo4j_enricher (6 AM), mỗi tuần Chủ nhật
     clustering_retrain_hour: int = 6

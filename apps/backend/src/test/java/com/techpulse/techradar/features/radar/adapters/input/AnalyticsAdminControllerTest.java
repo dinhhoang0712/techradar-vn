@@ -2,7 +2,9 @@ package com.techpulse.techradar.features.radar.adapters.input;
 
 import com.techpulse.techradar.features.radar.application.RadarCacheKeys;
 import com.techpulse.techradar.features.radar.etl.RadarAnalyticsEtlService;
+import com.techpulse.techradar.features.notification.application.NotificationService;
 import com.techpulse.techradar.features.radar.realtime.RadarBroadcaster;
+import com.techpulse.techradar.features.system.application.AuditLogService;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import com.techpulse.techradar.shared.redis.ReactiveRedisCache;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,7 +19,10 @@ import reactor.test.StepVerifier;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -30,12 +35,18 @@ class AnalyticsAdminControllerTest {
     private ReactiveRedisCache redisCache;
     @Mock
     private RadarBroadcaster radarBroadcaster;
+    @Mock
+    private AuditLogService auditLogService;
+    @Mock
+    private NotificationService notificationService;
 
     private AnalyticsAdminController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new AnalyticsAdminController(etlService, redisCache, radarBroadcaster);
+        controller = new AnalyticsAdminController(etlService, redisCache, radarBroadcaster, auditLogService, notificationService);
+        lenient().when(auditLogService.record(any(), any(), any(), any())).thenReturn(Mono.empty());
+        lenient().when(notificationService.notifyAllAdmins(any(), any(), any(), any())).thenReturn(Mono.empty());
     }
 
     @Test
@@ -56,6 +67,9 @@ class AnalyticsAdminControllerTest {
         InOrder order = inOrder(redisCache, radarBroadcaster);
         order.verify(redisCache).evictByPattern(RadarCacheKeys.EVICT_ALL_PATTERN);
         order.verify(radarBroadcaster).publishLatestSnapshot();
+
+        verify(auditLogService).record(eq("ANALYTICS_REBUILD"), eq("analytics"), any(), any());
+        verify(notificationService).notifyAllAdmins(eq("ADMIN_ANALYTICS_REBUILD_DONE"), any(), any(), eq("/admin/automation"));
     }
 
     @Test
@@ -65,5 +79,7 @@ class AnalyticsAdminControllerTest {
         StepVerifier.create(controller.rebuild())
                 .assertNext(response -> assertThat(response.getStatusCode().value()).isEqualTo(503))
                 .verifyComplete();
+
+        verify(notificationService).notifyAllAdmins(eq("ADMIN_ANALYTICS_REBUILD_FAILED"), any(), any(), eq("/admin/automation"));
     }
 }

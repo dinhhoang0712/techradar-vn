@@ -46,10 +46,19 @@ async def test_handle_chat_reuse_session(monkeypatch, mock_db):
 async def test_handle_chat_stream_full_flow(mock_db, monkeypatch):
     """Kiểm tra handle_chat_stream yield đủ token/done và lưu đúng content vào DB."""
 
-    async def mock_answer_stream(query, user_id):
+    async def mock_answer_stream(query, user_id=None, session_id=None, db=None):
         yield {"event": "token", "data": "Chào"}
         yield {"event": "token", "data": " bạn"}
-        yield {"event": "done", "data": {"answer": "Chào bạn", "sources": []}}
+        yield {
+            "event": "done",
+            "data": {
+                "answer": "Chào bạn",
+                "sources": [],
+                "analytics": [{"technology_name": "Java"}],
+                "subgraph": {"@graph": []},
+                "strategy": {"use_graph": True},
+            },
+        }
 
     monkeypatch.setattr("app.services.chat_service.answer_stream", mock_answer_stream)
 
@@ -64,6 +73,9 @@ async def test_handle_chat_stream_full_flow(mock_db, monkeypatch):
     assert events[2]["data"]["answer"] == "Chào bạn"
     assert events[2]["data"]["session_id"] is not None
     assert events[2]["data"]["query"] == "Hi"
+    assert events[2]["data"]["analytics"] == [{"technology_name": "Java"}]
+    assert events[2]["data"]["subgraph"] == {"@graph": []}
+    assert events[2]["data"]["strategy"] == {"use_graph": True}
 
     # Kiểm tra assistant message được lưu với content đầy đủ "Chào bạn"
     # Lấy đối tượng cuối cùng được add vào DB

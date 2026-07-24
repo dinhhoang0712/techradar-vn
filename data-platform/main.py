@@ -28,6 +28,17 @@ def main() -> None:
     logger.info("  Postgres : {}", settings.postgres_dsn.split("@")[-1])
     logger.info("  Neo4j    : {}", settings.neo4j_uri)
 
+    # ── Neo4j schema (idempotent, an toàn gọi lại mỗi lần khởi động) ─────────
+    from common.db import get_neo4j_driver
+    from common.neo4j_schema import ensure_constraints
+
+    try:
+        _schema_driver = get_neo4j_driver(settings)
+        ensure_constraints(_schema_driver)
+        _schema_driver.close()
+    except Exception as exc:
+        logger.warning("Không thể kiểm tra/tạo Neo4j constraints lúc khởi động: {}", exc)
+
     # ── Bronze Writer thread ───────────────────────────────────────────────
     from bronze.writer import run as run_bronze
 

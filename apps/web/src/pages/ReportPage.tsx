@@ -1,6 +1,9 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import type { FormEvent } from 'react';
 import { generateReport } from '../api/reportService';
+import MarkdownContent from '../components/common/MarkdownContent';
+import CopyButton from '../components/common/CopyButton';
+import { exportElementToPdf } from '../utils/exportPdf';
 import type { ReportResult } from '../types/report';
 import './ReportPage.css';
 
@@ -31,6 +34,8 @@ export default function ReportPage() {
     const [result, setResult] = useState<ReportResult | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [exportingPdf, setExportingPdf] = useState(false);
+    const reportResultRef = useRef<HTMLDivElement>(null);
 
     const handleGenerate = async (e: FormEvent) => {
         e.preventDefault();
@@ -57,6 +62,22 @@ export default function ReportPage() {
         a.download = `techradar-report-${result.period || period}.md`;
         a.click();
         URL.revokeObjectURL(url);
+    };
+
+    // Chụp toàn bộ .report-result (bảng + nội dung markdown) thành PDF nhiều trang — xem
+    // utils/exportPdf.ts (dùng chung với InterviewPage).
+    const handleExportPDF = async () => {
+        const el = reportResultRef.current;
+        if (!el) return;
+        setExportingPdf(true);
+        try {
+            await exportElementToPdf(el, `techradar-report-${result?.period || period}.pdf`);
+        } catch (err) {
+            console.error('[ReportPage] Export PDF failed:', err);
+            setError('Không thể xuất PDF. Vui lòng thử lại.');
+        } finally {
+            setExportingPdf(false);
+        }
     };
 
     // Giá trị lớn nhất trong danh sách hiện tại, dùng để scale thanh sparkbar theo tỉ lệ tương đối.
@@ -125,13 +146,23 @@ export default function ReportPage() {
                             ) : 'Tạo báo cáo'}
                         </button>
                         {result?.report && (
-                            <button
-                                type="button"
-                                className="btn btn-secondary"
-                                onClick={handleDownload}
-                            >
-                                Tải xuống (.md)
-                            </button>
+                            <>
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    onClick={handleDownload}
+                                >
+                                    Tải xuống (.md)
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    onClick={handleExportPDF}
+                                    disabled={exportingPdf}
+                                >
+                                    {exportingPdf ? <><span className="btn-spinner" /> Đang xuất PDF...</> : 'Xuất PDF'}
+                                </button>
+                            </>
                         )}
                     </div>
                 </form>
@@ -140,7 +171,7 @@ export default function ReportPage() {
             </div>
 
             {result && (
-                <div className="report-result">
+                <div className="report-result" ref={reportResultRef}>
                     {/* Top techs table */}
                     {topTechs.length > 0 && (
                         <div className="card report-table-card">
@@ -194,29 +225,16 @@ export default function ReportPage() {
                         <div className="card report-content-card report-generated-doc">
                             <div className="report-content-header">
                                 <h2 className="section-title">Nội dung báo cáo</h2>
-                                {result.generated_at && (
-                                    <span className="report-generated-at">
-                                        Tạo lúc: {new Date(result.generated_at).toLocaleString('vi-VN')}
-                                    </span>
-                                )}
+                                <div className="report-content-header-right">
+                                    {result.generated_at && (
+                                        <span className="report-generated-at">
+                                            Tạo lúc: {new Date(result.generated_at).toLocaleString('vi-VN')}
+                                        </span>
+                                    )}
+                                    <CopyButton text={result.report} label="Copy báo cáo" />
+                                </div>
                             </div>
-                            <div
-                                className="report-markdown"
-                                dangerouslySetInnerHTML={{
-                                    __html: result.report
-                                        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-                                        .replace(/^### (.*)/gm, '<h3>$1</h3>')
-                                        .replace(/^## (.*)/gm, '<h2>$1</h2>')
-                                        .replace(/^# (.*)/gm, '<h1>$1</h1>')
-                                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                                        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                                        .replace(/^- (.*)/gm, '<li>$1</li>')
-                                        .replace(/^(\d+)\. (.*)/gm, '<li>$2</li>')
-                                        .replace(/\n\n/g, '</p><p>')
-                                        .replace(/\n/g, '<br/>')
-                                        .replace(/`([^`]+)`/g, '<code>$1</code>')
-                                }}
-                            />
+                            <MarkdownContent className="report-markdown">{result.report}</MarkdownContent>
                         </div>
                     )}
                 </div>

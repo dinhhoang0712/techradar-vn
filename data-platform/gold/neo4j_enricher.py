@@ -11,10 +11,33 @@ from common.db import get_neo4j_driver, get_pg_conn, log_pipeline_run
 from config import Settings
 from loguru import logger
 
-# (Company)-[:USES]->(Technology): suy ra từ bài viết đề cập cả company lẫn tech
-_COMPANY_USES_TECH = """
+# (Company)-[:USES]->(Technology): suy ra từ bài viết đề cập cả company lẫn tech.
+#
+# Phát hiện thật (KG Health Audit mở rộng, xác nhận sống): tín hiệu này gần như không xảy ra —
+# chỉ 6/425 Company từng được 1 Article nhắc tên (MENTIONS), 419 công ty còn lại CHỈ tồn tại qua
+# Job posting nên KHÔNG BAO GIỜ có cạnh USES nào dù thực tế đang dùng rất nhiều công nghệ. Kết
+# quả: 46 cạnh USES thay vì hàng nghìn (snapshot cũ trên Aura có ~11.3k, xem docs/DATABASE.md
+# §4.1) — cả `services/ai-rag-core`'s `COMPANIES_USING_TECH` (câu hỏi kiểu "công ty nào dùng
+# React?") lẫn `services/ml-clustering`'s `neo4j_loader.py` (dùng USES làm feature huấn luyện
+# cluster) đều đang đói dữ liệu vì việc này.
+_COMPANY_USES_TECH_FROM_ARTICLE = """
 MATCH (a:Article)-[:MENTIONS]->(c:Company)
 MATCH (a)-[:MENTIONS]->(t:Technology)
+MERGE (c)-[r:USES]->(t)
+ON CREATE SET r.evidence_count = 1, r.first_seen = date()
+ON MATCH  SET r.evidence_count = r.evidence_count + 1,
+              r.last_updated = date()
+RETURN count(r) AS cnt
+"""
+
+# Tín hiệu thứ 2, bổ sung: công ty đang tuyển vị trí yêu cầu công nghệ X — tức công ty đó đang
+# dùng X. Cùng pattern `Company<-[:POSTED_BY|HIRES_FOR]-Job-[:REQUIRES]->Technology` mà
+# `apps/backend`'s `Neo4jCompanyRepository`/`COMPANY_INSIGHT_CONTEXT` đã tin dùng để suy ra tech
+# stack công ty (xem docs/DATABASE.md §4.1) — đây là nguồn tín hiệu chính, vì hầu hết Company chỉ
+# xuất hiện qua Job, không qua Article. MERGE cùng 1 cạnh USES với query trên (không tạo type
+# quan hệ mới) — evidence_count cộng dồn nếu cả 2 tín hiệu cùng xác nhận 1 cặp Company-Technology.
+_COMPANY_USES_TECH_FROM_JOB = """
+MATCH (c:Company)<-[:POSTED_BY|HIRES_FOR]-(j:Job)-[:REQUIRES]->(t:Technology)
 MERGE (c)-[r:USES]->(t)
 ON CREATE SET r.evidence_count = 1, r.first_seen = date()
 ON MATCH  SET r.evidence_count = r.evidence_count + 1,
@@ -60,6 +83,24 @@ SET t.trend_score = round(toFloat(t.mention_count * 2 + coalesce(t.job_count, 0)
 RETURN count(t) AS cnt
 """
 
+# Ghi category (do tech_dedup.py MVP + gold/tech_category_backfill.py tính, lưu ở Postgres
+# dp_tech_category) vào Technology node — hoàn thiện field đã document ở docs/DATABASE.md §4.1
+# nhưng trước đây chưa từng có writer nào ghi. Đọc lại dp_tech_category mỗi lần chạy nên tự
+# nhặt category mới nhất, kể cả category ghi đêm trước bởi tech_dedup (03:30, sau enricher
+# 03:00) — độ trễ tối đa ~24h, không phải bug.
+_UPDATE_TECH_CATEGORY = """
+UNWIND $rows AS row
+MATCH (t:Technology {name: row.canonical_name})
+SET t.category = row.category
+RETURN count(t) AS cnt
+"""
+
+
+def _fetch_categories(pg_conn) -> list[dict]:
+    with pg_conn.cursor() as cur:
+        cur.execute("SELECT canonical_name, category FROM dp_tech_category")
+        return cur.fetchall()
+
 
 def run(settings: Settings) -> dict:
     logger.info("Neo4j Enricher: starting...")
@@ -72,9 +113,15 @@ def run(settings: Settings) -> dict:
         driver = get_neo4j_driver(settings)
 
         with driver.session() as session:
-            logger.info("Neo4j Enricher: creating (Company)-[:USES]->(Technology)...")
-            rec = session.run(_COMPANY_USES_TECH).single()
-            results["company_uses_tech"] = rec["cnt"] if rec else 0
+            logger.info("Neo4j Enricher: creating (Company)-[:USES]->(Technology) từ Article...")
+            rec_article = session.run(_COMPANY_USES_TECH_FROM_ARTICLE).single()
+
+            logger.info("Neo4j Enricher: creating (Company)-[:USES]->(Technology) từ Job...")
+            rec_job = session.run(_COMPANY_USES_TECH_FROM_JOB).single()
+
+            results["company_uses_tech"] = (rec_article["cnt"] if rec_article else 0) + (
+                rec_job["cnt"] if rec_job else 0
+            )
 
             logger.info("Neo4j Enricher: creating (Technology)-[:RELATED_TO]->(Technology)...")
             rec = session.run(_TECH_RELATED_TO).single()
@@ -87,6 +134,11 @@ def run(settings: Settings) -> dict:
             logger.info("Neo4j Enricher: updating Technology trend scores...")
             rec = session.run(_UPDATE_TREND_SCORE).single()
             results["trend_score_update"] = rec["cnt"] if rec else 0
+
+            logger.info("Neo4j Enricher: updating Technology categories from dp_tech_category...")
+            categories = _fetch_categories(pg_conn)
+            rec = session.run(_UPDATE_TECH_CATEGORY, {"rows": categories}).single() if categories else None
+            results["category_update"] = rec["cnt"] if rec else 0
 
         driver.close()
 

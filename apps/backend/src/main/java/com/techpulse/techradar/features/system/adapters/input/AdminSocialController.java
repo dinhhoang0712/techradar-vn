@@ -3,6 +3,7 @@ package com.techpulse.techradar.features.system.adapters.input;
 import com.techpulse.techradar.features.system.adapters.input.AdminSocialDtos.CommentView;
 import com.techpulse.techradar.features.system.adapters.input.AdminSocialDtos.PostView;
 import com.techpulse.techradar.features.system.adapters.input.AdminSocialDtos.ReportView;
+import com.techpulse.techradar.features.system.application.AuditLogService;
 import com.techpulse.techradar.features.system.application.SocialModerationService;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import com.techpulse.techradar.shared.paging.PageRequest;
@@ -30,6 +31,7 @@ public class AdminSocialController {
     private static final int MAX_SIZE = 100;
 
     private final SocialModerationService moderationService;
+    private final AuditLogService auditLogService;
 
     @Operation(summary = "List all posts for moderation")
     @GetMapping("/posts")
@@ -50,6 +52,7 @@ public class AdminSocialController {
     @PreAuthorize("hasAuthority('social:moderate')")
     public Mono<ResponseEntity<ApiResponse<Void>>> deletePost(@PathVariable String id) {
         return moderationService.deletePost(id)
+                .then(auditLogService.record("POST_DELETE", "post", id, null))
                 .thenReturn(ResponseEntity.ok(ApiResponse.<Void>success(null, "Post deleted")));
     }
 
@@ -73,6 +76,7 @@ public class AdminSocialController {
     @PreAuthorize("hasAuthority('social:moderate')")
     public Mono<ResponseEntity<ApiResponse<Void>>> deleteComment(@PathVariable String id) {
         return moderationService.deleteComment(id)
+                .then(auditLogService.record("COMMENT_DELETE", "comment", id, null))
                 .thenReturn(ResponseEntity.ok(ApiResponse.<Void>success(null, "Comment deleted")));
     }
 
@@ -96,6 +100,7 @@ public class AdminSocialController {
     public Mono<ResponseEntity<ApiResponse<Void>>> dismissReport(@PathVariable String id) {
         return SecurityUtils.currentUserId()
                 .flatMap(adminId -> moderationService.dismissReport(id, adminId))
+                .then(auditLogService.record("REPORT_DISMISS", "report", id, null))
                 .thenReturn(ResponseEntity.ok(ApiResponse.<Void>success(null, "Report dismissed")));
     }
 

@@ -29,7 +29,7 @@ LOCAL_AUTH = ("neo4j", "localpassword")
 BATCH = 200
 
 LABELS = ["Article", "Technology", "Company", "Job", "Skill", "Person"]
-REL_TYPES = ["USES", "MENTIONS", "REQUIRES", "HIRES_FOR", "RELATED_TO", "IS_TECHNOLOGY"]
+REL_TYPES = ["USES", "MENTIONS", "REQUIRES", "POSTED_BY", "HIRES_FOR", "RELATED_TO", "IS_TECHNOLOGY"]
 
 
 # ─────────────────────────────────────────────────────────────────────────────

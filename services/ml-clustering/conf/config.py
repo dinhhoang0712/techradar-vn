@@ -201,7 +201,14 @@ class LabelingParams(BaseModel):
 class WritebackParams(BaseModel):
     enabled: bool = False
     apoc_batch_size: int = 500
-    clean_before_write: bool = False
+    # True: MERGE (:Cluster {cluster_id: ...}) khớp cluster_id RESET về 0..N-1 mỗi lần
+    # train — không phải định danh ổn định giữa các lần train — nên nếu để False, cạnh
+    # BELONGS_TO/NEAR_CLUSTER của lần train trước không bị xoá và cứ chồng thêm mỗi lần
+    # retrain (đã xác nhận thực tế: 135/156 Technology có 2-4 cạnh BELONGS_TO "primary
+    # cluster" cùng lúc sau vài lần chạy không dọn). BELONGS_TO là "primary cluster",
+    # PHẢI đúng 1 cạnh/tech — clean_before_write=False chỉ nên bật tạm khi debug 1 lần
+    # writeback cụ thể, không phải giá trị dùng lâu dài.
+    clean_before_write: bool = True
 
 
 class Params(BaseModel):

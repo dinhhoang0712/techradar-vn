@@ -1,6 +1,7 @@
 package com.techpulse.techradar.features.system.adapters.input;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.techpulse.techradar.features.system.application.AuditLogService;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,8 +18,10 @@ import java.time.Duration;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -32,6 +35,9 @@ class CrawlerAdminControllerTest {
     @Mock
     private ReactiveValueOperations<String, String> valueOperations;
 
+    @Mock
+    private AuditLogService auditLogService;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private CrawlerAdminController controller;
@@ -39,7 +45,8 @@ class CrawlerAdminControllerTest {
     @BeforeEach
     void setUp() {
         RedisTriggerPublisher redisTriggerPublisher = new RedisTriggerPublisher(redisTemplate, objectMapper);
-        controller = new CrawlerAdminController(redisTemplate, objectMapper, redisTriggerPublisher);
+        controller = new CrawlerAdminController(redisTemplate, objectMapper, redisTriggerPublisher, auditLogService);
+        lenient().when(auditLogService.record(any(), any(), any(), any())).thenReturn(Mono.empty());
     }
 
     @Test
@@ -59,6 +66,8 @@ class CrawlerAdminControllerTest {
                     assertThat(body.getData()).containsEntry("delivered", true);
                 })
                 .verifyComplete();
+
+        verify(auditLogService).record(eq("CRAWLER_TRIGGER"), eq("crawler"), any(), any());
     }
 
     @Test
@@ -98,6 +107,7 @@ class CrawlerAdminControllerTest {
                 .verifyComplete();
 
         verify(redisTemplate, never()).convertAndSend(anyString(), anyString());
+        verify(auditLogService, never()).record(any(), any(), any(), any());
     }
 
     @Test

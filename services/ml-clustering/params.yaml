@@ -168,4 +168,7 @@ labeling:
 writeback:
   enabled: true              # bật khi đã chốt model & labels
   apoc_batch_size: 500
-  clean_before_write: false  # xoá :BELONGS_TO|:NEAR_CLUSTER cũ trước khi ghi mới
+  clean_before_write: true   # xoá :BELONGS_TO|:NEAR_CLUSTER cũ trước khi ghi mới — BẮT BUỘC
+                              # true vì cluster_id không ổn định giữa các lần train, để false
+                              # sẽ chồng cạnh "primary cluster" qua mỗi lần retrain (xem
+                              # conf/config.py WritebackParams.clean_before_write)

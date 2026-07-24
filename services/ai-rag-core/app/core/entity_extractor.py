@@ -707,6 +707,47 @@ INTENT_ROLE_MAP: dict[str, list[str]] = {
     r"ai|trí tuệ nhân tạo|học máy": ["AI Engineer", "ML Engineer"],
 }
 
+# ==========================================
+# RETRIEVAL-STRATEGY INTENT PATTERNS
+# Dùng bởi strategy_selector.py để quyết định bật SQL analytics / độ sâu graph expansion —
+# không liên quan tới tech/role mapping ở trên (khác mục đích: quyết định CHIẾN LƯỢC truy
+# xuất, không phải bổ sung entity còn thiếu).
+# ==========================================
+
+ANALYTICS_INTENT_PATTERNS: list[str] = [
+    r"xu hướng",
+    r"tăng trưởng",
+    r"thống kê",
+    r"lương",
+    r"phổ biến",
+    r"nhu cầu tuyển dụng",
+    r"biến động",
+    r"dự báo",
+    r"so sánh",
+]
+
+MULTIHOP_INTENT_PATTERNS: list[str] = [
+    r"so sánh",
+    r"vừa.*vừa",
+    r"liên quan",
+    r"khác nhau",
+    r"hệ sinh thái",
+    r"kết hợp",
+    r"nên học cùng",
+]
+
+
+def has_analytics_intent(query: str) -> bool:
+    """True nếu câu hỏi có dấu hiệu cần dữ liệu thống kê/xu hướng (tech_analytics)."""
+    q_lower = query.lower()
+    return any(re.search(p, q_lower) for p in ANALYTICS_INTENT_PATTERNS)
+
+
+def has_multihop_intent(query: str) -> bool:
+    """True nếu câu hỏi có dấu hiệu cần mở rộng đồ thị sâu hơn 1 hop (so sánh/hệ sinh thái)."""
+    q_lower = query.lower()
+    return any(re.search(p, q_lower) for p in MULTIHOP_INTENT_PATTERNS)
+
 
 # ==========================================
 # COMPILE REGEX PATTERNS

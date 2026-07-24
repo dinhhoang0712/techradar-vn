@@ -1,0 +1,126 @@
+/* Style dùng chung cho mọi nơi hiển thị nội dung Markdown do AI sinh ra (chat, báo cáo, insight
+   công ty, roadmap sự nghiệp...) — tách riêng để không nơi nào tự vẽ lại 1 kiểu khác nhau. */
+.md-heading {
+    font-size: 0.95rem;
+    line-height: 1.45;
+    font-weight: 700;
+    margin: 8px 0 4px;
+    color: var(--text);
+}
+
+.md-heading:first-child {
+    margin-top: 0;
+}
+
+.md-p {
+    font-size: 0.85rem;
+    line-height: 1.7;
+    color: var(--text-2);
+    margin: 0 0 8px;
+    overflow-wrap: anywhere;
+}
+
+.md-p:last-child {
+    margin-bottom: 0;
+}
+
+.md-list {
+    padding-left: 18px;
+    margin: 6px 0 10px;
+}
+
+.md-list li {
+    font-size: 0.85rem;
+    line-height: 1.7;
+    color: var(--text-2);
+    margin-bottom: 6px;
+    overflow-wrap: anywhere;
+}
+
+.md-code {
+    background: var(--surface-2);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.8rem;
+    line-height: 1.6;
+    color: var(--primary-light);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.md-blockquote {
+    border-left: 3px solid var(--primary);
+    padding: 2px 12px;
+    margin: 8px 0;
+    color: var(--text-3);
+    font-style: italic;
+}
+
+.md-link {
+    color: var(--primary-light);
+    text-decoration: underline;
+}
+
+.md-table-wrap {
+    overflow-x: auto;
+    margin: 8px 0;
+}
+
+.md-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+}
+
+.md-table th {
+    background: var(--surface-2);
+    color: var(--primary-light);
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    font-weight: 600;
+    text-align: left;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.md-table td {
+    padding: 5px 10px;
+    border: 1px solid var(--border);
+    color: var(--text-2);
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.md-table tr:nth-child(even) td {
+    background: var(--bg-2);
+}
+
+/* Nút copy dùng chung cho các khối nội dung AI (chat bubble, báo cáo...) */
+.copy-content-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text-3);
+    font-size: 0.74rem;
+    padding: 4px 9px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.copy-content-btn:hover {
+    color: var(--text);
+    border-color: var(--primary);
+}
+
+.copy-content-btn.copied {
+    color: var(--green);
+    border-color: var(--green);
+}
+
+.copy-content-btn svg {
+    flex-shrink: 0;
+}

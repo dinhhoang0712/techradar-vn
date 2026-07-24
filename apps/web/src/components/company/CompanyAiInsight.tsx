@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { getCompanyInsight } from '../../api/companyService';
+import MarkdownContent from '../common/MarkdownContent';
 import type { CompanyInsight } from '../../types/company';
 
 // Nhận định AI về công ty — chỉ gọi API khi người dùng bấm xem (tránh tốn LLM call cho mọi công ty).
@@ -33,10 +34,12 @@ export default function CompanyAiInsight({ company }: { company: { name: string 
             {error && <p className="ai-summary-status ai-summary-error">{error}</p>}
             {!loading && !error && insight && (
                 <>
-                    <p className="ai-summary-text">{insight.summary}</p>
+                    <MarkdownContent className="ai-summary-text">{insight.summary}</MarkdownContent>
                     {insight.highlights && insight.highlights.length > 0 && (
                         <ul className="company-ai-highlights">
-                            {insight.highlights.map((h, i) => <li key={i}>{h}</li>)}
+                            {insight.highlights.map((h, i) => (
+                                <li key={i}><MarkdownContent className="ai-highlight-md">{h}</MarkdownContent></li>
+                            ))}
                         </ul>
                     )}
                 </>

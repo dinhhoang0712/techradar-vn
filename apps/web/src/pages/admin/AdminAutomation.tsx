@@ -4,6 +4,7 @@ import {
     triggerCrawlerRun, fetchCrawlerStatus,
     fetchClusteringPipelineStatus, triggerClusteringPipeline,
     fetchDataPlatformJobs, triggerDataPlatformJob,
+    evictCompanyCache, evictJobMatchCache, evictRoadmapCache,
 } from '../../api/adminService';
 import type { ClusteringPipelineStatus, CrawlerStatus, DataPlatformJob } from '../../types/admin';
 import { ApiError } from '../../types/api';
@@ -66,6 +67,36 @@ const DATA_PLATFORM_JOB_DEPENDS_ON: Record<string, string | null> = {
     neo4j_enricher: 'embed_trigger',
     tech_dedup: 'neo4j_enricher',
 };
+
+// Redis cache (30 phút TTL) không tự làm mới khi dữ liệu gốc thay đổi — dùng khi cần thấy
+// thay đổi ngay lập tức thay vì chờ TTL hết hạn.
+interface CacheTarget {
+    key: string;
+    label: string;
+    description: string;
+    evict: () => Promise<unknown>;
+}
+
+const CACHE_TARGETS: CacheTarget[] = [
+    {
+        key: 'companies',
+        label: 'Danh sách công ty',
+        description: 'Danh sách công ty kèm tech stack suy luận được, hiển thị ở Company Explorer.',
+        evict: evictCompanyCache,
+    },
+    {
+        key: 'jobs',
+        label: 'Việc làm phù hợp',
+        description: 'Kết quả gợi ý việc làm theo kỹ năng người dùng, dùng ở trang Career.',
+        evict: evictJobMatchCache,
+    },
+    {
+        key: 'roadmap',
+        label: 'Lộ trình sự nghiệp',
+        description: 'Lộ trình học tập cá nhân hóa theo từng người dùng.',
+        evict: evictRoadmapCache,
+    },
+];
 
 function DataPlatformJobStatus({ job }: { job: DataPlatformJob | undefined }) {
     if (!job || job.status === 'never_run') {
@@ -135,6 +166,7 @@ export default function AdminAutomation() {
     const [triggeringCluster, setTriggeringCluster] = useState(false);
     const [triggeringJobId, setTriggeringJobId] = useState<string | null>(null);
     const [historyJobId, setHistoryJobId] = useState<string | null>(null);
+    const [evictingCache, setEvictingCache] = useState<string | null>(null);
 
     const notify = useToast();
 
@@ -274,6 +306,19 @@ export default function AdminAutomation() {
 
     const dataPlatformJobByName = Object.fromEntries(dataPlatformJobs.map((j) => [j.job_name, j]));
 
+    const handleEvictCache = async (target: CacheTarget) => {
+        setEvictingCache(target.key);
+        try {
+            await target.evict();
+            notify({ title: `Đã xóa cache: ${target.label}`, variant: 'success' });
+        } catch (error) {
+            console.error(`Failed to evict ${target.key} cache:`, error);
+            notify({ title: `Xóa cache thất bại: ${target.label}`, variant: 'error' });
+        } finally {
+            setEvictingCache(null);
+        }
+    };
+
     if (loading) return <div className="admin-settings-loading"><div className="loading-spinner" /><span>Đang tải...</span></div>;
 
     return (
@@ -376,6 +421,32 @@ export default function AdminAutomation() {
                             </div>
                         );
                     })}
+                </div>
+            </div>
+
+            <div className="settings-card data-platform-jobs-card">
+                <div className="setting-info">
+                    <h3>Xóa Cache (Redis)</h3>
+                    <p>Dữ liệu bên dưới được cache 30 phút và không tự làm mới khi dữ liệu gốc thay đổi — xóa cache nếu cần thấy thay đổi ngay lập tức.</p>
+                </div>
+                <div className="data-platform-jobs-list">
+                    {CACHE_TARGETS.map(target => (
+                        <div className="data-platform-job-row" key={target.key}>
+                            <div className="setting-info">
+                                <h4>{target.label}</h4>
+                                <p>{target.description}</p>
+                            </div>
+                            <div className="data-platform-job-actions">
+                                <button
+                                    className="btn btn-secondary"
+                                    onClick={() => handleEvictCache(target)}
+                                    disabled={evictingCache === target.key}
+                                >
+                                    {evictingCache === target.key ? 'Đang xóa...' : 'Xóa cache'}
+                                </button>
+                            </div>
+                        </div>
+                    ))}
                 </div>
             </div>
 

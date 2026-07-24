@@ -3,6 +3,7 @@ import {
 } from 'recharts';
 import type { TooltipContentProps } from 'recharts';
 import type { ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent';
+import MarkdownContent from '../common/MarkdownContent';
 import type { Forecast } from '../../types/forecast';
 
 function TrendHistoryTooltip({ active, payload, label }: Partial<TooltipContentProps<ValueType, NameType>>) {
@@ -63,7 +64,7 @@ export default function ForecastPanel({ tech, loading, forecast, onClose }: Fore
                         </span>
                     </div>
                     {forecast.reasoning && (
-                        <p className="forecast-reasoning">{forecast.reasoning}</p>
+                        <MarkdownContent className="forecast-reasoning">{forecast.reasoning}</MarkdownContent>
                     )}
                     {forecast.trend_data && forecast.trend_data.length > 0 && (
                         <div className="forecast-trend-history">

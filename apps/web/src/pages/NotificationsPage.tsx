@@ -9,6 +9,7 @@ import {
 } from '../api/notificationService';
 import type { Notification } from '../types/notification';
 import NotifIcon from '../components/notifications/notifIcons';
+import { severityOf } from '../components/notifications/notifSeverity';
 import { useToast } from '../components/common/toastContext';
 import './NotificationsPage.css';
 
@@ -161,7 +162,7 @@ export default function NotificationsPage() {
                             {items.map((n) => (
                                 <button
                                     key={n.id}
-                                    className={`notifpage-item${n.read ? '' : ' unread'}`}
+                                    className={`notifpage-item notifpage-item--${severityOf(n.type)}${n.read ? '' : ' unread'}`}
                                     onClick={() => handleItemClick(n)}
                                 >
                                     <span className={`notifpage-item-icon${n.read ? '' : ' gradient-ring active'}`}>

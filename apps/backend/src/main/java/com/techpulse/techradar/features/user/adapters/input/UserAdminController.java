@@ -1,5 +1,6 @@
 package com.techpulse.techradar.features.user.adapters.input;
 
+import com.techpulse.techradar.features.system.application.AuditLogService;
 import com.techpulse.techradar.features.user.application.AdminUserService;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -24,6 +25,7 @@ import java.util.List;
 public class UserAdminController {
 
     private final AdminUserService userService;
+    private final AuditLogService auditLogService;
 
     @Operation(summary = "List all users")
     @GetMapping("/users")
@@ -48,6 +50,9 @@ public class UserAdminController {
                         request.getRole(),
                         request.getStatus(),
                         request.getSubscriptionTier())
+                .flatMap(user -> auditLogService.record("USER_CREATE", "user", user.getId().toString(),
+                                "email=" + user.getEmail() + ", role=" + user.getRole())
+                        .thenReturn(user))
                 .map(UserProfileResponse::fromUser)
                 .map(user -> ResponseEntity.status(HttpStatus.CREATED)
                         .body(ApiResponse.success(user, "User created")));
@@ -68,6 +73,9 @@ public class UserAdminController {
                         request.getRole(),
                         request.getStatus(),
                         request.getSubscriptionTier())
+                .flatMap(user -> auditLogService.record("USER_UPDATE", "user", user.getId().toString(),
+                                "email=" + user.getEmail() + ", role=" + user.getRole())
+                        .thenReturn(user))
                 .map(UserProfileResponse::fromUser)
                 .map(user -> ResponseEntity.ok(ApiResponse.success(user, "User updated")));
     }
@@ -79,6 +87,7 @@ public class UserAdminController {
             @PathVariable String id
     ) {
         return userService.deleteUser(id)
+                .then(auditLogService.record("USER_DELETE", "user", id, null))
                 .then(Mono.just(ResponseEntity.status(HttpStatus.NO_CONTENT)
                         .body(ApiResponse.success(null, "User deleted"))));
     }

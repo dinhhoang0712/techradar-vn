@@ -138,6 +138,24 @@ TECH_KEYWORDS = [
     "Cybersecurity",
     "5G",
     "Semiconductor",
+    # Network / Security hardware — thêm sau khi phát hiện gap REQUIRES: ~37% Job không có
+    # REQIRES nào, 1 phần thật là do dictionary trước đó thiên hẳn về software dev, bỏ sót thiết
+    # bị mạng/bảo mật xuất hiện thật trong mô tả công việc (VD "Chuyên Viên Hạ Tầng Network/
+    # Security" nhắc rõ Cisco/Juniper/Checkpoint/Palo Alto Networks/Fortinet/F5, không cái nào
+    # từng có trong danh sách).
+    "Cisco",
+    "Juniper",
+    "Checkpoint",
+    "Palo Alto Networks",
+    "Fortinet",
+    "F5",
+    # CAD / CNC / Game Engine — cùng đợt phát hiện gap REQUIRES (VD "Unreal Engine Artist",
+    # "Lập Trình Máy Tiện CNC ... Biết Mastercam" đều bị bỏ sót).
+    "Unreal Engine",
+    "Unity",
+    "Mastercam",
+    "AutoCAD",
+    "SolidWorks",
 ]
 
 # Cụm từ tiếng Việt phổ biến trong tin tức công nghệ VN -> tên canonical.

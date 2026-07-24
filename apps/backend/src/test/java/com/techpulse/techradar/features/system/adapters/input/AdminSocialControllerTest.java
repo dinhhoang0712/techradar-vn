@@ -4,6 +4,7 @@ import com.techpulse.techradar.features.social.ports.CommentRepository.CommentRo
 import com.techpulse.techradar.features.social.ports.PostRepository.FeedRow;
 import com.techpulse.techradar.features.social.ports.ReportRepository.ReportRow;
 import com.techpulse.techradar.features.system.adapters.input.AdminSocialDtos.ReportView;
+import com.techpulse.techradar.features.system.application.AuditLogService;
 import com.techpulse.techradar.features.system.application.SocialModerationService;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import com.techpulse.techradar.shared.security.SecurityUtils;
@@ -23,7 +24,9 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -33,11 +36,15 @@ class AdminSocialControllerTest {
     @Mock
     private SocialModerationService moderationService;
 
+    @Mock
+    private AuditLogService auditLogService;
+
     private AdminSocialController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new AdminSocialController(moderationService);
+        controller = new AdminSocialController(moderationService, auditLogService);
+        lenient().when(auditLogService.record(any(), any(), any(), any())).thenReturn(Mono.empty());
     }
 
     private static FeedRow feedRow(UUID id) {
@@ -96,6 +103,7 @@ class AdminSocialControllerTest {
                 .verifyComplete();
 
         verify(moderationService).deletePost(postId.toString());
+        verify(auditLogService).record(eq("POST_DELETE"), eq("post"), eq(postId.toString()), any());
     }
 
     @Test
@@ -124,6 +132,7 @@ class AdminSocialControllerTest {
                 .verifyComplete();
 
         verify(moderationService).deleteComment(commentId.toString());
+        verify(auditLogService).record(eq("COMMENT_DELETE"), eq("comment"), eq(commentId.toString()), any());
     }
 
     @Test
@@ -151,6 +160,7 @@ class AdminSocialControllerTest {
                 .verifyComplete();
 
         verify(moderationService).dismissReport(reportId.toString(), adminId.toString());
+        verify(auditLogService).record(eq("REPORT_DISMISS"), eq("report"), eq(reportId.toString()), any());
     }
 
     @Test

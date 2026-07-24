@@ -338,6 +338,11 @@ Tạo **derived relationships** và cập nhật statistics trong Knowledge Grap
 | `(Technology)-[:RELATED_TO]->(Technology)` | Co-mention trong cùng bài viết |
 | `t.mention_count = article_count + job_count` | Cập nhật mention count trên mỗi Technology node |
 | `t.trend_score` | `(mention_count * 2 + job_count) / max * 100` |
+| `t.category` | Đọc từ Postgres `dp_tech_category` (V29), ghi bởi Tech Dedup + Tech Category Backfill bên dưới |
+
+> **Độ trễ ~24h cho `category`:** job này chạy 5:00 AM, còn Tech Dedup (nguồn ghi `dp_tech_category`
+> cho tên mới) chạy SAU, 5:30 AM cùng ngày — nên category của 1 tên Technology mới phát hiện đêm
+> nay chỉ được `neo4j_enricher` đẩy lên Neo4j vào lần chạy NGÀY MAI, không phải cùng đêm đó.
 
 ### Tech Dedup
 
@@ -363,6 +368,43 @@ Merge = chuyển hướng toàn bộ cạnh (`MENTIONS`/`REQUIRES`/`USES`/`IS_TE
 từ node phụ sang node đại diện rồi xoá node phụ — viết bằng Cypher thuần
 (không dùng APOC, vì plugin APOC không có sẵn trên Neo4j Docker local, chỉ
 AuraDB cloud mới có).
+
+**Category classification (cùng 1 lệnh gọi LLM ở giai đoạn 2):** prompt LLM ở giai đoạn 2 giờ hỏi
+đồng thời cả nhóm trùng lặp LẪN category (language/framework/tool/cloud/database/...) cho mỗi tên
+mới — không tốn thêm lệnh gọi LLM riêng. Kết quả category ghi vào Postgres `dp_tech_category`
+(V29), KHÔNG ghi thẳng vào Neo4j (Neo4j Enricher mới là nơi đọc bảng này và đẩy lên
+`Technology.category`, xem trên).
+
+### Tech Category Backfill (chạy tay, một lần)
+
+Script `gold/tech_category_backfill.py` — **không** nằm trong lịch nightly (mục 7), chạy thủ công
+1 lần: `python -m gold.tech_category_backfill`. Dùng lại đúng logic phân loại của Tech Dedup
+(`_call_llm`/`_parse_llm_categories`/`_save_categories`) nhưng áp cho **toàn bộ catalog
+Technology hiện có** (không chỉ tên mới phát hiện) — dùng để lấp `category` cho các node đã tồn
+tại từ trước khi có cơ chế phân loại này, tránh phải chờ node đó "được nhắc tới lại" để Tech Dedup
+tự nhiên xử lý. Idempotent (bỏ qua tên đã có category), batch ~50-100 tên/lần gọi LLM.
+
+> **Nên spot-check kết quả:** phân loại category bằng LLM cho các trường hợp mơ hồ (vd
+> "GraphQL", "React Native" — framework hay tool?) vẫn có thể sai; nên kiểm tra thủ công một mẫu
+> nhỏ trước khi dùng số liệu độ phủ category cho báo cáo/luận án chính thức.
+
+### KG Health Audit (chạy tay, on-demand)
+
+Script `gold/kg_health_audit.py` — **không** nằm trong lịch nightly, chạy khi cần kiểm tra chất
+lượng đồ thị: `python -m gold.kg_health_audit` (in JSON ra stdout). Thiết kế trực tiếp từ 1 bug
+thật từng phát hiện trong dự án (`HIRES_FOR` — quan hệ chết vẫn còn dữ liệu cũ, một số Cypher
+từng match nhầm gây mất dữ liệu âm thầm), tự động hoá đúng loại phát hiện đó cho mọi lần chạy sau:
+
+| Kiểm tra | Ý nghĩa |
+|---|---|
+| Quan hệ "lạ"/chết | Loại quan hệ tồn tại trong graph nhưng không thuộc danh sách writer đang hoạt động (`_KNOWN_ACTIVE_REL_TYPES`) — dấu hiệu writer cũ đã bị gỡ, giống hệt `HIRES_FOR` |
+| Node mồ côi | Technology/Company không có quan hệ nào |
+| Độ phủ property | % Technology có `category` (V29), % có `pagerank_score`, và riêng % **dùng được** (loại `NaN` — `count()` của Cypher đếm cả NaN vì nó khác `NULL`) |
+| Tên trùng chỉ khác hoa/thường | Technology chưa được `tech_dedup`/alias map gộp |
+
+**Hạn chế đã biết:** chỉ bắt trùng tên ở `Technology`, **chưa** bắt trùng tên `Company`/`Job` (vd
+nhiều pháp nhân cùng tên gốc như "FPT Software"/"Công Ty Cổ Phần Viễn Thông FPT" bị lưu thành
+Company node riêng biệt) — ghi nhận là hướng phát triển tiếp theo, không phải lỗi của script.
 
 ### Embed Trigger
 
@@ -522,6 +564,23 @@ CREATE TABLE dp_tech_alias_map (
     canonical_name   TEXT NOT NULL,              -- vd "Go"
     source           TEXT NOT NULL DEFAULT 'seed', -- seed | llm_auto | human_review
     created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+### dp_tech_category
+
+Category (language/framework/tool/cloud/database/...) cho Technology, ghi bởi Tech Dedup (tên
+mới) + Tech Category Backfill (script chạy tay 1 lần, toàn bộ catalog cũ) — xem mục 6. Key theo
+`canonical_name` (không phải `alias_normalized` như `dp_tech_alias_map`) vì category là thuộc
+tính của **1 công nghệ**, không nên lặp/trôi theo từng cách viết khác nhau của cùng công nghệ đó.
+Chỉ dùng nội bộ `data-platform` — không chia sẻ với `apps/backend` như `dp_tech_alias_map`.
+
+```sql
+CREATE TABLE dp_tech_category (
+    canonical_name TEXT PRIMARY KEY,
+    category       TEXT NOT NULL,
+    source         TEXT NOT NULL DEFAULT 'llm_auto', -- llm_auto | human_review
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
 
@@ -816,8 +875,10 @@ data-platform/
 │   ├── pg_etl.py            # Neo4j → tech_analytics (3:00 AM)
 │   ├── neo4j_article_sync.py # dp_processed_articles → Neo4j (bù khi Kafka rớt, 2:00 AM)
 │   ├── neo4j_job_sync.py    # dp_processed_jobs → Neo4j (bù khi Kafka rớt, 2:30 AM)
-│   ├── neo4j_enricher.py    # Derived relationships + trend score (5:00 AM)
-│   └── tech_dedup.py        # Gộp Technology node trùng lặp (alias map + LLM, 5:30 AM)
+│   ├── neo4j_enricher.py    # Derived relationships + trend score + category (5:00 AM)
+│   ├── tech_dedup.py        # Gộp Technology node trùng lặp + phân loại category (alias map + LLM, 5:30 AM)
+│   ├── tech_category_backfill.py  # Backfill category cho catalog cũ (chạy tay, 1 lần, KHÔNG trong lịch)
+│   └── kg_health_audit.py   # Audit chất lượng đồ thị (chạy tay, on-demand, KHÔNG trong lịch)
 │
 ├── scheduler/
 │   ├── scheduler.py         # APScheduler setup

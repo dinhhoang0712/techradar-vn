@@ -23,7 +23,7 @@ là nơi DUY NHẤT tạo/sửa DDL.
 | Datastore | Vai trò | Ai tạo schema | Ai ghi | Ai đọc |
 |---|---|---|---|---|
 | **PostgreSQL** | Nguồn sự thật quan hệ: user/auth, chat, social feed, messaging, analytics time-series, CMS, notification, data-platform catalog | **Flyway** trong `apps/backend` (duy nhất) | `apps/backend` (hầu hết bảng) · `services/ai-rag-core` (chỉ `chat_message`) · `data-platform` (chỉ các bảng `dp_*`) | `apps/backend`, `services/ai-rag-core` (đọc `user_profile`, `chat_message`) |
-| **Neo4j** | Đồ thị tri thức: Article/Technology/Skill/Company/Job + quan hệ suy luận (MENTIONS, REQUIRES, USES, RELATED_TO...) | ⚠️ Không còn script nào tạo constraints/indexes — trước đây là `knowledge-graph/utils/schema_define.py`, đã bị xoá khỏi repo (xem §4.2); instance Neo4j tự host hiện tại (`docker-compose.yml`, container `techradar-neo4j`) đã có schema từ trước (dự án từng chạy trên Neo4j AuraDB, đã migrate về self-hosted — xem `services/ai-rag-core/scripts/migrate_aura_to_local.py`), nhưng dựng lại instance mới sẽ cần viết lại script này | `apps/backend` (`KafkaNeo4jWriterService`, real-time), `data-platform/gold/{neo4j_article_sync,neo4j_job_sync}.py` (batch) cho node gốc; `data-platform/gold/neo4j_enricher.py` (derived relationships/stats) | `apps/backend` (graph/company/job features), `services/ai-rag-core` (RAG context, interview grounding), `services/ml-clustering` (đọc để train/serve cluster) |
+| **Neo4j** | Đồ thị tri thức: Article/Technology/Skill/Company/Job + quan hệ suy luận (MENTIONS, REQUIRES, USES, RELATED_TO...) | `data-platform/common/neo4j_schema.py` (`ensure_constraints`, gọi idempotent mỗi lần `data-platform` khởi động — `CREATE CONSTRAINT IF NOT EXISTS`). Thay thế `knowledge-graph/utils/schema_define.py` cũ (đã xoá khỏi repo) sau khi phát hiện instance sống KHÔNG có constraint nào (`SHOW CONSTRAINTS` rỗng) dù docs từng giả định là có — hệ quả thực tế: `MERGE (t:Technology {name: ...})` race giữa Java realtime writer và Python batch writer sinh node trùng y hệt tên (xem §4.4) | `apps/backend` (`KafkaNeo4jWriterService`, real-time), `data-platform/gold/{neo4j_article_sync,neo4j_job_sync}.py` (batch) cho node gốc; `data-platform/gold/neo4j_enricher.py` (derived relationships/stats); `services/ml-clustering/pipelines/stage_05_writeback.py` (node `:Cluster` + cạnh `BELONGS_TO`/`NEAR_CLUSTER`, khi `writeback.enabled=true`) | `apps/backend` (graph/company/job features), `services/ai-rag-core` (RAG context, interview grounding), `services/ml-clustering` (đọc để train/serve cluster) |
 | **Redis** | Cache tra cứu nhanh + state tạm thời, KHÔNG phải nguồn sự thật, có thể mất dữ liệu mà không hỏng nghiệp vụ (trừ token blacklist) | `apps/backend` (mọi key) | `apps/backend` | `apps/backend` |
 
 Không service nào khác ghi trực tiếp vào Postgres của backend hay Redis; `services/ai-rag-core`
@@ -45,6 +45,7 @@ và `data-platform` chỉ được cấp quyền ghi đúng phạm vi bảng c�
 | `conversation`, `direct_message` | backend | Direct messaging (V9); realtime là SSE, fan-out qua Redis Pub/Sub (`MessageBroadcaster`, xem §5) nên chạy đúng với nhiều instance backend. |
 | `dp_bronze_catalog`, `dp_processed_articles`, `dp_processed_jobs`, `dp_pipeline_runs` | **data-platform** (Python) | Backend/Flyway chỉ tạo bảng (V7); ghi/đọc thuộc service `data-platform` (bronze/silver medallion catalog). `ai-rag-core` và `apps/backend` không đụng vào các bảng này. |
 | `dp_tech_alias_map`, `dp_tech_alias_review_queue` | **CẢ 2** — `apps/backend` (`TechAliasCache.java`, chỉ đọc) VÀ `data-platform` (`common/tech_alias_cache.py` đọc; `gold/tech_dedup.py` ghi khi phát hiện alias mới qua LLM) | Ngoại lệ có chủ đích duy nhất trong hệ thống nơi backend/data-platform cùng dùng chung 1 bảng — vì Docker build-context của 2 service tách biệt (`./apps/backend` vs `./data-platform`) nên không thể share 1 file cấu hình; Postgres là nơi trung lập cả 2 đều đã kết nối sẵn. Xem §4.3. |
+| `dp_tech_category` | **data-platform** (`gold/tech_dedup.py` cho tên mới, `gold/tech_category_backfill.py` cho backfill 1 lần) | KHÔNG chia sẻ với backend (khác `dp_tech_alias_map`) — chỉ `data-platform/gold/neo4j_enricher.py` đọc bảng này để đẩy `category` lên `Technology` node trong Neo4j. Xem §4.1/§4.2. |
 | Neo4j node/relationship gốc (Article, Technology, Skill, Company, Job, Person) | `apps/backend` (real-time) + `data-platform/gold` (batch) | Xem §4. |
 | Neo4j derived relationships (`USES`, `RELATED_TO`) + stats (`trend_score`, `article_count`, `job_count` trên `Technology`) | `data-platform/gold/neo4j_enricher.py` | Chạy như một Gold-layer job (ghi log vào `dp_pipeline_runs`, `job_name='neo4j_enricher'`). |
 | Redis keys | backend | Không có service nào khác dùng chung Redis instance cho dữ liệu nghiệp vụ. |
@@ -85,6 +86,9 @@ Data Platform catalog (V7 — sở hữu bởi service `data-platform`, không p
 
 Tech Alias / Canonicalization (V21 — dùng CHUNG bởi apps/backend VÀ data-platform, xem §4.3)
   dp_tech_alias_map, dp_tech_alias_review_queue
+
+Tech Category Classification (V29 — nội bộ data-platform, không chia sẻ với backend)
+  dp_tech_category
 ```
 
 Quan hệ chính: `users 1—1 user_profile`; `users 1—N chat_session 1—N chat_message`;
@@ -124,6 +128,8 @@ với ràng buộc canonical `user_a_id < user_b_id` (tránh tạo 2 conversatio
 | V25 | Role `moderator` (chỉ có `social:moderate` + `audit:view`) — chứng minh RBAC ở V24 hoạt động đúng |
 | V26 | Soft-delete cho `post`/`post_comment` (`deleted_at`) — giữ bằng chứng kiểm duyệt thay vì xoá cứng theo CASCADE |
 | V27 | Permission `graph:manage` cho endpoint rebuild Graph Analytics (PageRank/Louvain qua Neo4j GDS) |
+| V28 | Seed alias tự tham chiếu (`lower(canonical) -> canonical`) cho toàn bộ `TECH_KEYWORDS` còn thiếu trong `dp_tech_alias_map` — bịt lỗ hổng case-duplicate kiểu "SQL"/"Sql"/"sql" khi nhà tuyển dụng gõ case khác nhau và chưa có alias sẵn |
+| V29 | `dp_tech_category` — phân loại category (language/framework/tool/cloud/database/...) cho Technology, key theo `canonical_name` (không phải `alias_normalized` như `dp_tech_alias_map`, để category không bị trôi/duplicate giữa các alias của cùng 1 tech); ghi bởi `gold/tech_dedup.py` (LLM, tên mới phát hiện) + `gold/tech_category_backfill.py` (one-time, backfill toàn bộ catalog cũ); đọc bởi `gold/neo4j_enricher.py` để ghi lên `Technology.category` — xem §4.1/§4.2 |
 | V900–V905 (dev only) | Seed: admin/demo user, sample data, jobs/articles, activity_log, tech_analytics mở rộng, thêm users + cms cho môi trường dev |
 
 DDL đầy đủ từng cột/index: [`apps/backend/.../db/README.md`](../apps/backend/src/main/resources/db/README.md) §3.
@@ -142,7 +148,7 @@ DDL đầy đủ từng cột/index: [`apps/backend/.../db/README.md`](../apps/b
 
 **Node types:**
 - `Article`: title, content, source, published_date, sentiment_score, embedding (768d)
-- `Technology`: name, category, subcategory, description, trend_score, demand_score, **article_count, job_count** (derived, ghi bởi `neo4j_enricher.py`), **pagerank_score, community_id, degree_centrality** (derived, ghi bởi `apps/backend` — `Neo4jGraphAnalyticsAdapter`, admin-triggered `POST /admin/graph-analytics/rebuild`, dùng Neo4j GDS trên cạnh `RELATED_TO`; `community_id` đã remap về 0-5 cho 6 cộng đồng lớn nhất + sentinel `99` = "khác"; xem §4.3 backend guide). `name` được canonical hoá **trước khi ghi** qua `dp_tech_alias_map` ("Golang" → "Go") — xem §4.3.
+- `Technology`: name, **category** (derived, ghi bởi `neo4j_enricher.py` từ bảng Postgres `dp_tech_category` — V29, xem §3.2 — được LLM phân loại qua `gold/tech_dedup.py` cho tên mới + `gold/tech_category_backfill.py` cho backfill 1 lần toàn bộ catalog cũ; độ trễ tới ~24h giữa lúc `category` xuất hiện trong Postgres và lúc `neo4j_enricher.py` ghi lên node, vì `tech_dedup` 03:30 chạy SAU `neo4j_enricher` 03:00 mỗi đêm), subcategory, description, trend_score, demand_score, **article_count, job_count** (derived, ghi bởi `neo4j_enricher.py`), **pagerank_score, community_id, degree_centrality** (derived, ghi bởi `apps/backend` — `Neo4jGraphAnalyticsAdapter`, admin-triggered `POST /admin/graph-analytics/rebuild`, dùng Neo4j GDS trên cạnh `RELATED_TO`; `community_id` đã remap về 0-5 cho 6 cộng đồng lớn nhất + sentinel `99` = "khác"; xem §4.3 backend guide). `name` được canonical hoá **trước khi ghi** qua `dp_tech_alias_map` ("Golang" → "Go") — xem §4.3.
 - `Skill`: name, category, demand_score
 - `Company`: name, **industry** (không phải `field`), size, location. `rating` chỉ được ĐỌC
   (`coalesce(c.rating, 0.0)` ở `ai-rag-core`/`ml-clustering`) — không pipeline nào còn ghi property
@@ -151,17 +157,47 @@ DDL đầy đủ từng cột/index: [`apps/backend/.../db/README.md`](../apps/b
   `Neo4jJobRepository` phải `coalesce(j.name, j.title)`/`coalesce(j.url, j.source_url)` để tương
   thích ngược), description, requirement, benefit, salary. `due_date` chỉ được đọc qua `coalesce`,
   không có writer hiện tại nào ghi property này.
+  > **`services/ai-rag-core` từng thiếu cùng 1 fix này:** `app/db/graph_queries.py` (6 câu Cypher
+  > tra Job) chỉ đọc/lọc `j.title` — vì writer thật (`neo4j_job_sync.py`, batch, ~901/907 Job node
+  > thật) ghi `name` chứ không phải `title` (chỉ 6 node cũ/test dùng `title`), tiêu đề job trong
+  > response `/chat` bị `NULL` với gần như toàn bộ dữ liệu thật. Đã sửa sang cùng pattern
+  > `coalesce(j.title, j.name)` như `Neo4jJobRepository` phía Java — xác minh trực tiếp trên Neo4j
+  > sống trước/sau fix.
 - `Person`: name, role
+- `Cluster`: cluster_id, name (nhãn mô tả LLM đặt, KHÔNG unique — nhiều cluster của các lần train khác nhau có thể trùng nhãn, vd "UNLABELED"), size, updated_at. Ghi bởi `services/ml-clustering/pipelines/stage_05_writeback.py`, MERGE theo `cluster_id` — **`cluster_id` chỉ là nhãn 0..N-1 thuật toán gán lại MỖI LẦN train, không phải định danh ổn định giữa các lần** (xem cảnh báo ở `BELONGS_TO` bên dưới).
 
 **Relationship types:**
 - `MENTIONS`: Article → Technology/Company/Person
 - `REQUIRES`: Job → Technology/Skill (dùng bởi **Job Matching** — `Neo4jJobRepository`)
 - `HIRES_FOR`: Job → Company — **không còn pipeline nào ghi cạnh này**: nó được tạo bởi batch importer của `knowledge-graph/` (đã xoá khỏi repo, xem §4.2). Các cạnh `HIRES_FOR` hiện có trong Neo4j là dữ liệu lịch sử (từ trước khi migrate về self-hosted), không tăng thêm nữa. `graph_queries.JOBS_BY_TITLE_AND_COMPANY` và `Neo4jJobRepository`/`Neo4jCompanyRepository` vẫn match cả `POSTED_BY|HIRES_FOR` để không bỏ sót company linkage của các Job cũ.
 - `POSTED_BY`: Job → Company — **cùng ý nghĩa với `HIRES_FOR`**, ghi bởi pipeline real-time của `apps/backend` (`KafkaNeo4jWriterService`, consume topic `extracted.jobs`) và bởi `data-platform/gold/neo4j_job_sync.py` (batch/nightly) — đây là cạnh **duy nhất còn được ghi mới** cho Job → Company kể từ khi `knowledge-graph/` bị xoá.
-- `USES`: Company → Technology — **derived**, ghi bởi `data-platform/gold/neo4j_enricher.py` (MERGE, tăng `evidence_count`/`first_seen`); theo snapshot của `ml-clustering` (06/05/2026) có ~11.3k cạnh này trong Neo4j. `apps/backend` cố tình **không** đọc `USES` trực tiếp cho Company Explorer (xem ghi chú dưới).
+- `USES`: Company → Technology — **derived**, ghi bởi `data-platform/gold/neo4j_enricher.py` (MERGE, tăng `evidence_count`/`first_seen`); theo snapshot của `ml-clustering` (06/05/2026, dataset khác — Aura trước khi migrate) có ~11.3k cạnh này. `apps/backend` cố tình **không** đọc `USES` trực tiếp cho Company Explorer (xem ghi chú dưới).
+
+  > **Bug thật đã fix (KG Health Audit mở rộng phát hiện):** `_COMPANY_USES_TECH` trước đây CHỈ
+  > suy ra từ Article co-mention (`(a:Article)-[:MENTIONS]->(c:Company)` + `(a)-[:MENTIONS]->
+  > (t:Technology)`) — nhưng chỉ **6/425** Company từng được 1 Article nhắc tên, 419 công ty còn
+  > lại CHỈ tồn tại qua Job posting nên không bao giờ có cạnh `USES` nào dù thực tế đang dùng rất
+  > nhiều công nghệ. Kết quả trên dataset local: chỉ 46 cạnh `USES` (không phải ~11.3k), khiến cả
+  > `ai-rag-core`'s `COMPANIES_USING_TECH` (câu hỏi "công ty nào dùng React?") lẫn
+  > `ml-clustering`'s `neo4j_loader.py` (dùng `USES` làm feature huấn luyện cluster) đều đói dữ
+  > liệu. Đã sửa: thêm `_COMPANY_USES_TECH_FROM_JOB` — cùng tín hiệu
+  > `Company<-[:POSTED_BY|HIRES_FOR]-Job-[:REQUIRES]->Technology` mà
+  > `Neo4jCompanyRepository`/`COMPANY_INSIGHT_CONTEXT` (Java) đã tin dùng — MERGE chung vào cùng
+  > cạnh `USES` (không tạo relationship type mới). Xác minh trực tiếp trên Neo4j sống: **46 → 3018
+  > cạnh**.
+  >
+  > **Root cause sâu hơn của con số 6/425 ở trên (fix riêng, xem `docs/BACKEND_GUIDE.md`):**
+  > `EntityExtractionService.extractEntities()` (Java) từng LUÔN trả `ORG` rỗng — không phải vì
+  > Article hiếm khi nhắc tên công ty, mà vì cơ chế trích xuất tên công ty từ văn bản chưa từng
+  > được cài đặt xong. Đã bổ sung `extractOrg()` (dictionary tên Company đã biết qua
+  > `CompanyNameCache`) — Article xử lý MỚI từ nay có thể tạo thêm `MENTIONS(Article→Company)`,
+  > làm tín hiệu Article-based cho `USES` tăng dần theo thời gian (không hồi tố cho Article cũ
+  > trừ khi chạy lại `neo4j_enricher.py` sau khi các Article đó được re-process).
 - `RELATED_TO`: Technology → Technology — derived, cũng ghi bởi `neo4j_enricher.py` (co-mention count); `gold/tech_dedup.py` cũng dùng chính cạnh này (2 chiều) khi merge 2 node trùng, để không mất tín hiệu co-mention đã tích luỹ ở node bị xoá — xem §4.3.
-- `WORKS_AT`: Person → Company (derived)
-- `WROTE`: Person → Article (derived)
+- `BELONGS_TO`: Technology → Cluster — "primary cluster" (**đúng 1 cạnh/Technology**), ghi bởi `services/ml-clustering/pipelines/stage_05_writeback.py`. `writeback.clean_before_write` PHẢI `true` (đã đổi default sau khi phát hiện bug: để `false`, cạnh của lần train trước không bị xoá nên chồng thêm mỗi lần retrain — vì `cluster_id` không ổn định giữa các lần train, MERGE theo `cluster_id` không tự thay thế được cạnh cũ; đã thấy thực tế 135/156 Technology có 2-4 cạnh `BELONGS_TO` cùng lúc trước khi dọn thủ công).
+- `NEAR_CLUSTER`: Technology → Cluster — "soft link" (nhiều cạnh/Technology, có `score`), cùng writer/cùng lưu ý `clean_before_write` như `BELONGS_TO`.
+- `WORKS_AT`: Person → Company — **được document nhưng CHƯA TỪNG có writer nào ghi trong toàn repo** (grep xác nhận 0 kết quả); giữ lại mục này để không ai vô tình dùng nhầm làm nguồn dữ liệu, không phải quan hệ đang hoạt động, khác với `HIRES_FOR` (có dữ liệu lịch sử thật dù không ghi mới) — xem so sánh 2 loại "quan hệ chết" ở `data-platform/gold/kg_health_audit.py`.
+- `WROTE`: Person → Article — cùng tình trạng với `WORKS_AT`: chưa từng có writer nào ghi.
 
 > **Vì sao Company Explorer không đọc thẳng `USES`:** `Neo4jCompanyRepository`/
 > `GetSimilarCompaniesUseCase` suy ra tech stack của công ty gián tiếp qua
@@ -175,9 +211,10 @@ DDL đầy đủ từng cột/index: [`apps/backend/.../db/README.md`](../apps/b
 
 - **`apps/backend`** (`features/kafka/adapters/input/KafkaNeo4jWriterService.java`, ghi thật qua port `ExtractionWriter` → `features/kafka/adapters/output/Neo4jExtractionWriter.java`): consume `extracted.articles`/`extracted.jobs` real-time, MERGE node gốc (Article/Technology/Skill/Company/Job/Location) + cạnh trực tiếp (`MENTIONS`, `REQUIRES`, `POSTED_BY`).
 - **`data-platform/gold/neo4j_article_sync.py` + `neo4j_job_sync.py`**: batch/nightly, đọc `dp_processed_articles`/`dp_processed_jobs` (Postgres silver layer) và MERGE lại cùng loại node + cạnh trực tiếp — chạy song song với writer real-time ở trên (không phải nguồn duy nhất).
-- **`data-platform/gold/neo4j_enricher.py`**: chạy sau, MERGE các cạnh **derived** (`USES`, `RELATED_TO`) và cập nhật thống kê trên `Technology` (`article_count`, `job_count`, `trend_score`); log mỗi lần chạy vào `dp_pipeline_runs` (Postgres, `job_name='neo4j_enricher'`).
-- **`services/ml-clustering`**: chỉ **đọc** (qua `neo4j_loader.py`, export ra parquet làm input huấn luyện cluster) — không ghi ngược kết quả cluster vào Neo4j; kết quả cluster được serve qua API riêng của `ml-clustering` (không lưu trong graph).
-- **`services/ai-rag-core`**: chỉ đọc (RAG context cho `/chat`, và grounding cho `/interview` qua `graph_queries.py`).
+- **`data-platform/gold/neo4j_enricher.py`**: chạy sau, MERGE các cạnh **derived** (`USES`, `RELATED_TO`) và cập nhật thống kê trên `Technology` (`article_count`, `job_count`, `trend_score`, và từ khi có V29: `category`, đọc từ `dp_tech_category`); log mỗi lần chạy vào `dp_pipeline_runs` (Postgres, `job_name='neo4j_enricher'`).
+- **`data-platform/gold/tech_dedup.py`** (LLM, tên Technology mới phát hiện) + **`gold/tech_category_backfill.py`** (script one-time, backfill toàn bộ catalog cũ): cùng ghi bảng Postgres `dp_tech_category` — không ghi trực tiếp vào Neo4j, chỉ `neo4j_enricher.py` mới đọc bảng này và đẩy lên `Technology.category`.
+- **`services/ml-clustering`**: **đọc** (qua `neo4j_loader.py`, export ra parquet làm input huấn luyện cluster) VÀ **ghi** khi `writeback.enabled=true` trong `params.yaml` (mặc định `true`) — `pipelines/stage_05_writeback.py` MERGE node `:Cluster` + cạnh `BELONGS_TO`/`NEAR_CLUSTER` sau mỗi lần train/retrain (thủ công hoặc lịch tự động Chủ nhật, xem `DATA_PLATFORM.md` — Clustering Retrain). Đây là bản ghi PHỤ, KHÔNG phải nguồn phục vụ chính: kết quả cluster mà `apps/backend`/frontend (`ClusterDashboard`, `AdminClusters`) dùng vẫn đến từ API riêng của `ml-clustering` (đọc MinIO/MLflow), không đọc `:Cluster` qua Neo4j — writeback này hiện chưa có consumer nào khác ngoài `data-platform/gold/kg_health_audit.py`/`tech_dedup.py` (redirect khi merge Technology trùng).
+- **`services/ai-rag-core`**: chỉ đọc (RAG context cho `/chat`, và grounding cho `/interview` qua `graph_queries.py`) — bao gồm cả các property derived ở trên (`category`, `pagerank_score`...) để làm graph-aware ranking cho multi-hop expansion, xem [`AI_PLATFORM.md`](./AI_PLATFORM.md) §2.3.
 - **`apps/backend`**: cũng đọc nhiều hơn ghi (graph explore/road-analysis, company similarity, job matching, salary/sentiment filter trên `graph`/`company`/`job` features).
 
 > Lưu ý: thư mục `knowledge-graph/` (crawl + entity resolution + import độc lập) từng là bản đầu tiên của pipeline này nhưng đã bị thay thế bởi `services/crawler/` (crawl) + hai nguồn ghi ở trên, và đã được xoá khỏi repo — không dùng làm tài liệu tham khảo runtime nữa.
@@ -193,9 +230,26 @@ Trước khi có cơ chế này, cùng 1 công nghệ có thể bị lưu thành
 **b) Periodic cleanup (dọn phần còn sót — node trùng tạo từ trước khi có (a), hoặc case mới):**
 `data-platform/gold/tech_dedup.py` (5:30 AM daily, xem [`DATA_PLATFORM.md` §5e](./DATA_PLATFORM.md)) chạy 2 giai đoạn: Giai đoạn A áp `dp_tech_alias_map` đã biết trực tiếp lên các node hiện có trong Neo4j; Giai đoạn B gửi các tên chưa khớp alias nào cho LLM (Gemini/OpenAI) để phát hiện case mới (vd "K8s"/"Kubernetes") — case confidence cao thì merge luôn + lưu `dp_tech_alias_map` (`source='llm_auto'`), case không chắc thì ghi vào `dp_tech_alias_review_queue` chờ duyệt thủ công.
 
-`_merge_duplicate_node()` dùng **Cypher thuần** (không phải `apoc.refactor.mergeNodes`) vì APOC plugin không có sẵn trên Neo4j Docker local của project: chuyển hướng các cạnh incoming đã biết loại (`MENTIONS`, `REQUIRES`, `USES`, `IS_TECHNOLOGY`) + `RELATED_TO` 2 chiều từ node trùng sang node canonical, rồi `DETACH DELETE` node trùng.
+`_merge_duplicate_node()` dùng **Cypher thuần** (không phải `apoc.refactor.mergeNodes`) vì APOC plugin không có sẵn trên Neo4j Docker local của project: chuyển hướng các cạnh incoming đã biết loại (`MENTIONS`, `REQUIRES`, `USES`, `IS_TECHNOLOGY`) + outgoing (`BELONGS_TO`, `NEAR_CLUSTER`) + `RELATED_TO` 2 chiều từ node trùng sang node canonical, rồi `DETACH DELETE` node trùng. Hàm này match theo **tên** — dùng cho 2 tên KHÁC NHAU cùng 1 công nghệ (biến thể chính tả/hoa-thường). Với 2 node trùng Y HỆT cùng 1 chuỗi tên (2 node vật lý riêng biệt do race MERGE trước khi có constraint ở §4.4), `{name: $name}` khớp cả hai cùng lúc nên không dùng được — có `_merge_duplicate_node_by_id()`/`_dedup_exact_duplicates()` riêng, match theo `elementId`, chạy trước Giai đoạn A/B (Giai đoạn 0).
 
 `dp_tech_alias_map`/`dp_tech_alias_review_queue` là bảng Postgres **duy nhất** trong hệ thống được cả `apps/backend` và `data-platform` cùng dùng chung (xem ngoại lệ ở §2) — lý do là 2 service có Docker build-context tách biệt nên không thể share 1 file cấu hình, Postgres là điểm trung lập cả 2 đã kết nối sẵn.
+
+### 4.4 Uniqueness constraints
+
+`data-platform/common/neo4j_schema.py` (`ensure_constraints`, gọi lúc `main.py` khởi động, `CREATE CONSTRAINT IF NOT EXISTS` nên an toàn gọi lại mỗi lần restart) tạo unique constraint theo ĐÚNG property mà mọi writer hiện tại dùng để MERGE:
+
+| Label | Property | Vì sao |
+|---|---|---|
+| `Article` | `id` | hash xác định trước (`md5(sourceUrl)`), không phải tên hiển thị |
+| `Company` | `id` | slug xác định trước (`slugify(companyName)`) |
+| `Job` | `id` | hash xác định trước (`md5(sourceUrl)`) |
+| `Technology` | `name` | chưa có id xác định trước — mọi writer đều MERGE theo tên |
+| `Skill` | `name` | tương tự `Technology` |
+| `Location` | `name` | tương tự `Technology` |
+
+Trước khi thêm constraint này, `SHOW CONSTRAINTS` trên instance sống trả về RỖNG hoàn toàn (đúng như cảnh báo cũ ở §1 rằng `knowledge-graph/utils/schema_define.py` — script duy nhất từng tạo constraint — đã bị xoá khỏi repo mà không có gì thay thế). Hệ quả xác nhận được trên dữ liệu thật: `MERGE (t:Technology {name: ...})` race giữa Java realtime writer (`Neo4jExtractionWriter`) và Python batch writer (`neo4j_article_sync.py`/`neo4j_job_sync.py`) — 2 transaction cùng lúc đọc "chưa tồn tại" trước khi bên nào commit — sinh ra nhiều node `Technology` trùng Y HỆT tên (`TypeScript` ×2, `Laravel` ×3, `PHP` ×2, đã dedup thủ công qua `gold/tech_dedup.py` Giai đoạn 0, xem §4.3). `Article`/`Company`/`Job` (MERGE theo `id` xác định trước) không gặp race tương tự vì `id` được tính trước khi ghi, không phụ thuộc thứ tự transaction.
+
+`CREATE CONSTRAINT` sẽ **fail** nếu dữ liệu hiện có đã vi phạm uniqueness — `ensure_constraints()` log warning và bỏ qua constraint đó thay vì crash cả service, nhưng vẫn cần dedup thủ công trước khi bật lại (không tự động dedup ngầm trong `ensure_constraints`, để lỗi dedup không bị che giấu bởi vẻ "đã tạo constraint thành công").
 
 ---
 

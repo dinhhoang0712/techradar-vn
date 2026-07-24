@@ -217,6 +217,39 @@ def test_process_job_skips_when_source_url_missing():
     conn = FakeConn()
     processor._process_job(conn, {"data": {"job": {"title": "No URL"}}})
     assert conn.cursors == []
+
+
+# ---------------------------------------------------------------------------
+# _is_blocked_page_job / skip garbage crawl pages (regression guard cho bug thật:
+# crawler TopCV bị chặn từng lưu nhầm 48 trang lỗi/captcha thành Job node)
+# ---------------------------------------------------------------------------
+
+
+def test_is_blocked_page_job_detects_known_signatures():
+    assert processor._is_blocked_page_job("Sorry, you have been blocked", "", "") is True
+    assert processor._is_blocked_page_job("www.topcv.vn", "", "") is True
+    assert processor._is_blocked_page_job("Please complete the captcha", "", "") is True
+
+
+def test_is_blocked_page_job_false_when_has_company_or_description():
+    # Tin thật, kể cả tiêu đề trùng khớp tình cờ, không bị chặn nếu có company hoặc description.
+    assert processor._is_blocked_page_job("Sorry, you have been blocked", "", "FPT Software") is False
+    assert processor._is_blocked_page_job("www.topcv.vn", "Mô tả công việc chi tiết ở đây", "") is False
+
+
+def test_is_blocked_page_job_false_for_real_job_titles():
+    assert processor._is_blocked_page_job("Senior Backend Engineer", "", "") is False
+    assert processor._is_blocked_page_job("", "", "") is False
+
+
+def test_process_job_skips_blocked_page_job():
+    conn = FakeConn()
+    msg = {
+        "job_title": "Sorry, you have been blocked",
+        "source_url": "https://www.topcv.vn/some-blocked-path",
+    }
+    processor._process_job(conn, msg)
+    assert conn.cursors == []
     assert conn.commit_count == 0
 
 

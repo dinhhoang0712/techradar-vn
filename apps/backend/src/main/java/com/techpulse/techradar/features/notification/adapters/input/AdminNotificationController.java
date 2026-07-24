@@ -1,6 +1,7 @@
 package com.techpulse.techradar.features.notification.adapters.input;
 
 import com.techpulse.techradar.features.notification.application.SendAdminNotificationUseCase;
+import com.techpulse.techradar.features.system.application.AuditLogService;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -26,6 +27,7 @@ import java.util.Map;
 public class AdminNotificationController {
 
     private final SendAdminNotificationUseCase sendAdminNotificationUseCase;
+    private final AuditLogService auditLogService;
 
     @Operation(summary = "Send a notification to one user, or broadcast to all active users when userId is omitted")
     @PostMapping
@@ -33,6 +35,9 @@ public class AdminNotificationController {
     public Mono<ResponseEntity<ApiResponse<Map<String, Object>>>> send(@RequestBody SendNotificationRequest request) {
         boolean isBroadcast = request.getUserId() == null || request.getUserId().isBlank();
         return sendAdminNotificationUseCase.execute(request.getTitle(), request.getBody(), request.getLink(), request.getUserId())
+                .flatMap(count -> auditLogService.record("NOTIFICATION_SEND", "notification", request.getUserId(),
+                                "title=" + request.getTitle() + ", recipients=" + count)
+                        .thenReturn(count))
                 .map(count -> ResponseEntity.ok(ApiResponse.success(
                         Map.<String, Object>of("recipients", count),
                         isBroadcast ? "Đã gửi thông báo tới " + count + " người dùng" : "Đã gửi thông báo")))

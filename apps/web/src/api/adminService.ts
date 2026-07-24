@@ -4,7 +4,7 @@ import type { ApiResponse } from '../types/api';
 import type {
     AdminDashboardStats, SocialDashboard, JobMarketDashboard, PipelineDashboard, MessagingDashboard,
     ClusteringPipelineStatus, ClusteringPipelineRun, DataPlatformJob, DataPlatformJobRun, CrawlerStatus, AdminUser, AdminSettingRow,
-    AdminModerationPost, AdminModerationComment, AdminLiveMetrics,
+    AdminModerationPost, AdminModerationComment, AdminLiveMetrics, AuditLogEntry,
 } from '../types/admin';
 import type { ClusterSummary, ClusterDetail } from '../types/cluster';
 
@@ -86,6 +86,32 @@ export const updateAdminSetting = async (key: string, value: string): Promise<un
         method: 'PUT',
         body: JSON.stringify({ value })
     });
+};
+
+export const deleteAdminSetting = async (key: string): Promise<unknown> => {
+    return await apiClient(`/admin/settings/${key}`, { method: 'DELETE' });
+};
+
+// --- Cache eviction ---
+// Company/job/roadmap reads are cached (Redis, 30 min TTL) with no automatic invalidation when
+// their source data changes — these let an admin force stale data to refresh immediately.
+
+export const evictCompanyCache = async (): Promise<unknown> => {
+    return await apiClient('/admin/cache/companies/evict', { method: 'POST' });
+};
+
+export const evictJobMatchCache = async (): Promise<unknown> => {
+    return await apiClient('/admin/cache/jobs/evict', { method: 'POST' });
+};
+
+export const evictRoadmapCache = async (): Promise<unknown> => {
+    return await apiClient('/admin/cache/roadmap/evict', { method: 'POST' });
+};
+
+// --- Audit log ---
+
+export const fetchAuditLog = async (page = 0, size = 50): Promise<ApiResponse<AuditLogEntry[]>> => {
+    return await apiClient(`/admin/audit-log?page=${page}&size=${size}`);
 };
 
 // POST /admin/analytics/rebuild — rebuilds tech_analytics from the knowledge graph on demand
@@ -252,6 +278,34 @@ export const fetchClusterDetail = async (clusterId: string | number): Promise<Ap
     return await apiClient(`/clustering/clusters/${clusterId}`);
 };
 
+export interface BatchPredictTechResult {
+    tech_name: string;
+    cluster_id: number | null;
+    label: string | null;
+    label_en?: string | null;
+    domain?: string | null;
+    found: boolean;
+    provisional?: boolean;
+    matched_via?: string | null;
+}
+
+export interface BatchPredictResult {
+    results: BatchPredictTechResult[];
+    n_found: number;
+    n_provisional: number;
+    n_not_found: number;
+    snapshot_tag?: string;
+}
+
+// POST /clustering/predict/batch — look up the cluster for several technologies in one call
+// instead of one request per technology.
+export const batchPredictClusters = async (techNames: string[]): Promise<ApiResponse<BatchPredictResult>> => {
+    return await apiClient('/clustering/predict/batch', {
+        method: 'POST',
+        body: JSON.stringify({ tech_names: techNames }),
+    });
+};
+
 export interface UpdateClusterLabelFields {
     label?: string;
     labelEn?: string;
@@ -341,5 +395,61 @@ export const updateCmsContent = async (id: string, content: Partial<CmsContent>)
 export const deleteCmsContent = async (id: string): Promise<unknown> => {
     return await apiClient(`/admin/cms/${id}`, {
         method: 'DELETE'
+    });
+};
+
+// --- Knowledge Graph review queue ---
+// dp_tech_alias_review_queue (Technology alias pairs the LLM in tech_dedup.py wasn't confident
+// enough to auto-merge) + Company near-duplicate groups (detected live from Neo4j, never
+// persisted — see KgReviewAdminController).
+
+export const KG_REVIEW_CHANGED_EVENT = 'admin-kg-review-changed';
+
+export interface TechAliasReviewItem {
+    id: number;
+    name_a: string;
+    name_b: string;
+    llm_reasoning?: string;
+    status: string;
+    created_at: string;
+}
+
+export interface CompanyDuplicateCandidate {
+    id: string;
+    name: string;
+}
+
+export interface CompanyDuplicateGroup {
+    normalized_core: string;
+    companies: CompanyDuplicateCandidate[];
+}
+
+export const fetchTechAliasReviewQueue = async (page = 0, size = 20): Promise<ApiResponse<TechAliasReviewItem[]>> => {
+    return await apiClient(`/admin/kg-review/tech-aliases?page=${page}&size=${size}`);
+};
+
+export const fetchTechAliasReviewCount = async (): Promise<ApiResponse<{ pending: number }>> => {
+    return await apiClient('/admin/kg-review/tech-aliases/count');
+};
+
+export const approveTechAlias = async (id: number, canonicalName?: string): Promise<unknown> => {
+    return await apiClient(`/admin/kg-review/tech-aliases/${id}/approve`, {
+        method: 'POST',
+        body: JSON.stringify({ canonicalName: canonicalName || null }),
+    });
+};
+
+export const rejectTechAlias = async (id: number): Promise<unknown> => {
+    return await apiClient(`/admin/kg-review/tech-aliases/${id}/reject`, { method: 'POST' });
+};
+
+export const fetchCompanyDuplicates = async (): Promise<ApiResponse<CompanyDuplicateGroup[]>> => {
+    return await apiClient('/admin/kg-review/company-duplicates');
+};
+
+export const mergeCompanyDuplicate = async (duplicateId: string, canonicalId: string): Promise<unknown> => {
+    return await apiClient('/admin/kg-review/company-duplicates/merge', {
+        method: 'POST',
+        body: JSON.stringify({ duplicateId, canonicalId }),
     });
 };

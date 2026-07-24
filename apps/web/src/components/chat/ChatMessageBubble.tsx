@@ -1,5 +1,7 @@
-import { renderMarkdown } from '../../utils/markdown';
+import MarkdownContent from '../common/MarkdownContent';
+import CopyButton from '../common/CopyButton';
 import type { ChatUiMessage } from '../../types/chat';
+import './ChatMessageBubble.css';
 
 // 1 dòng tin nhắn trong cửa sổ chat — bot (kèm steps của Agent mode/sources RAG nếu có) hoặc user.
 export default function ChatMessageBubble({ msg }: { msg: ChatUiMessage }) {
@@ -17,11 +19,14 @@ export default function ChatMessageBubble({ msg }: { msg: ChatUiMessage }) {
                         <span className="dots-animation"><span>.</span><span>.</span><span>.</span></span>
                     ) : (
                         <>
-                            {renderMarkdown(msg.text)}
+                            <MarkdownContent>{msg.text}</MarkdownContent>
                             {msg.streaming && <span className="cursor-blink" />}
                         </>
                     )}
                 </div>
+                {msg.role === 'bot' && !msg.streaming && msg.text && (
+                    <CopyButton text={msg.text} className="chat-bubble-copy" />
+                )}
                 {msg.steps && msg.steps.length > 0 && (
                     <details className="agent-steps">
                         <summary>Các bước đã thực hiện ({msg.steps.length})</summary>

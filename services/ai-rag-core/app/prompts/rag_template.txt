@@ -13,6 +13,11 @@ CONTEXT — Thống kê analytics (job_count, article_count, tăng trưởng):
 
 ---
 
+CONTEXT — Đồ thị mở rộng (công nghệ/công ty liên quan qua nhiều bước):
+{subgraph_block}
+
+---
+
 {user_block}
 
 CÂU HỎI: {query}

@@ -41,3 +41,16 @@ def test_extract_tech_does_not_match_unrelated_words_containing_keyword_substrin
     # "go" alone should still match the "Go" keyword — this documents the
     # current (imperfect) behavior: keyword matching can't disambiguate intent.
     assert extract_tech(text) == ["Go"]
+
+
+def test_extract_tech_matches_network_security_hardware_vendors():
+    """Regression guard cho gap REQUIRES đã phát hiện: danh sách trước đó thiên hẳn về
+    software dev, bỏ sót thiết bị mạng/bảo mật xuất hiện thật trong mô tả công việc."""
+    text = "Quản trị hệ thống mạng trên nền tảng Cisco, Juniper, Checkpoint, Fortinet và F5."
+    assert extract_tech(text) == ["Checkpoint", "Cisco", "F5", "Fortinet", "Juniper"]
+
+
+def test_extract_tech_matches_cad_cnc_game_engine_tools():
+    """Regression guard cho gap REQUIRES — cùng đợt phát hiện với network/security hardware."""
+    text = "Lập trình máy tiện CNC bằng Mastercam, hoặc phát triển game bằng Unreal Engine."
+    assert extract_tech(text) == ["Mastercam", "Unreal Engine"]

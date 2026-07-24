@@ -85,6 +85,61 @@
     }
 }
 
+.profile-danger-zone {
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+.profile-danger-zone h3 {
+    margin: 0;
+    color: var(--danger-light);
+    font-size: 1.1rem;
+}
+.profile-danger-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    background: var(--surface-2);
+    border-radius: var(--radius);
+}
+.profile-danger-row strong {
+    display: block;
+    color: var(--text);
+    margin-bottom: 4px;
+}
+.profile-danger-row p {
+    margin: 0;
+    color: var(--text-2);
+    font-size: 0.9rem;
+    max-width: 460px;
+}
+@media (max-width: 640px) {
+    .profile-danger-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
+.profile-danger-password-input {
+    width: 100%;
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-size: 0.95rem;
+}
+.profile-danger-password-input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
 /* Avatar section */
 .profile-avatar-section {
     display: flex;

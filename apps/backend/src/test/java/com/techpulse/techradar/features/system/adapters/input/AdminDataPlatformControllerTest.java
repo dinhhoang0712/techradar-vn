@@ -1,6 +1,7 @@
 package com.techpulse.techradar.features.system.adapters.input;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.techpulse.techradar.features.system.application.AuditLogService;
 import com.techpulse.techradar.features.system.application.DataPlatformJobStatusService;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,9 +21,11 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -39,6 +42,9 @@ class AdminDataPlatformControllerTest {
     @Mock
     private DataPlatformJobStatusService jobStatusService;
 
+    @Mock
+    private AuditLogService auditLogService;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private AdminDataPlatformController controller;
@@ -46,7 +52,8 @@ class AdminDataPlatformControllerTest {
     @BeforeEach
     void setUp() {
         RedisTriggerPublisher redisTriggerPublisher = new RedisTriggerPublisher(redisTemplate, objectMapper);
-        controller = new AdminDataPlatformController(jobStatusService, redisTriggerPublisher, redisTemplate);
+        controller = new AdminDataPlatformController(jobStatusService, redisTriggerPublisher, redisTemplate, auditLogService);
+        lenient().when(auditLogService.record(any(), any(), any(), any())).thenReturn(Mono.empty());
     }
 
     private void stubLockAcquired(String jobId) {
@@ -110,6 +117,7 @@ class AdminDataPlatformControllerTest {
                 .verifyComplete();
 
         verify(redisTemplate, never()).convertAndSend(anyString(), anyString());
+        verify(auditLogService, never()).record(any(), any(), any(), any());
     }
 
     @Test
@@ -126,6 +134,8 @@ class AdminDataPlatformControllerTest {
                     assertThat(body.getData()).containsEntry("delivered", true);
                 })
                 .verifyComplete();
+
+        verify(auditLogService).record(eq("DATA_PLATFORM_JOB_TRIGGER"), eq("job"), eq("tech_dedup"), any());
     }
 
     @Test

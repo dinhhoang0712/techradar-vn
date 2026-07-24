@@ -1,6 +1,7 @@
 package com.techpulse.techradar.features.notification.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.techpulse.techradar.features.auth.ports.UserRepository;
 import com.techpulse.techradar.features.notification.ports.NotificationRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,12 +27,14 @@ class NotificationServiceUnreadCountTest {
     private ReactiveRedisMessageListenerContainer redisListenerContainer;
     @Mock
     private ReactiveStringRedisTemplate redisTemplate;
+    @Mock
+    private UserRepository userRepository;
 
     private NotificationService service;
 
     @BeforeEach
     void setUp() {
-        service = new NotificationService(repository, redisListenerContainer, redisTemplate, new ObjectMapper());
+        service = new NotificationService(repository, redisListenerContainer, redisTemplate, new ObjectMapper(), userRepository);
     }
 
     @Test

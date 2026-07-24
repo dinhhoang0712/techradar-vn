@@ -9,7 +9,9 @@ import {
 } from '../../api/notificationService';
 import { useToast } from '../common/toastContext';
 import NotifIcon from './notifIcons';
+import { severityOf } from './notifSeverity';
 import { timeAgo } from '../../utils/timeAgo';
+import { playNotificationSound } from '../../utils/notificationSound';
 import type { Notification } from '../../types/notification';
 import './NotificationBell.css';
 
@@ -61,6 +63,7 @@ export default function NotificationBell() {
                     setUnread((c) => c + 1);
                     setPulse(true);
                     setTimeout(() => setPulse(false), 700);
+                    playNotificationSound();
                 }
                 if (!openRef.current) {
                     showToast({
@@ -177,7 +180,7 @@ export default function NotificationBell() {
                             items.map((n) => (
                                 <button
                                     key={n.id}
-                                    className={`notif-item${n.read ? '' : ' unread'}`}
+                                    className={`notif-item notif-item--${severityOf(n.type)}${n.read ? '' : ' unread'}`}
                                     onClick={() => handleItemClick(n)}
                                 >
                                     <span className="notif-item-icon-wrap">

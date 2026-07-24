@@ -16,9 +16,11 @@ const AdminModeration = lazy(() => import('./pages/admin/AdminModeration'));
 const AdminReports = lazy(() => import('./pages/admin/AdminReports'));
 const AdminCMS = lazy(() => import('./pages/admin/AdminCMS'));
 const AdminClusters = lazy(() => import('./pages/admin/AdminClusters'));
+const AdminKgReview = lazy(() => import('./pages/admin/AdminKgReview'));
 const AdminSettings = lazy(() => import('./pages/admin/AdminSettings'));
 const AdminAutomation = lazy(() => import('./pages/admin/AdminAutomation'));
 const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'));
+const AdminAuditLog = lazy(() => import('./pages/admin/AdminAuditLog'));
 const TrendDashboard = lazy(() => import('./pages/TrendDashboard'));
 const ComparePage = lazy(() => import('./pages/ComparePage'));
 const GraphExplorer = lazy(() => import('./pages/GraphExplorer'));
@@ -75,8 +77,10 @@ export default function App() {
             <Route path="users" element={<AdminUsers />} />
             <Route path="cms" element={<AdminCMS />} />
             <Route path="clusters" element={<AdminClusters />} />
+            <Route path="kg-review" element={<AdminKgReview />} />
             <Route path="automation" element={<AdminAutomation />} />
             <Route path="settings" element={<AdminSettings />} />
+            <Route path="audit-log" element={<AdminAuditLog />} />
           </Route>
 
           {/* Catch-all: Hiển thị trang 404 cho các route không tồn tại */}

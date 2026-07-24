@@ -26,3 +26,38 @@ def test_prompt_construction_scenarios():
     graph_partial = {"related_tech": [{"from_tech": "A", "related_tech": "B"}]}
     msgs_partial = build_messages("A", [], graph_partial)
     assert "Công nghệ liên quan: B" in msgs_partial[1]["content"]
+
+
+def test_subgraph_block_groups_triples_by_hop_distance():
+    """Multi-hop expansion (Phase 2): triple phải được nhóm theo hop, không phải liệt kê phẳng —
+    để LLM phân biệt được 'liên quan trực tiếp' với 'mở rộng nhiều bước'."""
+    triples = [
+        {"subject": "Java", "predicate": "REQUIRES", "object": "Spring", "hop": 1},
+        {"subject": "Spring", "predicate": "RELATED_TO", "object": "Kafka", "hop": 2},
+    ]
+    msgs = build_messages("Java cần học gì?", [], {}, subgraph_triples=triples)
+    content = msgs[1]["content"]
+
+    assert "Liên quan trực tiếp" in content
+    assert "Java yêu cầu Spring" in content
+    assert "Mở rộng 2 bước" in content
+    assert "Spring liên quan tới Kafka" in content
+
+
+def test_subgraph_block_empty_when_no_triples():
+    msgs = build_messages("Query", [], {})
+    assert "Không có dữ liệu đồ thị mở rộng" in msgs[1]["content"]
+
+
+def test_job_and_company_blocks_unchanged_after_formatter_extraction():
+    """Regression guard: format_job_line/format_company_line được tách ra khỏi
+    _build_job_context_block (Phase 3) không được đổi hành vi render."""
+    graph = {
+        "jobs": [{"title": "Backend Dev", "technology": "Java", "company": "FPT", "location": "Hà Nội"}],
+        "companies": [{"name": "FPT", "industry": "IT", "technology": "Java"}],
+    }
+    msgs = build_messages("Query", [], graph)
+    content = msgs[1]["content"]
+
+    assert "Backend Dev (yêu cầu: Java) tại FPT" in content
+    assert "FPT (dùng Java)" in content

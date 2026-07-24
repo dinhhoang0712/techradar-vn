@@ -89,6 +89,9 @@ async def handle_chat(request: ChatRequest, db: AsyncSession) -> ChatResponse:
         sources=sources,
         entities=result.get("entities", []),
         job_titles=result.get("job_titles", []),
+        analytics=result.get("analytics", []),
+        subgraph=result.get("subgraph"),
+        strategy=result.get("strategy"),
         query=request.query,
     )
 
@@ -176,6 +179,9 @@ async def handle_chat_stream(request: ChatRequest, db: AsyncSession) -> AsyncIte
             "sources": sources,
             "entities": (final_payload or {}).get("entities", []),
             "job_titles": (final_payload or {}).get("job_titles", []),
+            "analytics": (final_payload or {}).get("analytics", []),
+            "subgraph": (final_payload or {}).get("subgraph"),
+            "strategy": (final_payload or {}).get("strategy"),
             "query": request.query,
         },
     }

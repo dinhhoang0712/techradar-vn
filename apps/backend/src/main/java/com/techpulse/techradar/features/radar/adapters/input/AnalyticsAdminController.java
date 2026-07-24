@@ -1,8 +1,10 @@
 package com.techpulse.techradar.features.radar.adapters.input;
 
+import com.techpulse.techradar.features.notification.application.NotificationService;
 import com.techpulse.techradar.features.radar.application.RadarCacheKeys;
 import com.techpulse.techradar.features.radar.etl.RadarAnalyticsEtlService;
 import com.techpulse.techradar.features.radar.realtime.RadarBroadcaster;
+import com.techpulse.techradar.features.system.application.AuditLogService;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import com.techpulse.techradar.shared.redis.ReactiveRedisCache;
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,6 +31,10 @@ public class AnalyticsAdminController {
     private final RadarAnalyticsEtlService etlService;
     private final ReactiveRedisCache redisCache;
     private final RadarBroadcaster radarBroadcaster;
+    private final AuditLogService auditLogService;
+    private final NotificationService notificationService;
+
+    private static final String ADMIN_AUTOMATION_LINK = "/admin/automation";
 
     @Operation(summary = "Rebuild radar/compare analytics from Neo4j")
     @PostMapping("/rebuild")
@@ -37,9 +43,19 @@ public class AnalyticsAdminController {
         return etlService.rebuild()
                 .flatMap(count -> redisCache.evictByPattern(RadarCacheKeys.EVICT_ALL_PATTERN).thenReturn(count))
                 .flatMap(count -> radarBroadcaster.publishLatestSnapshot().thenReturn(count))
+                .flatMap(count -> auditLogService.record("ANALYTICS_REBUILD", "analytics", null,
+                                "rows_upserted=" + count)
+                        .thenReturn(count))
+                .flatMap(count -> notificationService.notifyAllAdmins("ADMIN_ANALYTICS_REBUILD_DONE",
+                                "Đã chạy lại phân tích xu hướng thành công", count + " dòng đã cập nhật.",
+                                ADMIN_AUTOMATION_LINK)
+                        .thenReturn(count))
                 .map(count -> ResponseEntity.ok(
                         ApiResponse.success(Map.<String, Object>of("rows_upserted", count), "Analytics rebuilt")))
-                .onErrorResume(ex -> Mono.just(ResponseEntity.status(503).body(
-                        ApiResponse.error("Analytics rebuild failed: " + ex.getMessage(), "ETL_ERROR"))));
+                .onErrorResume(ex -> notificationService.notifyAllAdmins("ADMIN_ANALYTICS_REBUILD_FAILED",
+                                "Chạy lại phân tích xu hướng thất bại", "Lỗi: " + ex.getMessage(),
+                                ADMIN_AUTOMATION_LINK)
+                        .then(Mono.just(ResponseEntity.status(503).body(
+                                ApiResponse.<Map<String, Object>>error("Analytics rebuild failed: " + ex.getMessage(), "ETL_ERROR")))));
     }
 }

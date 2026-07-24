@@ -188,3 +188,64 @@
     font-size: 0.8rem;
     margin: -4px 0 0;
 }
+
+/* ── Batch cluster check ─────────────────────────────────────────────── */
+
+.batch-check-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.batch-check-hint {
+    margin: -8px 0 0;
+    color: var(--text-2);
+    font-size: 0.88rem;
+    max-width: 720px;
+}
+
+.batch-check-input {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    padding: 10px 14px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    resize: vertical;
+}
+.batch-check-input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.batch-check-results {
+    overflow-x: auto;
+}
+
+.batch-check-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+    color: var(--text);
+}
+.batch-check-table th {
+    background: var(--surface-2);
+    padding: 12px 16px;
+    font-weight: 600;
+    color: var(--text-2);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+}
+.batch-check-table td {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+}
+.batch-check-table tr:last-child td { border-bottom: none; }
+
+.batch-check-empty-cell {
+    text-align: center;
+    color: var(--text-2);
+    padding: 20px !important;
+}

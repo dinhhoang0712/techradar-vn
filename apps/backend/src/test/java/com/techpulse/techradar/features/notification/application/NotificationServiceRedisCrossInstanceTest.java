@@ -2,12 +2,14 @@ package com.techpulse.techradar.features.notification.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.techpulse.techradar.features.auth.ports.UserRepository;
 import com.techpulse.techradar.features.notification.domain.Notification;
 import com.techpulse.techradar.features.notification.ports.NotificationRepository;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.mockito.Mockito;
 import org.springframework.data.redis.connection.ReactiveRedisConnectionFactory;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
@@ -67,7 +69,8 @@ class NotificationServiceRedisCrossInstanceTest {
                                                     ObjectMapper objectMapper) {
         ReactiveRedisMessageListenerContainer container = new ReactiveRedisMessageListenerContainer(connectionFactory);
         ReactiveStringRedisTemplate template = new ReactiveStringRedisTemplate(connectionFactory);
-        NotificationService service = new NotificationService(repository, container, template, objectMapper);
+        NotificationService service = new NotificationService(repository, container, template, objectMapper,
+                Mockito.mock(UserRepository.class));
         service.subscribeToRedis();
         return service;
     }

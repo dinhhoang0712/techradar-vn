@@ -1,4 +1,5 @@
 import './TechRecommendationCards.css';
+import MarkdownContent from './common/MarkdownContent';
 import type { NextSkill } from '../types/career';
 
 interface TechRecommendationCardsProps {
@@ -64,7 +65,7 @@ export default function TechRecommendationCards({
                                 )}
                             </div>
                             {rec.reason && (
-                                <p className="rec-reason">{rec.reason}</p>
+                                <MarkdownContent className="rec-reason">{rec.reason}</MarkdownContent>
                             )}
                             <div className="rec-meta">
                                 {rec.growth_rate != null && (

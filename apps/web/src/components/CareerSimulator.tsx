@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import './CareerSimulator.css';
+import MarkdownContent from './common/MarkdownContent';
 import type { CareerSimulationResult, CareerSimulationSalary } from '../types/career';
 
 const TREND_META: Record<string, { label: string; icon: string; tone: string }> = {
@@ -135,7 +136,7 @@ export default function CareerSimulator({ suggestions = [], onSimulate }: Career
                                     </div>
                                 )}
                                 {result.forecast?.reasoning && (
-                                    <p className="sim-reasoning">{result.forecast.reasoning}</p>
+                                    <MarkdownContent className="sim-reasoning">{result.forecast.reasoning}</MarkdownContent>
                                 )}
                             </>
                         ) : (

@@ -53,6 +53,14 @@
     background: var(--surface-2);
 }
 
+.notifpage-item--error {
+    border-left: 3px solid var(--danger);
+}
+
+.notifpage-item--success {
+    border-left: 3px solid var(--green);
+}
+
 .notifpage-item.unread {
     background: var(--primary-glow);
 }

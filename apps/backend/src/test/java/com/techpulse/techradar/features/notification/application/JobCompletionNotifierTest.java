@@ -5,6 +5,7 @@ import com.techpulse.techradar.features.auth.domain.User;
 import com.techpulse.techradar.features.auth.ports.EmailSender;
 import com.techpulse.techradar.features.auth.ports.UserRepository;
 import com.techpulse.techradar.features.notification.domain.Notification;
+import com.techpulse.techradar.features.notification.event.ClusteringCompletedEvent;
 import com.techpulse.techradar.features.notification.event.CrawlerCompletedEvent;
 import com.techpulse.techradar.features.notification.event.JobCompletedEvent;
 import com.techpulse.techradar.features.system.application.DataPlatformJobStatusService;
@@ -154,6 +155,39 @@ class JobCompletionNotifierTest {
         assertThat(saved.getType()).isEqualTo("ADMIN_CRAWL_DONE");
         assertThat(saved.getTitle()).isEqualTo("Crawler đã hoàn tất: 6/8 nguồn thành công");
         assertThat(saved.getUserId()).isEqualTo(admin.getId());
+        verify(emailSender, never()).sendNotification(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void onClusteringCompleted_notifiesEveryAdmin_whenStatusIsSuccess() {
+        User admin = admin("admin@example.com");
+        when(userRepository.findAdmins()).thenReturn(Flux.just(admin));
+        when(notificationService.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+
+        notifier.onClusteringCompleted(new ClusteringCompletedEvent("success", 184, "2026-07-24-0000", null));
+
+        verify(notificationService).save(notificationCaptor.capture());
+        Notification saved = notificationCaptor.getValue();
+        assertThat(saved.getType()).isEqualTo("ADMIN_CLUSTERING_DONE");
+        assertThat(saved.getTitle()).isEqualTo("Huấn luyện lại cụm công nghệ thành công");
+        assertThat(saved.getBody()).isEqualTo("Hoàn tất trong 184s.");
+        assertThat(saved.getLink()).isEqualTo("/admin/automation");
+        verify(emailSender, never()).sendNotification(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void onClusteringCompleted_notifiesEveryAdminWithError_whenStatusIsFailed() {
+        User admin = admin("admin@example.com");
+        when(userRepository.findAdmins()).thenReturn(Flux.just(admin));
+        when(notificationService.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+
+        notifier.onClusteringCompleted(new ClusteringCompletedEvent("failed", 12, null, "stage_03_train exit 1"));
+
+        verify(notificationService).save(notificationCaptor.capture());
+        Notification saved = notificationCaptor.getValue();
+        assertThat(saved.getType()).isEqualTo("ADMIN_CLUSTERING_FAILED");
+        assertThat(saved.getTitle()).isEqualTo("Huấn luyện lại cụm công nghệ thất bại");
+        assertThat(saved.getBody()).isEqualTo("Lỗi: stage_03_train exit 1");
         verify(emailSender, never()).sendNotification(anyString(), anyString(), anyString());
     }
 }

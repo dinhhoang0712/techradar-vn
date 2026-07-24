@@ -491,11 +491,17 @@
     color: var(--text-2);
     font-size: 0.88rem;
     line-height: 1.6;
-    margin: 0;
     padding: 10px 14px;
     background: var(--surface);
     border-radius: 8px;
     border-left: 3px solid var(--primary);
+}
+
+.forecast-reasoning .md-p {
+    margin: 0;
+    color: inherit;
+    font-size: inherit;
+    line-height: inherit;
 }
 
 .forecast-subsection-title {
@@ -538,6 +544,7 @@
 }
 
 .signal-label { color: var(--text-2); flex: 1; }
+.signal-label .md-p { margin: 0; color: inherit; font-size: inherit; line-height: inherit; }
 .signal-value { color: var(--primary); font-weight: 600; margin-left: 12px; }
 
 .signal-weight-row {

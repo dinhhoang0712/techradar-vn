@@ -68,6 +68,12 @@ public class Neo4jExtractionWriter implements ExtractionWriter {
                             continue;
                         }
                         String companyId = slugify(orgName);
+                        // slugify() có thể trả rỗng cho tên chỉ gồm ký tự không phải a-z0-9 (vd "---",
+                        // "?") dù orgName đã qua check isBlank() ở trên — bỏ qua để không tạo
+                        // Company{id:"", name: orgName} (cùng lớp bug với writeJob(), xem ghi chú ở đó).
+                        if (companyId.isEmpty()) {
+                            continue;
+                        }
                         tx.run(
                                 "MERGE (c:Company {id: $company_id}) " +
                                         "SET c.name = $company_name " +
@@ -143,26 +149,34 @@ public class Neo4jExtractionWriter implements ExtractionWriter {
                 ).single();
                 boolean isNewJob = jobRecord.get("isNew").asBoolean();
 
-                if (job.getData().getCompany() != null && job.getData().getCompany().getName() != null) {
+                if (job.getData().getCompany() != null && job.getData().getCompany().getName() != null
+                        && !job.getData().getCompany().getName().isBlank()) {
                     String companyId = slugify(job.getData().getCompany().getName());
-                    // Không phải crawler nào cũng scrape được industry/size (VD: TopCV có, ITviec thì
-                    // không) — dùng CASE để giữ nguyên giá trị cũ khi tin tuyển dụng này không mang theo
-                    // dữ liệu, thay vì ghi đè bằng rỗng và làm mất dữ liệu công ty đã có từ tin trước.
-                    tx.run(
-                            "MERGE (c:Company {id: $company_id}) " +
-                                    "SET c.name = $company_name, c.location = $company_location, " +
-                                    "c.industry = CASE WHEN $company_industry IS NULL OR $company_industry = '' THEN c.industry ELSE $company_industry END, " +
-                                    "c.size = CASE WHEN $company_size IS NULL OR $company_size = '' THEN c.size ELSE $company_size END " +
-                                    "WITH c MATCH (j:Job {id: $job_id}) MERGE (j)-[:POSTED_BY]->(c)",
-                            Values.parameters(
-                                    "company_id", companyId,
-                                    "company_name", job.getData().getCompany().getName(),
-                                    "company_location", job.getData().getCompany().getLocation(),
-                                    "company_industry", job.getData().getCompany().getField(),
-                                    "company_size", job.getData().getCompany().getSize(),
-                                    "job_id", jobId
-                            )
-                    );
+                    // slugify() có thể trả rỗng cho tên chỉ gồm ký tự không phải a-z0-9 (vd "---", "?",
+                    // "N/A" viết kiểu khác) dù đã qua check isBlank() ở trên (isBlank() chỉ bắt chuỗi
+                    // rỗng/toàn khoảng trắng) — bỏ qua để không tạo Company{id:"", name:""} (đã xác nhận
+                    // sống: 1 node như vậy tồn tại, mồ côi, không rel nào, xem docs/DATABASE.md §4).
+                    if (!companyId.isEmpty()) {
+                        // Không phải crawler nào cũng scrape được industry/size (VD: TopCV có, ITviec
+                        // thì không) — dùng CASE để giữ nguyên giá trị cũ khi tin tuyển dụng này không
+                        // mang theo dữ liệu, thay vì ghi đè bằng rỗng và làm mất dữ liệu công ty đã có
+                        // từ tin trước.
+                        tx.run(
+                                "MERGE (c:Company {id: $company_id}) " +
+                                        "SET c.name = $company_name, c.location = $company_location, " +
+                                        "c.industry = CASE WHEN $company_industry IS NULL OR $company_industry = '' THEN c.industry ELSE $company_industry END, " +
+                                        "c.size = CASE WHEN $company_size IS NULL OR $company_size = '' THEN c.size ELSE $company_size END " +
+                                        "WITH c MATCH (j:Job {id: $job_id}) MERGE (j)-[:POSTED_BY]->(c)",
+                                Values.parameters(
+                                        "company_id", companyId,
+                                        "company_name", job.getData().getCompany().getName(),
+                                        "company_location", job.getData().getCompany().getLocation(),
+                                        "company_industry", job.getData().getCompany().getField(),
+                                        "company_size", job.getData().getCompany().getSize(),
+                                        "job_id", jobId
+                                )
+                        );
+                    }
                 }
 
                 if (job.getData().getTechnologies() != null) {

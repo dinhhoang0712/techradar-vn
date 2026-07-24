@@ -1,0 +1,301 @@
+.kg-review {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.kg-review-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.kg-review-title h2 {
+    margin: 0;
+    color: var(--text);
+    background: var(--gradient-brand);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    display: inline-block;
+}
+
+.kg-review-title p {
+    margin: 6px 0 0;
+    color: var(--text-2);
+}
+
+/* --- Tabs --- */
+
+.kg-tabs {
+    position: relative;
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    width: fit-content;
+}
+
+.kg-tab {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 18px;
+    border: none;
+    background: transparent;
+    color: var(--text-2);
+    font-weight: 600;
+    font-size: 0.92rem;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: color var(--t);
+}
+
+.kg-tab:hover { color: var(--text); }
+.kg-tab.active { color: var(--bg); }
+
+.kg-tab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.18);
+    color: inherit;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.kg-tab.active .kg-tab-badge { background: rgba(6, 8, 16, 0.25); }
+
+.kg-tab-indicator {
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: 4px;
+    width: calc(50% - 4px);
+    background: var(--gradient-brand);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-primary);
+    transition: transform var(--t-spring);
+}
+
+.kg-tab-indicator.company { transform: translateX(100%); }
+
+/* --- Panel & cards --- */
+
+.kg-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.kg-panel-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.kg-panel-hint {
+    margin: 0;
+    color: var(--text-3);
+    font-size: 0.85rem;
+}
+
+.kg-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 18px 20px;
+    box-shadow: var(--shadow-sm);
+    transition: border-color var(--t), transform var(--t), box-shadow var(--t);
+}
+
+.kg-card:hover {
+    border-color: var(--border-2);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+}
+
+.kg-pair {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.kg-pair-arrow {
+    color: var(--text-3);
+    font-size: 1.1rem;
+}
+
+.kg-pill {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 999px;
+    border: 1.5px solid var(--border-2);
+    background: var(--surface-2);
+    color: var(--text-2);
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all var(--t);
+}
+
+.kg-pill:hover { border-color: var(--primary); color: var(--text); }
+
+.kg-pill.canonical {
+    border-color: var(--primary);
+    background: var(--primary-glow);
+    color: var(--primary-light);
+    box-shadow: 0 0 0 3px var(--primary-glow);
+}
+
+.kg-suggested-tag {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: var(--accent-glow);
+    color: var(--accent-light);
+}
+
+.kg-reasoning {
+    margin: 14px 0 0;
+    padding: 10px 14px;
+    border-left: 3px solid var(--accent);
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    color: var(--text-2);
+    font-style: italic;
+    font-size: 0.9rem;
+}
+
+.kg-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+}
+
+.kg-time { color: var(--text-3); font-size: 0.85rem; }
+
+.kg-actions { display: flex; gap: 8px; }
+
+.kg-btn {
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    border: none;
+    font-weight: 600;
+    font-size: 0.88rem;
+    cursor: pointer;
+    transition: all var(--t);
+}
+
+.kg-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.kg-btn.ghost { background: var(--surface-2); color: var(--text-2); }
+.kg-btn.ghost:hover:not(:disabled) { background: var(--border); color: var(--text); }
+.kg-btn.sm { padding: 6px 12px; font-size: 0.82rem; }
+
+.kg-btn.primary {
+    background: var(--gradient-brand);
+    color: #06080f;
+    box-shadow: var(--shadow-primary);
+}
+.kg-btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
+
+/* --- Company groups --- */
+
+.kg-group-label {
+    color: var(--text-3);
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    margin-bottom: 12px;
+}
+
+.kg-chip-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.kg-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: var(--radius);
+    border: 1.5px solid var(--border-2);
+    background: var(--surface-2);
+    color: var(--text-2);
+    font-size: 0.88rem;
+    cursor: pointer;
+    transition: all var(--t);
+}
+
+.kg-chip:hover { border-color: var(--green); color: var(--text); }
+
+.kg-chip.canonical {
+    border-color: var(--green);
+    background: var(--green-glow);
+    color: var(--green-light);
+}
+
+.kg-chip-star { color: var(--green-light); }
+
+/* --- Empty / loading state --- */
+
+.kg-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 56px 20px;
+    color: var(--text-3);
+    background: var(--surface);
+    border: 1px dashed var(--border-2);
+    border-radius: var(--radius-lg);
+    text-align: center;
+}
+
+.kg-empty-icon {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--green-glow);
+    color: var(--green-light);
+    font-size: 1.3rem;
+}
+
+/* --- Pagination (mirrors .moderation-pagination) --- */
+
+.kg-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    margin-top: 4px;
+}
+
+.kg-pagination .pagination-page { color: var(--text-2); font-weight: 600; }

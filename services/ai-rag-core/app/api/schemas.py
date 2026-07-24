@@ -24,6 +24,9 @@ class ChatResponse(BaseModel):
     sources: list[SourceItem] = []
     entities: list[str] = []
     job_titles: list[str] = []
+    analytics: list[dict] = []
+    subgraph: dict | None = None
+    strategy: dict | None = None
     query: str
 
 

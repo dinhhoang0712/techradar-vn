@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import { severityOf } from './notifSeverity';
+import type { NotifSeverity } from './notifSeverity';
 
 interface NotifIconDef {
     color: string;
@@ -52,8 +54,35 @@ const DEFAULT_ICON: NotifIconDef = {
     ),
 };
 
+const SUCCESS_ICON: NotifIconDef = {
+    color: 'var(--green)',
+    path: (
+        <>
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+            <polyline points="22 4 12 14.01 9 11.01" />
+        </>
+    ),
+};
+
+const ERROR_ICON: NotifIconDef = {
+    color: 'var(--danger)',
+    path: (
+        <>
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+        </>
+    ),
+};
+
+const SEVERITY_ICONS: Record<NotifSeverity, NotifIconDef> = {
+    error: ERROR_ICON,
+    success: SUCCESS_ICON,
+    info: DEFAULT_ICON,
+};
+
 export default function NotifIcon({ type }: { type: string }) {
-    const icon = ICONS[type] || DEFAULT_ICON;
+    const icon = ICONS[type] || SEVERITY_ICONS[severityOf(type)];
     return (
         <svg
             className="notif-item-icon"

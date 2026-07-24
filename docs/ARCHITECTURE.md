@@ -229,7 +229,7 @@ và các Gold gap-filler (`neo4j_article_sync.py`/`neo4j_job_sync.py`) không ba
 cơ chế này, hoặc case LLM mới phát hiện) được dọn định kỳ bởi `data-platform/gold/tech_dedup.py`
 (5:30 AM daily) — xem [DATA_PLATFORM.md §5e](./DATA_PLATFORM.md).
 
-### 4.2 RAG Query Pipeline
+### 4.2 RAG Query Pipeline (Adaptive Hybrid Graph RAG)
 
 ```
 User Query (React)
@@ -240,23 +240,32 @@ Spring Boot API Gateway
     ▼  X-Internal-Auth header
 ai-rag-core (/chat)
     │
-    ├─[1] Vector Search (Neo4j)
-    ├─[2] Graph Traversal (NER + Cypher)
-    ├─[3] SQL Analytics (tech_analytics)
-    ├─[4] User Context (user_profile)
+    ├─[0] Extract entities (NER, 1 lần) + Strategy Selector (rule-based)
+    │       quyết định ĐỘC LẬP: use_graph? graph_expansion_depth (0/1/2)? use_sql_analytics?
+    │       — một câu hỏi có thể bật nhiều nhánh cùng lúc, không phân loại theo 1 type cố định
+    │
+    ├─[1] Vector Search (Neo4j)                — luôn chạy
+    ├─[2] Graph Traversal (Cypher, 1-hop)       — nếu use_graph
+    ├─[3] Graph Expansion (1-2 hop, PageRank)   — nếu graph_expansion_depth > 0
+    ├─[4] SQL Analytics (tech_analytics)        — nếu use_sql_analytics
+    ├─[5] User Context (user_profile)           — nếu có user_id
     │
     ▼
-Rerank (BGE reranker)
+Unified Rerank (BGE reranker, riêng từng loại nguồn: article/job/company/analytics)
     │
     ▼
-Build Prompt (4 sources + history)
+Build Prompt (article + job/company + analytics + subgraph theo hop + history)
     │
     ▼
-LLM Generate (OpenAI/Gemini)
+LLM Generate (OpenAI/Gemini/Groq)
     │
     ▼
-Response + Sources
+Response + Sources + subgraph (JSON-LD) + strategy (explainability)
 ```
+
+Chi tiết đầy đủ (bug fix nền tảng, thiết kế Strategy Selector, ablation evaluation) xem
+[`AI_PLATFORM.md` §2.3](./AI_PLATFORM.md#23-rag-pipeline-adaptive-hybrid-graph-rag) và
+[`GRAPH_RAG_KG_REPORT.md`](./GRAPH_RAG_KG_REPORT.md).
 
 ### 4.3 Clustering Pipeline
 
@@ -551,16 +560,20 @@ services/ai-rag-core/app/
 │   ├── routes_health.py         # /health
 │   └── routes_agent.py          # /agent (LangChain)
 ├── core/
-│   ├── pipeline.py              # RAG orchestrator
-│   ├── pipeline_stream.py       # Streaming version
+│   ├── pipeline.py              # RAG orchestrator (adaptive: Strategy Selector + conditional gather)
+│   ├── pipeline_stream.py       # Streaming version (trùng lặp có chủ đích, xem AI_PLATFORM.md §2.3)
+│   ├── strategy_selector.py     # Rule-based Strategy Selector (capability-based, không type-based)
 │   ├── embedder.py              # E5-base singleton
 │   ├── retriever.py             # Vector search
-│   ├── retriever_graph.py       # NER + Cypher
+│   ├── retriever_graph.py       # NER + Cypher (1-hop)
+│   ├── retriever_graph_expand.py # Graph expansion 1-2 hop, đọc pagerank_score (GDS) để rank
 │   ├── retriever_sql.py         # Analytics queries
 │   ├── retriever_user.py        # User context
-│   ├── entity_extractor.py      # NER pipeline
+│   ├── entity_extractor.py      # NER pipeline + intent patterns (analytics/multihop)
 │   ├── reranker.py              # BGE reranker
-│   ├── prompt_builder.py        # Prompt templates
+│   ├── context_ranker.py        # Unified rerank riêng từng loại nguồn (article/job/company/analytics)
+│   ├── graph_serializer.py      # Triple → JSON-LD tối giản cho response API
+│   ├── prompt_builder.py        # Prompt templates (gồm subgraph block nhóm theo hop)
 │   ├── generator.py             # LLM factory (OpenAI/Gemini/Groq)
 │   └── generator_stream.py      # Streaming LLM generation
 ├── services/
@@ -646,8 +659,11 @@ services/ml-clustering/
   article_count, job_count (derived), pagerank_score, community_id, degree_centrality (derived —
   Neo4j GDS, ghi bởi `apps/backend` `Neo4jGraphAnalyticsAdapter`, admin-triggered)
 - `Skill`: name, category, demand_score
-- `Company`: name, field, size, location, rating
-- `Job`: title, description, requirement, benefit, salary, due_date, source_url
+- `Company`: name, **industry** (không phải `field`), size, location, rating
+- `Job`: **name** + **url** (không phải `title`/`source_url` — tên cột legacy; mọi reader phải
+  `coalesce(j.name, j.title)`/`coalesce(j.url, j.source_url)`, cả Java lẫn Python — chi tiết +
+  bug thật đã fix xem [`docs/DATABASE.md`](./DATABASE.md#41-node--relationship-types) §4.1),
+  description, requirement, benefit, salary, due_date
 
 **Relationship Types:**
 - `MENTIONS`: Article → Technology/Company

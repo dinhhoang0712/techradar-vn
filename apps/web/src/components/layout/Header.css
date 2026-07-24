@@ -50,37 +50,48 @@
     opacity: 0.85;
 }
 
-.logo-ping {
-    position: relative;
-    width: 9px;
-    height: 9px;
+.logo-mark {
+    width: 30px;
+    height: 30px;
     flex-shrink: 0;
+    filter: drop-shadow(0 0 6px var(--primary-glow));
 }
 
-.ping-dot {
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    background: var(--primary);
-    box-shadow: 0 0 8px var(--primary-glow);
+.logo-sweep {
+    transform-origin: 30px 36px;
+    animation: logoSweepSpin 6s linear infinite;
 }
 
-.ping-ring {
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    border: 1.5px solid var(--primary);
-    animation: radarPing 2.4s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
+.logo-ping-ring {
+    transform-origin: 54px 10px;
+    animation: logoPing 2.4s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
 }
 
-@keyframes radarPing {
+.logo-ping-ring--delay {
+    animation-delay: 1.2s;
+}
+
+@keyframes logoSweepSpin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes logoPing {
     0% {
         transform: scale(1);
-        opacity: 0.8;
+        opacity: 0.7;
     }
     100% {
-        transform: scale(3);
+        transform: scale(2.8);
         opacity: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .logo-sweep,
+    .logo-ping-ring {
+        animation: none;
     }
 }
 

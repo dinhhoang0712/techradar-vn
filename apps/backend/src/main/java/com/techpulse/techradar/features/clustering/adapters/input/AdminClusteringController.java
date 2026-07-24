@@ -4,6 +4,7 @@ import com.techpulse.techradar.features.clustering.application.GetPipelineRunsUs
 import com.techpulse.techradar.features.clustering.application.GetPipelineStatusUseCase;
 import com.techpulse.techradar.features.clustering.application.TriggerPipelineUseCase;
 import com.techpulse.techradar.features.clustering.application.UpdateClusterLabelUseCase;
+import com.techpulse.techradar.features.system.application.AuditLogService;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import com.techpulse.techradar.shared.redis.RedisLock;
 import com.techpulse.techradar.shared.security.SecurityUtils;
@@ -39,6 +40,7 @@ public class AdminClusteringController {
     private final GetPipelineRunsUseCase getPipelineRunsUseCase;
     private final UpdateClusterLabelUseCase updateClusterLabelUseCase;
     private final ReactiveStringRedisTemplate redisTemplate;
+    private final AuditLogService auditLogService;
 
     @Operation(summary = "Get the current clustering retrain pipeline status")
     @GetMapping("/pipeline/status")
@@ -63,6 +65,8 @@ public class AdminClusteringController {
                                         "Vừa mới kích hoạt, vui lòng đợi vài giây rồi thử lại", "CLUSTERING_TRIGGER_DEBOUNCED")));
                     }
                     return triggerPipelineUseCase.execute()
+                            .flatMap(result -> auditLogService.record("CLUSTERING_PIPELINE_TRIGGER", "pipeline", null, null)
+                                    .thenReturn(result))
                             .map(result -> ResponseEntity.ok(ApiResponse.success(result, "Pipeline retrain started")));
                 });
     }
@@ -92,6 +96,9 @@ public class AdminClusteringController {
                         request.getDescription(),
                         request.getDomain(),
                         actor.isBlank() ? null : actor))
+                .flatMap(result -> auditLogService.record("CLUSTER_LABEL_OVERRIDE", "cluster", clusterId,
+                                "label=" + request.getLabel())
+                        .thenReturn(result))
                 .map(result -> ResponseEntity.ok(ApiResponse.success(result, "Cluster label updated")))
                 .onErrorResume(IllegalArgumentException.class, ex -> Mono.just(
                         ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage(), "INVALID_REQUEST"))));

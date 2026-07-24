@@ -96,9 +96,14 @@ ai-rag-core/
 | POST | `/internal/ai/llm-summary` | X-Internal-Auth | Tóm tắt bằng LLM cho tính năng Compare (`routes_internal.py`) |
 | POST | `/internal/ai/moderation-suggestion` | X-Internal-Auth | Gợi ý kiểm duyệt nội dung report cho admin (`routes_internal.py`) |
 
-### 2.3 RAG Pipeline (Graph RAG)
+### 2.3 RAG Pipeline (Adaptive Hybrid Graph RAG)
 
-Pipeline kết hợp **4 nguồn song song** trước khi sinh câu trả lời:
+Pipeline **thích ứng (adaptive)**: một Strategy Selector dựa trên luật (rule-based, xem dưới)
+quyết định nhánh nào thực sự cần chạy cho từng câu hỏi, thay vì luôn chạy cố định tất cả các
+nguồn. `vector_search` luôn chạy (baseline, không bao giờ bị tắt); `graph_search`, mở rộng đồ thị
+đa bước (graph expansion), và `sql_analytics_search` chỉ chạy khi Strategy Selector bật cờ tương
+ứng. Có thể tắt toàn bộ phần adaptive để quay về hành vi cũ (luôn chạy tất cả) qua
+`strategy_selector_enabled=False` — dùng cho A/B ablation, xem §2.6.
 
 #### Luồng xử lý
 
@@ -107,32 +112,59 @@ query + user_id + session_id
         │
         ├── [0] Load conversation history (PostgreSQL, sliding window 10 turns)
         │
-        ├── [1] Parallel asyncio.gather()
-        │     ├── vector_search(query, top_k=5)
-        │     │   embed query → Neo4j vector index → top-20 Article
-        │     ├── graph_search(query)
-        │     │   NER → Cypher → Job + Company + Technology
-        │     └── get_user_context(user_id)
-        │         PostgreSQL user_profile.preferences_json
+        ├── [1] extract_query_entities(query)  — hoist 1 lần, dùng chung cho mọi nhánh dưới
+        │         NER: dictionary lookup → regex pattern → NLPHust NER
+        │         Alias normalization: k8s → Kubernetes, nodejs → Node.js
         │
-        ├── [1b] sql_analytics_search(tech_entities, months=6)
-        │         PostgreSQL tech_analytics (Gold ETL)
+        ├── [2] select_strategy(query, extracted)  — Strategy Selector (rule-based, capability-based)
+        │         3 quyết định ĐỘC LẬP, không loại trừ nhau:
+        │           use_graph              — có thực thể (tech/company/job title/location) không
+        │           graph_expansion_depth  — 0/1/2, tuỳ tín hiệu so sánh/đa bước (MULTIHOP_INTENT_PATTERNS)
+        │           use_sql_analytics      — có tech entity VÀ tín hiệu phân tích/xu hướng (ANALYTICS_INTENT_PATTERNS)
+        │         Một câu hỏi có thể bật ĐỒNG THỜI nhiều nhánh (vd "Xu hướng lương Java" bật cả
+        │         use_graph lẫn use_sql_analytics) — không phân loại vào 1 type cố định.
         │
-        ├── [2] Rerank articles
-        │         BGE reranker (ONNX, CPU)
-        │         threshold 0.40 → top-5
+        ├── [3] Parallel asyncio.gather() theo tasks dict (chỉ chứa nhánh thực sự cần chạy)
+        │     ├── vector_search(query, top_k=5)          — luôn chạy
+        │     │     embed query → Neo4j vector index → top-20 Article
+        │     ├── graph_search(query, extracted)          — nếu use_graph
+        │     │     Cypher (graph_queries.py) → Job + Company + Technology, 1-hop
+        │     ├── expand_subgraph(tech_names, company_names, depth)  — nếu graph_expansion_depth > 0
+        │     │     subgraph_expand_query() — 1-2 hop, ORDER BY pagerank_score (đọc GDS score có
+        │     │     sẵn từ apps/backend, xem docs/DATABASE.md §4.1) → triple phẳng kèm hop-distance
+        │     ├── sql_analytics_search(tech_names, months=6)  — nếu use_sql_analytics
+        │     │     PostgreSQL tech_analytics (Gold ETL)
+        │     └── get_user_context(user_id)               — nếu có user_id
+        │           PostgreSQL user_profile.preferences_json
         │
-        ├── [3] Fallback nếu không tìm thấy gì
+        ├── [4] rerank_context(query, articles, jobs, companies, sql_rows)  — unified rerank
+        │         Rerank RIÊNG từng loại nguồn (không gộp 1 batch — điểm cross-encoder không hiệu
+        │         chỉnh được giữa các miền văn bản khác nhau), cùng BGE reranker (ONNX, CPU),
+        │         ngưỡng 0.40. Triple từ graph expansion KHÔNG qua rerank (đã anchor theo entity,
+        │         đã cap/dedup bằng Cypher).
+        │
+        ├── [5] Fallback nếu không tìm thấy gì
         │         trả về "Không tìm thấy thông tin..."
         │
-        ├── [4] Build prompt
-        │         system_prompt + history + rag_template
+        ├── [6] Build prompt
+        │         system_prompt + history + rag_template, gồm 4 khối context (article/job/company+
+        │         analytics/subgraph — khối subgraph nhóm triple theo hop, không phải danh sách phẳng)
         │
-        ├── [5] LLM generate (OpenAI gpt-4o-mini, Gemini, hoặc Groq)
+        ├── [7] LLM generate (OpenAI gpt-4o-mini, Gemini, hoặc Groq)
         │         retry tối đa 3 lần khi 429/503
         │
-        └── [6] RAGAS evaluation (fire-and-forget)
+        └── [8] Evaluation (fire-and-forget) — xem §2.6
 ```
+
+Response trả thêm 2 field so với trước: `subgraph` (JSON-LD tối giản của các triple mở rộng,
+`null` nếu không expansion) và `strategy` (`{use_graph, graph_expansion_depth,
+use_sql_analytics, matched_signals}` — giải thích được Strategy Selector đã quyết định gì cho
+câu hỏi này, phục vụ explainability/debug).
+
+`pipeline.py` (non-streaming) và `pipeline_stream.py` (SSE streaming) triển khai **song song, cố
+ý trùng lặp logic** (không share qua module chung) để tương thích cách test hiện tại monkeypatch
+từng module riêng — mọi thay đổi ở 1 file phải tự tay áp dụng sang file kia, không có cơ chế
+chống trôi (drift).
 
 #### Chi tiết từng bước
 
@@ -140,11 +172,16 @@ query + user_id + session_id
 
 **Graph Traversal**: NER pipeline trích xuất entity (dictionary lookup → regex pattern → NLPHust NER). Alias normalization tự động: `k8s → Kubernetes`, `nodejs → Node.js`
 
+**Graph Expansion**: mở rộng 1-2 hop từ thực thể đã trích xuất (không phải node cụ thể matched bởi
+graph search — seed độc lập để giữ song song hoá), depth do Strategy Selector quyết định, clamp
+theo `graph_max_hops`. Tận dụng `pagerank_score` đã tính sẵn bởi backend Java (GDS) để ưu tiên
+công nghệ trung tâm khi kết quả bị cắt bởi `graph_expansion_limit`.
+
 **SQL Analytics**: Đọc từ `tech_analytics` table (Gold ETL rebuild mỗi đêm)
 
-**Rerank**: BGE reranker chấm điểm cross-encoder, ngưỡng 0.40
+**Rerank**: BGE reranker chấm điểm cross-encoder, ngưỡng 0.40, chạy riêng theo từng loại nguồn (unified rerank)
 
-**Build Prompt**: System prompt + conversation history + RAG context (articles + jobs + analytics + user context)
+**Build Prompt**: System prompt + conversation history + RAG context (article + job/company + analytics + subgraph, nhóm theo hop + user context)
 
 ### 2.4 Services
 
@@ -262,7 +299,7 @@ POST /interview
 ```
 
 - **`len(history) == 0`** (mở đầu): tra Neo4j lấy 1 job posting thật khớp `target_role`
-  (+ `target_company` nếu có) qua `Job-[:HIRES_FOR]->Company` (`graph_queries.py`,
+  (+ `target_company` nếu có) qua `Job-[:POSTED_BY|HIRES_FOR]->Company` (`graph_queries.py`,
   `JOBS_BY_TITLE_AND_COMPANY`, fallback về `JOBS_BY_TITLE` dùng chung với RAG chat nếu không có
   company hoặc không tìm thấy, fallback tiếp về câu nhắc chung chung nếu Neo4j lỗi/không có kết
   quả) → LLM sinh 1 câu hỏi mở đầu (`interview_opening_template.txt`) → trả `next_question`,
@@ -321,11 +358,22 @@ Endpoint: `GET /metrics`
 
 **Stages**: `retrieval`, `rerank`, `llm`, `total`
 
-#### RAGAS Evaluation
+#### Evaluation (`scripts/evaluate_rag.py`)
 
-Mặc định tắt (`EVAL_ENABLED=false`). Bật khi cần đánh giá chất lượng.
+2 chế độ, chọn qua `EVAL_METRICS_MODE`:
+- **`local`** (mặc định) — không dùng LLM: faithfulness ước lượng bằng word-overlap, relevancy
+  bằng cosine similarity embedding. Dựng thêm chế độ này vì quota miễn phí Groq/Gemini dễ cạn khi
+  chạy RAGAS thật nhiều lần trong lúc ablation — số liệu chỉ mang tính proxy, không thay thế RAGAS
+  chuẩn.
+- **`ragas`** — RAGAS thật (`faithfulness`, `answer_relevancy`, và `context_precision`/
+  `context_recall` nếu câu hỏi có `ground_truth` khác rỗng trong `TEST_QUERIES`), judge model qua
+  Groq (`ChatGroq`, mặc định `llama-3.3-70b-versatile`) + `HuggingFaceEmbeddings`.
 
-LLM judge faithfulness → MLflow logging → `mlflow ui`
+Cả 2 chế độ log vào MLflow (experiment `rag_evaluation`, kèm tham số `variant`/
+`strategy_selector_enabled`/`graph_expansion_enabled`/`unified_rerank_enabled` để so sánh ablation)
+→ `mlflow ui`. `TEST_QUERIES`'s `ground_truth` là dữ liệu tra trực tiếp Postgres/Neo4j (độc lập với
+pipeline đang được đánh giá) — xem `docs/GRAPH_RAG_KG_REPORT.md` §3.1 để biết cách soạn và trạng
+thái duyệt hiện tại.
 
 ### 2.7 Configuration
 
@@ -341,7 +389,14 @@ LLM judge faithfulness → MLflow logging → `mlflow ui`
 | `INTERNAL_API_TOKEN` | `""` | Token kiểm tra từ Spring |
 | `EMBED_SECRET` | `changeme` | Secret cho `/embed/trigger` |
 | `EVAL_ENABLED` | `false` | Bật RAGAS evaluation |
+| `EVAL_METRICS_MODE` | `local` | `"local"` (proxy, không LLM) \| `"ragas"` (RAGAS thật, cần Groq quota) — xem §2.6 |
 | `SQL_ANALYTICS_MONTHS` | `6` | Khoảng thời gian đọc tech_analytics |
+| `STRATEGY_SELECTOR_ENABLED` | `true` | Bật Strategy Selector (adaptive); `false` = quay về hành vi cũ, luôn chạy mọi nhánh — dùng cho ablation §2.3 |
+| `GRAPH_EXPANSION_ENABLED` | `true` | Bật mở rộng đồ thị đa bước |
+| `GRAPH_MAX_HOPS` | `2` | Trần an toàn cho `graph_expansion_depth` (Strategy Selector không được vượt qua) |
+| `GRAPH_EXPANSION_LIMIT` | `100` | Số triple tối đa trả về mỗi lần mở rộng đồ thị |
+| `UNIFIED_RERANK_ENABLED` | `true` | Bật rerank riêng từng loại nguồn (article/job/company/analytics) |
+| `RERANK_TOP_K` | `5` | Số kết quả giữ lại sau rerank mỗi loại nguồn |
 
 ### 2.8 Running the Service
 
@@ -862,6 +917,6 @@ docker logs techradar-crawler -f
 
 <div align="center">
 
-**Last Updated**: 2026-07-01
+**Last Updated**: 2026-07-24
 
 </div>

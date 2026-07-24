@@ -147,6 +147,14 @@
     background: var(--primary-glow);
 }
 
+.notif-item--error {
+    border-left: 3px solid var(--danger);
+}
+
+.notif-item--success {
+    border-left: 3px solid var(--green);
+}
+
 .notif-item-icon-wrap {
     flex: 0 0 auto;
     display: flex;

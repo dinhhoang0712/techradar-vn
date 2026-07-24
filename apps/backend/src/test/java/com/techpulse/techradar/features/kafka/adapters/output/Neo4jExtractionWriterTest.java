@@ -24,6 +24,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -75,6 +76,11 @@ class Neo4jExtractionWriterTest {
     }
 
     private ExtractedJob extractedJob(String companySizeField, String companyIndustryField) throws Exception {
+        return extractedJob("\"Acme Corp\"", companySizeField, companyIndustryField);
+    }
+
+    private ExtractedJob extractedJob(String companyNameField, String companySizeField, String companyIndustryField)
+            throws Exception {
         String json = ("""
                 {
                   "message_type": "extracted_job",
@@ -92,7 +98,7 @@ class Neo4jExtractionWriterTest {
                       "source_url": "https://example.com/job-1"
                     },
                     "company": {
-                      "name": "Acme Corp",
+                      "name": %s,
                       "size": %s,
                       "field": %s,
                       "location": "Hà Nội"
@@ -101,7 +107,7 @@ class Neo4jExtractionWriterTest {
                     "technologies": []
                   }
                 }
-                """).formatted(companySizeField, companyIndustryField);
+                """).formatted(companyNameField, companySizeField, companyIndustryField);
         return objectMapper.readValue(json, ExtractedJob.class);
     }
 
@@ -201,5 +207,29 @@ class Neo4jExtractionWriterTest {
         Value params = companyMergeParams();
         assertThat(params.get("company_size").asString()).isEmpty();
         assertThat(params.get("company_industry").asString()).isEmpty();
+    }
+
+    @Test
+    void writeJob_skipsCompanyMergeWhenCompanyNameIsBlank() throws Exception {
+        stubIsNew(false);
+
+        // An empty (non-null) company name previously slipped past the old `getName() != null`
+        // guard and slugified to an empty string, creating a real Company{id:"", name:""}
+        // garbage node with zero relationships (confirmed live on 2026-07-24). Must be skipped
+        // entirely instead of MERGEd.
+        writer.writeJob(extractedJob("\"\"", "\"100-500\"", "\"Fintech\""));
+
+        verify(tx, never()).run(contains("MERGE (c:Company"), any(Value.class));
+    }
+
+    @Test
+    void writeJob_skipsCompanyMergeWhenCompanyNameIsOnlyPunctuation() throws Exception {
+        stubIsNew(false);
+
+        // Not blank per String.isBlank(), but slugify() strips every non a-z0-9 character —
+        // "---" reduces to an empty id, the same garbage-node class as a truly blank name.
+        writer.writeJob(extractedJob("\"---\"", "\"100-500\"", "\"Fintech\""));
+
+        verify(tx, never()).run(contains("MERGE (c:Company"), any(Value.class));
     }
 }

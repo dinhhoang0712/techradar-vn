@@ -8,7 +8,7 @@
 
 1. [Tổng quan](#1-tổng-quan)
 2. [Kiến trúc Hexagonal](#2-kiến-trúc-hexagonal)
-3. [Cấu trúc dự án](#3-cấu-trúc-dự án)
+3. [Cấu trúc dự án](#3-cấu-trúc-dự-án)
 4. [Feature Modules](#4-feature-modules)
 5. [Database Layer](#5-database-layer)
 6. [Security & Authentication](#6-security--authentication)
@@ -415,6 +415,15 @@ package with no `domain/ports/adapters` split; restructured for DIP/SRP):**
 **Key Components:**
 - `ArticleExtractorService` / `JobExtractorService` — split out of a former single `KafkaExtractorService` (article and job pipelines shared nothing but the producer/hash-util dependencies, so each became its own single-responsibility listener). Each consumes its raw topic, runs entity extraction (`EntityExtractionService`, keyword/regex-based NER — không phải LLM dù tên biến `entities` gợi ý vậy), publishes to its extracted topic.
 - `EntityExtractionService` — `extractTech()`/`extractEntities()` resolve mỗi tên công nghệ tách được qua `TechAliasResolver` (impl `TechAliasCache`) **trước khi** trả về (vd "Golang" → "Go", "ML" → "Machine Learning") để `KafkaNeo4jWriterService` phía dưới không bao giờ ghi 2 node `:Technology` khác nhau cho cùng 1 công nghệ. Xem [`docs/DATABASE.md`](./DATABASE.md) §4.3 cho bức tranh full (cả phía Python `data-platform`).
+  > **Bug thật đã fix:** `extractEntities()` từng LUÔN trả `ORG`/`LOC` rỗng (chưa bao giờ triển
+  > khai) dù `Neo4jExtractionWriter` đã có sẵn code chờ ghi `MENTIONS(Article→Company/Location)`
+  > từ 2 field này — hệ quả thực tế: `USES` (Company→Technology, suy từ Article co-mention) gần
+  > như không bao giờ được tạo (xem `docs/DATABASE.md` §4.1). Đã thêm: `extractOrg()` so khớp
+  > với danh sách tên Company đã biết trong Neo4j (`CompanyNameCache`, tạo qua đường Job — chỉ
+  > phát hiện được Company đã từng biết, không phát hiện Company hoàn toàn mới) và `extractLoc()`
+  > so khớp dictionary tĩnh 63 tỉnh/thành (`LOCATION_KEYWORDS`, không cần cache vì danh sách này
+  > cố định).
+- `CompanyNameCache` — cache in-memory tên `:Company` đã có trong Neo4j (`@Scheduled` refresh mỗi `app.company-name-cache.refresh-ms`, mặc định 15 phút — dài hơn `TechAliasCache` vì quét toàn bộ Company node, nặng hơn đọc 1 bảng Postgres nhỏ). Dùng làm dictionary cho `EntityExtractionService.extractOrg()` — xem ghi chú ở trên.
 - `TechAliasCache` — cache in-memory bảng Postgres `dp_tech_alias_map` (`@Scheduled` refresh mỗi `app.tech-alias.refresh-ms`, mặc định 5 phút; `@PostConstruct` load lần đầu). `resolve(rawName)` casefold+trim rồi tra cache, fallback về tên gốc (trimmed) nếu không có alias — không bao giờ throw hay trả null. Đây là bảng Postgres **duy nhất** mà `apps/backend` và `data-platform` cùng ghi/đọc chung (ngoại lệ có chủ đích, vì 2 service có Docker build-context tách biệt nên không share được 1 file cấu hình).
 - `KafkaNeo4jWriterService` — consumes `extracted_articles`/`extracted_jobs`, delegates the actual Cypher write to `ExtractionWriter` (impl `Neo4jExtractionWriter`); also publishes `job.match.alerts` the first time a job is genuinely new (checked via a `MATCH` before the `MERGE`, so re-crawled/updated listings don't re-fire), and tracks in-process throughput/error counters exposed via `syncStatus()` (`KafkaSyncStatus` — see `GET /admin/dashboard/pipeline`, §4.7, now served by `system/application/PipelineHealthService`). Counters reset on restart, not persisted.
 - `JobMatchDispatcher` (in `notification`, not `kafka`) — consumes `job.match.alerts`, fans out to users whose profile technologies overlap the job's, mirroring `TrendAlertDispatcher`. See §4.10.
@@ -471,7 +480,7 @@ package with no `domain/ports/adapters` split; restructured for DIP/SRP):**
 - `CompanyController` — `GET /companies?page=&size=`, `GET /companies/{id}/similar?limit=`
 - `GetCompaniesUseCase` — Neo4j result cached whole in Redis (`cache:company:all`, TTL `app.redis.company-cache-ttl`, default 1800s) since it only changes as often as ingestion runs; pagination (`page`/`size`) is applied in-memory on top of the cached list
 - `GetSimilarCompaniesUseCase` — in-memory Jaccard similarity, reuses `GetCompaniesUseCase`'s cached list instead of re-querying Neo4j
-- `Neo4jCompanyRepository` — infers a company's tech stack via `Company<-[:HIRES_FOR]-Job-[:REQUIRES]->Technology` rather than reading the `USES` relationship directly (see [`docs/DATABASE.md`](./DATABASE.md) §4.1 for why this is worth double-checking — `USES` is in fact populated by the data-platform Gold enricher)
+- `Neo4jCompanyRepository` — infers a company's tech stack via `Company<-[:POSTED_BY|HIRES_FOR]-Job-[:REQUIRES]->Technology` rather than reading the `USES` relationship directly (see [`docs/DATABASE.md`](./DATABASE.md) §4.1 for why this is worth double-checking — `USES` is in fact populated by the data-platform Gold enricher). `POSTED_BY` is the live edge; `HIRES_FOR` is legacy-only data from a removed batch importer, matched too so older jobs aren't dropped.
 - `CompanyNames.clean()` — strips a crawler-appended badge line from display names
 
 **Data Source:**

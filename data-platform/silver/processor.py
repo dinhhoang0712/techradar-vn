@@ -9,6 +9,7 @@ Group-id silver-processor: KHÔNG xung đột với Spring Boot consumer group.
 
 import hashlib
 import json
+import re
 import time
 from datetime import UTC, datetime
 
@@ -30,6 +31,26 @@ from silver.deduplicator import (
 # song song với entity rỗng để không bỏ lỡ dữ liệu khi Spring Boot tắt.
 TOPICS = ["raw_articles", "raw_jobs", "extracted_articles", "extracted_jobs"]
 GROUP_ID = "silver-processor"
+
+
+# Crawler bị chặn (anti-bot/WAF) đôi khi trả về trang lỗi/captcha thay vì tin tuyển dụng thật —
+# xác nhận sống trên TopCV: 48 Job node có title="Sorry, you have been blocked" hoặc domain trần
+# "www.topcv.vn", company/salary/description đều rỗng. Chặn từ gốc ở đây (không ghi vào
+# dp_processed_jobs) rẻ hơn nhiều so với dọn lại sau khi đã lọt vào Neo4j — xem
+# gold/kg_health_audit.py's _check_garbage_jobs cho check phát hiện phần đã lọt qua trước fix này.
+_BLOCKED_PAGE_TITLE_KEYWORDS = ("blocked", "captcha", "access denied", "cloudflare")
+_BARE_DOMAIN_RE = re.compile(r"^(www\.)?[a-z0-9-]+\.(vn|com|net|org)$")
+
+
+def _is_blocked_page_job(title: str, description: str, company_name: str) -> bool:
+    # Tin tuyển dụng thật, kể cả tin ngắn nhất, luôn có company HOẶC description — chỉ trang lỗi
+    # mới rỗng cả 2, nên đây là điều kiện chặn an toàn (không loại nhầm tin thật).
+    if company_name or (description and len(description.strip()) >= 10):
+        return False
+    t = (title or "").strip().lower()
+    if not t:
+        return False
+    return any(kw in t for kw in _BLOCKED_PAGE_TITLE_KEYWORDS) or bool(_BARE_DOMAIN_RE.match(t))
 
 
 def _quality_score(title: str, content: str) -> float:
@@ -141,6 +162,10 @@ def _process_job(conn, msg: dict) -> None:
     techs_raw = job.get("technologies") or data.get("technologies") or data.get("entity_techs") or []
     # Chuẩn hoá tên tech — xem comment tương ứng trong _process_article().
     techs = tech_alias_cache.canonicalize_techs(techs_raw)
+
+    if _is_blocked_page_job(title, desc, company_name):
+        logger.warning("Silver: skip job {} — trang lỗi/bị chặn khi crawl (title={!r})", job_id[:8], title)
+        return
 
     chash = content_hash(title, f"{desc} {req}")
     quality = _quality_score(title, f"{desc} {req}")

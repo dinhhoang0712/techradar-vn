@@ -1,5 +1,6 @@
 package com.techpulse.techradar.features.system.adapters.input;
 
+import com.techpulse.techradar.features.system.application.AuditLogService;
 import com.techpulse.techradar.features.system.application.DataPlatformJobStatusService;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import com.techpulse.techradar.shared.paging.PageRequest;
@@ -55,6 +56,7 @@ public class AdminDataPlatformController {
     private final DataPlatformJobStatusService jobStatusService;
     private final RedisTriggerPublisher redisTriggerPublisher;
     private final ReactiveStringRedisTemplate redisTemplate;
+    private final AuditLogService auditLogService;
 
     @Operation(summary = "List the 5 data-platform gold jobs with their latest run status")
     @GetMapping("/jobs")
@@ -92,7 +94,8 @@ public class AdminDataPlatformController {
                                     ApiResponse.<Map<String, Object>>error(
                                             "Job đang chạy, vui lòng đợi", "DATA_PLATFORM_JOB_RUNNING")));
                         }
-                        return publishTrigger(jobId);
+                        return auditLogService.record("DATA_PLATFORM_JOB_TRIGGER", "job", jobId, null)
+                                .then(publishTrigger(jobId));
                     });
                 });
     }

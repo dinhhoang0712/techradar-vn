@@ -159,3 +159,16 @@ export interface AdminModerationComment {
     content: string;
     created_at?: string;
 }
+
+// GET /admin/audit-log — one row of the admin mutation trail (user CRUD, moderation, cluster
+// label overrides, pipeline triggers, admin notifications).
+export interface AuditLogEntry {
+    id: string;
+    actor_id: string;
+    actor_email?: string;
+    action: string;
+    target_type?: string;
+    target_id?: string;
+    details?: string;
+    created_at: string;
+}

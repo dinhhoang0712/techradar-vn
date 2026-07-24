@@ -228,29 +228,30 @@
     margin-bottom: 18px;
 }
 
+.report-content-header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
 .report-generated-at {
     color: var(--text-3);
     font-size: 0.78rem;
 }
 
+/* .report-markdown dùng chung .md-* từ MarkdownContent (component/common/MarkdownContent.css) —
+   ở đây chỉ override lại cỡ chữ heading theo đúng tag (h1 md → thẻ h3, h2 md → h4, h3 md → h5,
+   xem hàm heading() trong MarkdownContent.tsx) để 1 báo cáo dài có phân cấp rõ ràng, khác với
+   cỡ chữ đồng nhất nhỏ dùng cho chat bubble/roadmap. */
 .report-markdown {
     color: var(--text-2);
     font-size: 0.92rem;
     line-height: 1.8;
 }
 
-.report-markdown h1 { font-size: 1.3rem; color: var(--text); font-weight: 700; margin: 20px 0 8px; }
-.report-markdown h2 { font-size: 1.1rem; color: var(--text); font-weight: 600; margin: 18px 0 6px; }
-.report-markdown h3 { font-size: 0.95rem; color: var(--text); font-weight: 600; margin: 14px 0 4px; }
-.report-markdown li { margin-left: 20px; margin-bottom: 4px; }
-.report-markdown code {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    font-size: 0.82rem;
-    padding: 1px 5px;
-    font-family: monospace;
-}
+.report-markdown h3.md-heading { font-size: 1.3rem; margin: 20px 0 8px; }
+.report-markdown h4.md-heading { font-size: 1.1rem; margin: 18px 0 6px; }
+.report-markdown h5.md-heading { font-size: 0.95rem; margin: 14px 0 4px; }
 .report-markdown strong { color: var(--text); }
 
 /* .card / .section-title / .btn / .btn-primary / .btn-secondary now come from the shared

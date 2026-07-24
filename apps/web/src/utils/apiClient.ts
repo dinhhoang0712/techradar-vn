@@ -3,7 +3,7 @@
 import { showGlobalToast } from '../components/common/toastBridge';
 import { ApiError } from '../types/api';
 
-const API_BASE_URL = '/api/v1';
+export const API_BASE_URL = '/api/v1';
 
 interface RefreshTokenResponse {
     access_token?: string;

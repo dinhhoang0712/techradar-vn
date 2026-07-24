@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.techpulse.techradar.features.auth.ports.EmailSender;
 import com.techpulse.techradar.features.auth.ports.UserRepository;
 import com.techpulse.techradar.features.notification.domain.Notification;
+import com.techpulse.techradar.features.notification.event.ClusteringCompletedEvent;
 import com.techpulse.techradar.features.notification.event.CrawlerCompletedEvent;
 import com.techpulse.techradar.features.notification.event.JobCompletedEvent;
 import com.techpulse.techradar.features.system.application.DataPlatformJobStatusService;
@@ -19,14 +20,12 @@ import java.util.Map;
 
 /**
  * Persistent admin notification when a background job actually finishes (data-platform gold jobs
- * over {@code job:completed}, crawler runs over {@code crawler:completed}) — a backstop for the
- * client-side polling in {@code AdminSettings.tsx}: an admin who triggers a job and navigates away
- * still sees the result on their next visit, via the same in-app notification bell/SSE stream
- * already used for user-facing alerts. Notifies EVERY admin, not just whoever triggered the run —
- * no job-trigger endpoint records who that was (a separate, unfixed gap), and job completion is an
- * ops-wide concern regardless. Clustering retrain is deliberately not covered here: ml-clustering
- * (the Python service) has no Redis connectivity at all today, so wiring that up is a bigger,
- * separate change.
+ * over {@code job:completed}, crawler runs over {@code crawler:completed}, clustering retrain over
+ * {@code clustering:completed}) — a backstop for the client-side polling in {@code AdminAutomation.tsx}:
+ * an admin who triggers a job and navigates away still sees the result on their next visit, via the
+ * same in-app notification bell/SSE stream already used for user-facing alerts. Notifies EVERY
+ * admin, not just whoever triggered the run — no job-trigger endpoint records who that was (a
+ * separate, unfixed gap), and job completion is an ops-wide concern regardless.
  */
 @Component
 @RequiredArgsConstructor
@@ -34,6 +33,7 @@ public class JobCompletionNotifier {
 
     private static final String JOB_COMPLETED_CHANNEL = "job:completed";
     private static final String CRAWLER_COMPLETED_CHANNEL = "crawler:completed";
+    private static final String CLUSTERING_COMPLETED_CHANNEL = "clustering:completed";
     private static final String ADMIN_JOB_LINK = "/admin/automation";
     /** "Last N runs all failed" — including the run that just triggered this handler. */
     private static final int CONSECUTIVE_FAILURE_THRESHOLD = 3;
@@ -51,6 +51,8 @@ public class JobCompletionNotifier {
                 JobCompletedEvent.class, this::onJobCompleted);
         RedisFanout.subscribe(redisListenerContainer, objectMapper, CRAWLER_COMPLETED_CHANNEL,
                 CrawlerCompletedEvent.class, this::onCrawlerCompleted);
+        RedisFanout.subscribe(redisListenerContainer, objectMapper, CLUSTERING_COMPLETED_CHANNEL,
+                ClusteringCompletedEvent.class, this::onClusteringCompleted);
     }
 
     // Package-private (not private) so JobCompletionNotifierTest can exercise the handler logic
@@ -84,6 +86,16 @@ public class JobCompletionNotifier {
     void onCrawlerCompleted(CrawlerCompletedEvent event) {
         String title = "Crawler đã hoàn tất: " + event.getSuccessCount() + "/" + event.getTotal() + " nguồn thành công";
         notifyAllAdmins("ADMIN_CRAWL_DONE", title, null, false);
+    }
+
+    void onClusteringCompleted(ClusteringCompletedEvent event) {
+        if ("success".equals(event.getStatus())) {
+            String body = event.getDurationS() != null ? "Hoàn tất trong " + event.getDurationS() + "s." : "Hoàn tất.";
+            notifyAllAdmins("ADMIN_CLUSTERING_DONE", "Huấn luyện lại cụm công nghệ thành công", body, false);
+            return;
+        }
+        String body = "Lỗi: " + (event.getError() != null ? event.getError() : "không rõ");
+        notifyAllAdmins("ADMIN_CLUSTERING_FAILED", "Huấn luyện lại cụm công nghệ thất bại", body, false);
     }
 
     /** {@code alsoEmail}: escalated failures also get a best-effort email, not just in-app. */

@@ -4,6 +4,7 @@ import com.techpulse.techradar.features.clustering.application.GetPipelineRunsUs
 import com.techpulse.techradar.features.clustering.application.GetPipelineStatusUseCase;
 import com.techpulse.techradar.features.clustering.application.TriggerPipelineUseCase;
 import com.techpulse.techradar.features.clustering.application.UpdateClusterLabelUseCase;
+import com.techpulse.techradar.features.system.application.AuditLogService;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import com.techpulse.techradar.shared.exception.ConflictException;
 import com.techpulse.techradar.shared.exception.ErrorCode;
@@ -27,6 +28,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -44,6 +47,8 @@ class AdminClusteringControllerTest {
     private ReactiveStringRedisTemplate redisTemplate;
     @Mock
     private ReactiveValueOperations<String, String> valueOperations;
+    @Mock
+    private AuditLogService auditLogService;
 
     private AdminClusteringController controller;
 
@@ -51,7 +56,8 @@ class AdminClusteringControllerTest {
     void setUp() {
         controller = new AdminClusteringController(
                 getPipelineStatusUseCase, triggerPipelineUseCase, getPipelineRunsUseCase, updateClusterLabelUseCase,
-                redisTemplate);
+                redisTemplate, auditLogService);
+        lenient().when(auditLogService.record(any(), any(), any(), any())).thenReturn(Mono.empty());
     }
 
     private void stubLockAcquired() {
@@ -73,6 +79,18 @@ class AdminClusteringControllerTest {
                     assertThat(body.getData()).containsEntry("status", "running");
                 })
                 .verifyComplete();
+    }
+
+    @Test
+    void triggerPipeline_recordsAuditLog_onSuccess() {
+        stubLockAcquired();
+        when(triggerPipelineUseCase.execute()).thenReturn(Mono.just(Map.of("status", "started")));
+
+        StepVerifier.create(controller.triggerPipeline())
+                .assertNext(response -> assertThat(response.getStatusCode().is2xxSuccessful()).isTrue())
+                .verifyComplete();
+
+        verify(auditLogService).record(eq("CLUSTERING_PIPELINE_TRIGGER"), eq("pipeline"), isNull(), isNull());
     }
 
     @Test
@@ -138,6 +156,8 @@ class AdminClusteringControllerTest {
                     assertThat(body.getData()).containsEntry("overridden", true);
                 })
                 .verifyComplete();
+
+        verify(auditLogService).record(eq("CLUSTER_LABEL_OVERRIDE"), eq("cluster"), eq("0"), any());
     }
 
     @Test

@@ -1,4 +1,5 @@
-import { renderMarkdown } from '../../utils/markdown';
+import MarkdownContent from '../common/MarkdownContent';
+import CopyButton from '../common/CopyButton';
 import type { CareerAdvice } from '../../types/career';
 
 // Kết quả phân tích lộ trình nghề nghiệp: vai trò mục tiêu, kỹ năng hiện có, khoảng cách kỹ năng
@@ -60,10 +61,11 @@ export default function CareerResultPanel({ result }: { result: CareerAdvice }) 
 
             {result.roadmap && (
                 <div className="card">
-                    <h3 className="section-title">Lộ trình học tập</h3>
-                    <div className="career-roadmap-content">
-                        {renderMarkdown(result.roadmap)}
+                    <div className="career-roadmap-header">
+                        <h3 className="section-title">Lộ trình học tập</h3>
+                        <CopyButton text={result.roadmap} label="Copy roadmap" />
                     </div>
+                    <MarkdownContent className="career-roadmap-content">{result.roadmap}</MarkdownContent>
                 </div>
             )}
         </div>

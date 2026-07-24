@@ -50,22 +50,18 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY --from=builder /root/.local /root/.local
-COPY --from=builder /root/.cache /root/.cache
+# Create appuser BEFORE copying so --chown can apply at copy time. Doing `COPY` then a separate
+# `RUN chown -R` over these dirs (several GB of torch/model files) makes buildkit copy-on-write
+# the entire contents again into a new layer — nearly doubling the image size. chmod 755 /root
+# (metadata-only, not recursive) still needed so appuser can traverse into /root/.local & .cache.
+RUN useradd --create-home --uid 1000 appuser \
+    && chmod 755 /root
 ENV PATH=/root/.local/bin:$PATH
 ENV HOME=/root
 
-# Copy source
-COPY . .
-
-# The pip --user install + HF model cache above landed under /root (this stage's builder ran as
-# root), which defaults to 0700 — inaccessible to any other user. huggingface_hub also writes a
-# cache-refresh marker (refs/main) back into the model cache on load, so appuser needs actual
-# ownership there, not just read access — chmod alone left it able to read the cached model but
-# not update that marker, which surfaced as (harmless but noisy) "Permission denied" warnings.
-RUN useradd --create-home --uid 1000 appuser \
-    && chmod 755 /root \
-    && chown -R appuser:appuser /root/.local /root/.cache /app
+COPY --from=builder --chown=appuser:appuser /root/.local /root/.local
+COPY --from=builder --chown=appuser:appuser /root/.cache /root/.cache
+COPY --chown=appuser:appuser . .
 
 EXPOSE 8000
 

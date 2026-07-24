@@ -75,6 +75,14 @@ class Settings(BaseSettings):
     # ML clustering microservice (tra cứu cluster_label cho từng tech trong report)
     ml_clustering_base_url: str = "http://localhost:8001"
 
+    # Adaptive Hybrid Graph RAG — bật/tắt từng phần để A/B trong evaluate_rag.py
+    strategy_selector_enabled: bool = True
+    graph_expansion_enabled: bool = True
+    graph_max_hops: int = 2  # trần an toàn — clamp thêm max(1, min(x, 3)) khi dùng
+    graph_expansion_limit: int = 100
+    unified_rerank_enabled: bool = True
+    rerank_top_k: int = 5
+
     model_config = SettingsConfigDict(
         env_file=str(_ENV_FILE),
         env_file_encoding="utf-8",

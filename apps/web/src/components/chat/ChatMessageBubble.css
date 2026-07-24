@@ -1,0 +1,159 @@
+/* Style của 1 bong bóng chat — tách riêng khỏi ChatbotPage.css (route lazy-load /chat) và import
+   trực tiếp từ ChatMessageBubble.tsx, vì component này còn được FloatingChatWidget dùng lại trên
+   MỌI trang khác — nếu để trong ChatbotPage.css thì trang nào chưa từng load /chat sẽ không có
+   style (đúng loại bug lazy-route CSS đã gặp nhiều lần). */
+.chat-bubble-wrap {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+}
+
+.chat-bubble-wrap.user {
+    flex-direction: row-reverse;
+}
+
+.bot-avatar,
+.user-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+}
+
+.chat-bubble {
+    max-width: 72%;
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    position: relative;
+    min-width: 0;
+    contain: layout paint;
+    overflow-wrap: anywhere;
+    word-break: normal;
+}
+
+.chat-bubble-copy {
+    margin-top: 6px;
+}
+
+@media (max-width: 640px) {
+    .chat-bubble {
+        max-width: 85%;
+    }
+}
+
+.chat-bubble.bot {
+    background: var(--surface);
+    border: 1px solid var(--border);
+}
+
+.chat-bubble.user {
+    background: var(--primary-glow);
+    border: 1px solid var(--primary-dark);
+}
+
+.bubble-content {
+    line-height: 1.65;
+    font-size: 0.85rem;
+    overflow-wrap: anywhere;
+    word-break: normal;
+}
+
+.agent-steps {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--text-2);
+}
+
+.agent-steps summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--text-3);
+}
+
+.agent-steps ul {
+    margin: 8px 0 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.agent-steps li strong {
+    color: var(--text);
+}
+
+.chat-sources {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--text-2);
+}
+
+.chat-sources summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--text-3);
+}
+
+.chat-sources ul {
+    margin: 8px 0 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.chat-source-title {
+    color: var(--text);
+}
+
+.chat-source-meta {
+    color: var(--text-3);
+    margin-left: 6px;
+}
+
+/* Streaming cursor */
+.cursor-blink {
+    display: inline-block;
+    width: 2px;
+    height: 14px;
+    background: var(--primary-light);
+    margin-left: 2px;
+    vertical-align: middle;
+    animation: blink 0.8s steps(1) infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
+/* Dots animation - 1 chấm -> 2 chấm -> 3 chấm -> lặp lại (chờ bot trả lời) */
+.dots-animation {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dots-animation span {
+    opacity: 0;
+    animation: dot-appear 1.2s infinite;
+}
+
+.dots-animation span:nth-child(1) { animation-delay: 0s; }
+.dots-animation span:nth-child(2) { animation-delay: 0.3s; }
+.dots-animation span:nth-child(3) { animation-delay: 0.6s; }
+
+@keyframes dot-appear {
+    0%, 25% { opacity: 1; }
+    26%, 100% { opacity: 0; }
+}

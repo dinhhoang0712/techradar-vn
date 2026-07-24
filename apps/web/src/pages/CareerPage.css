@@ -271,6 +271,13 @@
     white-space: nowrap;
 }
 
+.career-roadmap-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
 /* Roadmap markdown — headings rendered by the sanitized-markdown injection are styled
    as connected numbered "milestones" purely via CSS counters, without touching how the
    content is generated/injected (dangerouslySetInnerHTML stays untouched). */

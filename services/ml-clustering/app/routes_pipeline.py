@@ -15,6 +15,8 @@ params.yaml không đổi giữa các lần trigger.
 
 from __future__ import annotations
 
+import json
+import os
 import re
 import subprocess
 import sys
@@ -23,6 +25,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import redis
 from conf.config import DATA_DIR, MODULE_ROOT, load_params
 from fastapi import APIRouter, Header, HTTPException
 from loguru import logger
@@ -31,6 +34,13 @@ from app.schemas import PipelineRunSummary
 from app.store import _get_minio_settings, _make_minio_client, _minio_key
 
 router = APIRouter(prefix="/pipeline", tags=["pipeline"])
+
+# Admin notification on pipeline finish (see JobCompletionNotifier on the Java side, which
+# subscribes to this exact channel). redis-py connects lazily on first command, so building
+# this unconditionally is safe even if Redis isn't reachable yet when the container starts.
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+COMPLETED_CHANNEL = "clustering:completed"
+_redis_client = redis.Redis.from_url(REDIS_URL, socket_connect_timeout=5, socket_timeout=5)
 
 # ── State ──────────────────────────────────────────────────────────────────
 _LOCK = threading.Lock()
@@ -155,6 +165,22 @@ def _bump_snapshot_tag(new_tag: str, params_path: Path = _PARAMS_PATH_OBJ) -> st
     return old_tag
 
 
+def _publish_completion() -> None:
+    """Admin notification is a nice-to-have — never block/fail the retrain itself over it
+    (mirrors services/crawler/run_all.py's identical fire-and-forget pattern)."""
+    with _LOCK:
+        payload = {
+            "status": _state["status"],
+            "duration_s": _state["duration_s"],
+            "snapshot_tag": _state["snapshot_tag"],
+            "error": _state["error"],
+        }
+    try:
+        _redis_client.publish(COMPLETED_CHANNEL, json.dumps(payload))
+    except redis.exceptions.RedisError as e:
+        logger.warning("Could not publish clustering completion to Redis: {}", e)
+
+
 def _run_pipeline() -> None:
     t0 = datetime.now(tz=UTC)
     with _LOCK:
@@ -181,6 +207,7 @@ def _run_pipeline() -> None:
             _state["finished_at"] = finished.isoformat()
             _state["error"] = f"snapshot tag bump failed: {exc}"[:500]
             _state["duration_s"] = round((finished - t0).total_seconds())
+        _publish_completion()
         return
 
     try:
@@ -232,6 +259,7 @@ def _run_pipeline() -> None:
             _state["current_stage"] = None
             _state["duration_s"] = round((finished - t0).total_seconds())
         logger.info("Pipeline retraining completed in {}s", _state["duration_s"])
+        _publish_completion()
 
     except Exception as exc:
         finished = datetime.now(tz=UTC)
@@ -242,6 +270,7 @@ def _run_pipeline() -> None:
             _state["error"] = str(exc)[:500]
             _state["duration_s"] = round((finished - t0).total_seconds())
         logger.exception("Pipeline retraining FAILED")
+        _publish_completion()
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 package com.techpulse.techradar.features.kafka.domain;
 
 import com.techpulse.techradar.features.kafka.event.Entities;
+import com.techpulse.techradar.features.kafka.ports.CompanyNameProvider;
 import com.techpulse.techradar.features.kafka.ports.TechAliasResolver;
 import org.springframework.stereotype.Service;
 
@@ -50,7 +51,16 @@ public class EntityExtractionService {
             "Kafka", "RabbitMQ", "gRPC", "Microservices", "WebSocket",
             // Bảo mật / công nghệ mới
             "Blockchain", "Web3", "Solidity", "IoT", "AR", "VR", "Cybersecurity",
-            "5G", "Semiconductor"
+            "5G", "Semiconductor",
+            // Network / Security hardware — thêm sau khi phát hiện gap REQUIRES: ~37% Job
+            // không có REQUIRES nào, 1 phần thật là do danh sách trước đó thiên hẳn về software
+            // dev, bỏ sót thiết bị mạng/bảo mật xuất hiện thật trong mô tả công việc (VD
+            // "Chuyên Viên Hạ Tầng Network/Security" nhắc rõ Cisco/Juniper/Checkpoint/Palo Alto
+            // Networks/Fortinet/F5, không cái nào từng có trong danh sách).
+            "Cisco", "Juniper", "Checkpoint", "Palo Alto Networks", "Fortinet", "F5",
+            // CAD / CNC / Game Engine — cùng đợt phát hiện gap REQUIRES (VD "Unreal Engine
+            // Artist", "Lập Trình Máy Tiện CNC ... Biết Mastercam" đều bị bỏ sót).
+            "Unreal Engine", "Unity", "Mastercam", "AutoCAD", "SolidWorks"
     );
 
     // Cụm từ tiếng Việt phổ biến trong tin tức công nghệ VN -> tên canonical.
@@ -73,13 +83,45 @@ public class EntityExtractionService {
             Map.entry("internet vạn vật", "IoT")
     );
 
+    // 63 tỉnh/thành Việt Nam (cách gọi phổ biến trong báo chí/tin tuyển dụng) — khác với
+    // TECH_KEYWORDS/Company, danh sách này CỐ ĐỊNH và đầy đủ (không có "tỉnh mới xuất hiện" theo
+    // thời gian như công nghệ/công ty), nên dictionary tĩnh là đủ, không cần cache/refresh.
+    private static final List<String> LOCATION_KEYWORDS = List.of(
+            "Hà Nội", "Hồ Chí Minh", "Hải Phòng", "Đà Nẵng", "Cần Thơ",
+            "An Giang", "Bà Rịa - Vũng Tàu", "Bạc Liêu", "Bắc Giang", "Bắc Kạn", "Bắc Ninh",
+            "Bến Tre", "Bình Định", "Bình Dương", "Bình Phước", "Bình Thuận", "Cà Mau",
+            "Cao Bằng", "Đắk Lắk", "Đắk Nông", "Điện Biên", "Đồng Nai", "Đồng Tháp",
+            "Gia Lai", "Hà Giang", "Hà Nam", "Hà Tĩnh", "Hải Dương", "Hậu Giang", "Hòa Bình",
+            "Hưng Yên", "Khánh Hòa", "Kiên Giang", "Kon Tum", "Lai Châu", "Lâm Đồng",
+            "Lạng Sơn", "Lào Cai", "Long An", "Nam Định", "Nghệ An", "Ninh Bình",
+            "Ninh Thuận", "Phú Thọ", "Phú Yên", "Quảng Bình", "Quảng Nam", "Quảng Ngãi",
+            "Quảng Ninh", "Quảng Trị", "Sóc Trăng", "Sơn La", "Tây Ninh", "Thái Bình",
+            "Thái Nguyên", "Thanh Hóa", "Thừa Thiên Huế", "Tiền Giang", "Trà Vinh",
+            "Tuyên Quang", "Vĩnh Long", "Vĩnh Phúc", "Yên Bái"
+    );
+
+    // Cách viết tắt/thông tục phổ biến -> tên tỉnh/thành canonical.
+    private static final Map<String, String> VN_LOCATION_ALIASES = Map.ofEntries(
+            Map.entry("tp.hcm", "Hồ Chí Minh"),
+            Map.entry("tp hcm", "Hồ Chí Minh"),
+            Map.entry("tphcm", "Hồ Chí Minh"),
+            Map.entry("hcmc", "Hồ Chí Minh"),
+            Map.entry("sài gòn", "Hồ Chí Minh"),
+            Map.entry("saigon", "Hồ Chí Minh"),
+            Map.entry("hn", "Hà Nội"),
+            Map.entry("huế", "Thừa Thiên Huế")
+    );
+
     private final Map<Pattern, String> techPatterns;
+    private final Map<Pattern, String> locationPatterns;
     private final Pattern datePattern;
     private final Pattern salaryPattern;
     private final TechAliasResolver techAliasResolver;
+    private final CompanyNameProvider companyNameProvider;
 
-    public EntityExtractionService(TechAliasResolver techAliasResolver) {
+    public EntityExtractionService(TechAliasResolver techAliasResolver, CompanyNameProvider companyNameProvider) {
         this.techAliasResolver = techAliasResolver;
+        this.companyNameProvider = companyNameProvider;
         Map<String, String> canonicalByLower = new LinkedHashMap<>();
         for (String keyword : TECH_KEYWORDS) {
             canonicalByLower.put(keyword.toLowerCase(), keyword);
@@ -96,6 +138,21 @@ public class EntityExtractionService {
                     Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE
             );
             techPatterns.put(pattern, entry.getValue());
+        }
+
+        Map<String, String> locationCanonicalByLower = new LinkedHashMap<>();
+        for (String keyword : LOCATION_KEYWORDS) {
+            locationCanonicalByLower.put(keyword.toLowerCase(), keyword);
+        }
+        VN_LOCATION_ALIASES.forEach((alias, canonical) -> locationCanonicalByLower.put(alias.toLowerCase(), canonical));
+
+        locationPatterns = new LinkedHashMap<>();
+        for (Map.Entry<String, String> entry : locationCanonicalByLower.entrySet()) {
+            Pattern pattern = Pattern.compile(
+                    "(?<!\\w)(" + Pattern.quote(entry.getKey()) + ")(?!\\w)",
+                    Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE
+            );
+            locationPatterns.put(pattern, entry.getValue());
         }
 
         datePattern = Pattern.compile("\\b(?:\\d{1,2}[/\\-]\\d{1,2}[/\\-]\\d{2,4}|\\d{4})\\b");
@@ -118,10 +175,12 @@ public class EntityExtractionService {
             }
         }
 
+        List<String> orgs = extractOrg(text);
+        List<String> locs = extractLoc(text);
         List<String> dates = extractMatches(text, datePattern);
         List<String> salaries = extractMatches(text, salaryPattern);
 
-        return new Entities(new ArrayList<>(tech), List.of(), List.of(), dates, List.of(), salaries);
+        return new Entities(new ArrayList<>(tech), orgs, locs, dates, List.of(), salaries);
     }
 
     private Set<String> extractTech(String text) {
@@ -137,6 +196,52 @@ public class EntityExtractionService {
             }
         }
         return result;
+    }
+
+    private List<String> extractLoc(String text) {
+        Set<String> result = new TreeSet<>();
+        for (Map.Entry<Pattern, String> entry : locationPatterns.entrySet()) {
+            if (entry.getKey().matcher(text).find()) {
+                result.add(entry.getValue());
+            }
+        }
+        return new ArrayList<>(result);
+    }
+
+    /**
+     * Nhận diện Company được nhắc tới trong text bằng cách so khớp với danh sách tên Company đã
+     * biết ({@link CompanyNameProvider} — tạo qua đường Job, xem docs/DATABASE.md §4.1). KHÔNG
+     * biên dịch tên Company thành regex như tech/location — tên công ty có thể chứa ký tự đặc
+     * biệt bất kỳ (dấu ngoặc, "&", "."...) không an toàn để đưa thẳng vào regex dù đã
+     * {@code Pattern.quote()}; so khớp bằng {@code indexOf} + kiểm tra ranh giới từ thủ công vừa
+     * an toàn vừa đủ nhanh cho quy mô vài trăm tên/bài viết.
+     */
+    private List<String> extractOrg(String text) {
+        String lowerText = text.toLowerCase();
+        Set<String> result = new TreeSet<>();
+        for (String company : companyNameProvider.knownCompanyNames()) {
+            if (company == null || company.isBlank()) {
+                continue;
+            }
+            if (containsAsWord(lowerText, company.toLowerCase())) {
+                result.add(company);
+            }
+        }
+        return new ArrayList<>(result);
+    }
+
+    private static boolean containsAsWord(String haystackLower, String needleLower) {
+        int idx = haystackLower.indexOf(needleLower);
+        while (idx != -1) {
+            boolean leftBoundary = idx == 0 || !Character.isLetterOrDigit(haystackLower.charAt(idx - 1));
+            int endIdx = idx + needleLower.length();
+            boolean rightBoundary = endIdx == haystackLower.length() || !Character.isLetterOrDigit(haystackLower.charAt(endIdx));
+            if (leftBoundary && rightBoundary) {
+                return true;
+            }
+            idx = haystackLower.indexOf(needleLower, idx + 1);
+        }
+        return false;
     }
 
     private List<String> extractMatches(String text, Pattern pattern) {

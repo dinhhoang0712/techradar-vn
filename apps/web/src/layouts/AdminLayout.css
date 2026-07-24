@@ -29,7 +29,7 @@
     overflow-y: auto;
 }
 
-.admin-mobile-header {
+.admin-topbar {
     height: var(--header-h);
     background: var(--bg-2);
     border-bottom: 1px solid var(--border);
@@ -39,16 +39,20 @@
     gap: 16px;
 }
 
-.admin-mobile-header .logo-text {
+.admin-topbar-spacer {
+    flex: 1;
+}
+
+.admin-topbar .logo-text {
     font-size: 1.1rem;
     font-weight: 800;
 }
 
-.admin-mobile-header .logo-accent {
+.admin-topbar .logo-accent {
     color: var(--primary);
 }
 
-.admin-mobile-header .mobile-menu-btn {
+.admin-topbar .mobile-menu-btn {
     background: transparent;
     border: none;
     color: var(--text);

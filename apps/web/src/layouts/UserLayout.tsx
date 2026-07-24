@@ -4,6 +4,7 @@ import Footer from '../components/layout/Footer';
 import MaintenancePage from '../pages/MaintenancePage';
 import { useAppContext } from '../contexts/appContextStore';
 import { MessagingProvider } from '../contexts/MessagingContext';
+import FloatingChatWidget from '../components/chat/FloatingChatWidget';
 
 export default function UserLayout() {
     const { settings } = useAppContext()!;
@@ -20,6 +21,7 @@ export default function UserLayout() {
                     <Outlet />
                 </main>
                 <Footer />
+                <FloatingChatWidget />
             </div>
         </MessagingProvider>
     );

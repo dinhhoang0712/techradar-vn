@@ -1,6 +1,7 @@
 package com.techpulse.techradar.features.notification.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.techpulse.techradar.features.auth.ports.UserRepository;
 import com.techpulse.techradar.features.notification.domain.Notification;
 import com.techpulse.techradar.features.notification.ports.NotificationRepository;
 import com.techpulse.techradar.shared.redis.RedisFanout;
@@ -39,6 +40,7 @@ public class NotificationService {
     private final ReactiveRedisMessageListenerContainer redisListenerContainer;
     private final ReactiveStringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
+    private final UserRepository userRepository;
 
     // autoCancel=false: if every connected client disconnects momentarily, the default
     // autoCancel=true would terminate this sink and silently refuse every subscriber for the
@@ -91,6 +93,20 @@ public class NotificationService {
     /** Persist a notification and broadcast it (via Redis) to any live SSE subscriber for that user. */
     public Mono<Notification> save(Notification notification) {
         return repository.insert(notification).doOnNext(this::publishLive);
+    }
+
+    /** Persists + broadcasts the same notification to every admin user (fire-and-forget). */
+    public Mono<Void> notifyAllAdmins(String type, String title, String body, String link) {
+        return userRepository.findAdmins()
+                .flatMap(admin -> save(Notification.builder()
+                        .userId(admin.getId())
+                        .type(type)
+                        .title(title)
+                        .body(body)
+                        .link(link)
+                        .read(false)
+                        .build()))
+                .then();
     }
 
     public Flux<Notification> streamFor(String userId) {

@@ -2,6 +2,7 @@ package com.techpulse.techradar.features.graph.adapters.input;
 
 import com.techpulse.techradar.features.graph.application.RebuildGraphAnalyticsUseCase;
 import com.techpulse.techradar.features.graph.domain.GraphAnalyticsSummary;
+import com.techpulse.techradar.features.system.application.AuditLogService;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -12,6 +13,10 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -19,12 +24,15 @@ class GraphAnalyticsAdminControllerTest {
 
     @Mock
     private RebuildGraphAnalyticsUseCase rebuildGraphAnalyticsUseCase;
+    @Mock
+    private AuditLogService auditLogService;
 
     private GraphAnalyticsAdminController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new GraphAnalyticsAdminController(rebuildGraphAnalyticsUseCase);
+        controller = new GraphAnalyticsAdminController(rebuildGraphAnalyticsUseCase, auditLogService);
+        lenient().when(auditLogService.record(any(), any(), any(), any())).thenReturn(Mono.empty());
     }
 
     @Test
@@ -40,6 +48,8 @@ class GraphAnalyticsAdminControllerTest {
                     assertThat(body.getData().communitiesFound()).isEqualTo(9);
                 })
                 .verifyComplete();
+
+        verify(auditLogService).record(eq("GRAPH_ANALYTICS_REBUILD"), eq("graph"), any(), any());
     }
 
     @Test

@@ -68,3 +68,35 @@ async def test_graph_search_dedup_jobs(monkeypatch):
     assert len(result["jobs"]) == 1
     assert result["jobs"][0]["title"] == "Python Dev"
     assert result["jobs"][0]["company"] == "A"
+
+
+@pytest.mark.asyncio
+async def test_graph_search_uses_provided_extracted_without_calling_extractor(monkeypatch):
+    """Regression guard cho Strategy Selector (Phase 1): khi extracted đã được hoist lên gọi
+    1 lần ở pipeline.py và truyền vào, graph_search KHÔNG được tự chạy lại NER lần 2."""
+    mock_extract = MagicMock(side_effect=AssertionError("extract_query_entities should not be called again"))
+    monkeypatch.setattr("app.core.retriever_graph.extract_query_entities", mock_extract)
+
+    mock_run_query = AsyncMock(return_value=[])
+    monkeypatch.setattr("app.core.retriever_graph.run_query", mock_run_query)
+
+    extracted = {"technologies": ["Python"], "job_titles": [], "companies": [], "locations": []}
+    result = await graph_search("bất kỳ câu gì", extracted=extracted)
+
+    mock_extract.assert_not_called()
+    assert result["entities"] == ["Python"]
+
+
+@pytest.mark.asyncio
+async def test_graph_search_extracts_when_extracted_not_provided(monkeypatch):
+    """Backward-compat: caller không truyền extracted (VD test cũ) vẫn tự trích như trước."""
+    mock_extract = MagicMock(
+        return_value={"technologies": ["Java"], "job_titles": [], "companies": [], "locations": []}
+    )
+    monkeypatch.setattr("app.core.retriever_graph.extract_query_entities", mock_extract)
+    monkeypatch.setattr("app.core.retriever_graph.run_query", AsyncMock(return_value=[]))
+
+    result = await graph_search("Java là gì?")
+
+    mock_extract.assert_called_once()
+    assert result["entities"] == ["Java"]

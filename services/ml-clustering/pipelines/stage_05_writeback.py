@@ -252,6 +252,26 @@ def main(
         )
         logger.info(":NEAR_CLUSTER written")
 
+        # 8.5 Dọn :Cluster mồ côi từ lần train trước — cluster_id không phải định danh ổn
+        # định giữa các lần train (chỉ là nhãn 0..N-1 thuật toán gán lại mỗi lần), nên
+        # :Cluster của lần train cũ không còn xuất hiện ở cluster_meta lần này sẽ không
+        # nhận lại cạnh nào ở bước 6-8 — sau khi bước 5 đã dọn cạnh cũ, node nào hiện
+        # không còn cạnh incoming nào là rác, xoá luôn để không tích luỹ qua mỗi lần
+        # retrain. Chỉ đúng khi clean_before_write=True (nếu không, cạnh cũ vẫn còn nên
+        # "mồ côi" không phản ánh đúng cluster nào thật sự đã lỗi thời).
+        if wb.clean_before_write:
+            orphan_result = run_query(
+                """
+                MATCH (c:Cluster)
+                WHERE NOT (c)<--()
+                DETACH DELETE c
+                RETURN count(c) AS n
+                """
+            )
+            n_orphans = orphan_result[0]["n"] if orphan_result else 0
+            if n_orphans:
+                logger.info("Dọn {} node :Cluster mồ côi (từ lần train cũ)", n_orphans)
+
         # 9. Verify
         res_belongs = run_query("MATCH (:Technology)-[:BELONGS_TO]->(:Cluster) RETURN count(*) AS n")
         res_near = run_query("MATCH (:Technology)-[:NEAR_CLUSTER]->(:Cluster) RETURN count(*) AS n")

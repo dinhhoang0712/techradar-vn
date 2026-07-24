@@ -117,7 +117,17 @@
 .ai-summary-text {
     color: var(--text);
     line-height: 1.6;
-    white-space: pre-line;
+}
+
+.ai-summary-text .md-p {
+    margin: 0 0 8px;
+    color: inherit;
+    line-height: inherit;
+    font-size: 0.9rem;
+}
+
+.ai-summary-text .md-p:last-child {
+    margin-bottom: 0;
 }
 
 .compare-stats-row {

@@ -11,6 +11,7 @@ import { getCompareSearch, getLlmSummary } from '../api/compareService';
 import { getRadarTop10 } from '../api/trendService';
 import { CHART_PALETTE as PALETTE } from '../utils/chartPalette';
 import { useToast } from '../components/common/toastContext';
+import MarkdownContent from '../components/common/MarkdownContent';
 import { useAsync } from '../hooks/useAsync';
 import type { CompareItem } from '../types/trend';
 import './ComparePage.css';
@@ -308,7 +309,7 @@ export default function ComparePage() {
                     {summaryLoading && <p className="ai-summary-status">Đang tạo tóm tắt...</p>}
                     {summaryError && <p className="ai-summary-status ai-summary-error">{summaryError}</p>}
                     {!summaryLoading && !summaryError && summary && (
-                        <p className="ai-summary-text">{summary}</p>
+                        <MarkdownContent className="ai-summary-text">{summary}</MarkdownContent>
                     )}
                 </div>
             )}

@@ -4,8 +4,9 @@ import {
     fetchClusters,
     fetchClusterDetail,
     updateClusterLabel,
+    batchPredictClusters,
 } from '../../api/adminService';
-import type { UpdateClusterLabelFields } from '../../api/adminService';
+import type { UpdateClusterLabelFields, BatchPredictTechResult } from '../../api/adminService';
 import type { ClusterSummary, ClusterDetail } from '../../types/cluster';
 import Modal from '../../components/common/Modal';
 import RingGauge from '../../components/common/RingGauge';
@@ -44,6 +45,10 @@ export default function AdminClusters() {
     const [detailLoading, setDetailLoading] = useState(false);
     const [form, setForm] = useState<ClusterLabelForm>({ label: '', labelEn: '', description: '', domain: '' });
     const [saving, setSaving] = useState(false);
+
+    const [batchInput, setBatchInput] = useState('');
+    const [batchResults, setBatchResults] = useState<BatchPredictTechResult[] | null>(null);
+    const [batchChecking, setBatchChecking] = useState(false);
 
     const notify = useToast();
 
@@ -111,6 +116,26 @@ export default function AdminClusters() {
 
     const closeDetail = () => { setSelectedId(null); setDetail(null); };
 
+    const handleBatchCheck = async () => {
+        const techNames = [...new Set(
+            batchInput.split(/[\n,]/).map(s => s.trim()).filter(Boolean)
+        )];
+        if (techNames.length === 0) {
+            notify({ title: 'Nhập ít nhất một tên công nghệ', variant: 'error' });
+            return;
+        }
+        setBatchChecking(true);
+        try {
+            const res = await batchPredictClusters(techNames);
+            setBatchResults(res?.data?.results || []);
+        } catch (e) {
+            console.error('Failed to batch-check clusters:', e);
+            notify({ title: 'Kiểm tra hàng loạt thất bại', body: (e as Error).message, variant: 'error' });
+        } finally {
+            setBatchChecking(false);
+        }
+    };
+
     const handleSave = async (e: FormEvent) => {
         e.preventDefault();
         if (!detail) return;
@@ -156,6 +181,53 @@ export default function AdminClusters() {
                     />
                 </div>
             </div>
+
+            <section className="clusters-section batch-check-card card">
+                <h3 className="clusters-section-title">Kiểm tra hàng loạt</h3>
+                <p className="batch-check-hint">Dán danh sách tên công nghệ (mỗi dòng hoặc cách nhau bằng dấu phẩy) để tra cứu cụm của nhiều công nghệ cùng lúc — hữu ích khi cần rà soát tech stack của một công ty hay một lô công nghệ mới nạp vào hệ thống.</p>
+                <textarea
+                    className="batch-check-input"
+                    rows={3}
+                    placeholder={'React\nNode.js\nPostgreSQL'}
+                    value={batchInput}
+                    onChange={e => setBatchInput(e.target.value)}
+                />
+                <button className="btn btn-secondary" onClick={handleBatchCheck} disabled={batchChecking}>
+                    {batchChecking ? 'Đang kiểm tra…' : 'Kiểm tra'}
+                </button>
+
+                {batchResults && (
+                    <div className="batch-check-results">
+                        <table className="batch-check-table">
+                            <thead>
+                                <tr>
+                                    <th>Công nghệ</th>
+                                    <th>Cụm</th>
+                                    <th>Lĩnh vực</th>
+                                    <th>Trạng thái</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {batchResults.length === 0 && (
+                                    <tr><td colSpan={4} className="batch-check-empty-cell">Không có kết quả</td></tr>
+                                )}
+                                {batchResults.map(r => (
+                                    <tr key={r.tech_name}>
+                                        <td>{r.tech_name}</td>
+                                        <td>{r.cluster_id != null ? (r.cluster_id === -1 ? 'Nhiễu (không thuộc cụm nào)' : `#${r.cluster_id}${r.label ? ` — ${r.label}` : ''}`) : '—'}</td>
+                                        <td>{r.domain ? <span className={`domain-badge ${domainClass(r.domain)}`}>{r.domain}</span> : '—'}</td>
+                                        <td>
+                                            {r.found && <span className="badge badge-primary">Đã xác định</span>}
+                                            {!r.found && r.provisional && <span className="badge badge-down">Tạm thời{r.matched_via ? ` (giống "${r.matched_via}")` : ''}</span>}
+                                            {!r.found && !r.provisional && <span className="badge badge-down">Không tìm thấy</span>}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </section>
 
             {loading && (
                 <div className="admin-loading-container">

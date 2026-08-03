@@ -37,7 +37,7 @@ class MessageBroadcasterSubscriptionRaceTest {
         // "Tab 1": already open.
         Disposable oldSubscription = broadcaster.subscribe(userId).subscribe(msg -> { });
 
-        List<DirectMessage> receivedByNewTab = new CopyOnWriteArrayList<>();
+        List<MessageLiveEvent> receivedByNewTab = new CopyOnWriteArrayList<>();
         CyclicBarrier barrier = new CyclicBarrier(2);
 
         // Races doFinally()'s cleanup of "tab 1" against subscribe() wiring up "tab 2" for the
@@ -48,7 +48,7 @@ class MessageBroadcasterSubscriptionRaceTest {
         });
         Thread openNewTab = new Thread(() -> {
             awaitBarrier(barrier);
-            Flux<DirectMessage> newStream = broadcaster.subscribe(userId);
+            Flux<MessageLiveEvent> newStream = broadcaster.subscribe(userId);
             newStream.subscribe(receivedByNewTab::add);
         });
 
@@ -57,16 +57,17 @@ class MessageBroadcasterSubscriptionRaceTest {
         closeOldTab.join();
         openNewTab.join();
 
-        DirectMessage message = new DirectMessage(
-                "msg-1", "conv-1", "sender-1", "hello", LocalDateTime.of(2026, 7, 20, 12, 0), false);
+        DirectMessage directMessage = new DirectMessage(
+                "msg-1", "conv-1", "sender-1", "hello", LocalDateTime.of(2026, 7, 20, 12, 0), false, null, List.of());
+        MessageLiveEvent event = MessageLiveEvent.newMessage(directMessage);
         // Simulates the Redis-relayed delivery path (subscribeToRedis()'s callback) without
         // actually touching Redis.
-        deliverLocally(broadcaster, userId, message);
+        deliverLocally(broadcaster, userId, event);
 
         assertThat(receivedByNewTab)
                 .as("the new tab's subscription must still be wired into the live channels map "
                         + "after racing the old tab's close")
-                .containsExactly(message);
+                .containsExactly(event);
     }
 
     private static void awaitBarrier(CyclicBarrier barrier) {
@@ -77,9 +78,9 @@ class MessageBroadcasterSubscriptionRaceTest {
         }
     }
 
-    private static void deliverLocally(MessageBroadcaster broadcaster, String userId, DirectMessage message) throws Exception {
-        Method method = MessageBroadcaster.class.getDeclaredMethod("deliverLocally", String.class, DirectMessage.class);
+    private static void deliverLocally(MessageBroadcaster broadcaster, String userId, MessageLiveEvent event) throws Exception {
+        Method method = MessageBroadcaster.class.getDeclaredMethod("deliverLocally", String.class, MessageLiveEvent.class);
         method.setAccessible(true);
-        method.invoke(broadcaster, userId, message);
+        method.invoke(broadcaster, userId, event);
     }
 }

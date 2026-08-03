@@ -12,7 +12,7 @@ interface SummaryPanelProps {
 // Panel tóm tắt tin tức gần đây cho 1 công nghệ (POST /chat/summarize).
 export default function SummaryPanel({ tech, loading, summary, error, onClose }: SummaryPanelProps) {
     return (
-        <div className="card forecast-panel" style={{ marginTop: 16 }}>
+        <div className="forecast-panel">
             <div className="forecast-header">
                 <h2 className="section-title">Tóm tắt tin tức: <span style={{ color: 'var(--primary)' }}>{tech}</span></h2>
                 <button className="forecast-close-btn" onClick={onClose}>✕</button>

@@ -29,11 +29,17 @@ public class CmsService {
     }
 
     public Mono<CmsContent> create(String title, String type, LocalDate date, String status) {
+        return create(title, type, date, status, null);
+    }
+
+    /** {@code body}: full content, e.g. the generated markdown for a "Report" row (nullable). */
+    public Mono<CmsContent> create(String title, String type, LocalDate date, String status, String body) {
         return cmsRepository.insert(CmsContent.builder()
                 .title(title)
                 .type(type)
                 .contentDate(date)
                 .status(StringUtils.hasText(status) ? status : "Pending")
+                .body(body)
                 .build())
                 .doOnSubscribe(s -> log.info("Creating CMS content '{}' (type={})", title, type))
                 .doOnSuccess(c -> log.info("Created CMS content id={} title='{}'", c.getId(), c.getTitle()))

@@ -55,6 +55,23 @@ stages:
     outs:
       - data/labels/${snapshot.tag}
 
+  publish:
+    # Đẩy artifact (best_labels.parquet, cluster_labels.json, technologies.parquet) lên MinIO
+    # rồi cập nhật latest.json — bước "Publish Model / Artifact Deployment" giữa TRAIN và
+    # SERVING (app/store.py đọc latest.json khi MLCLUSTER_SNAPSHOT_TAG=latest). Cần --run-id
+    # (MLflow run "best" của stage_03_train) nên không thể chạy qua `dvc repro publish` thẳng —
+    # giống hệt lý do `writeback` bên dưới thiếu --run-id trong cmd. Chạy tay:
+    #   python -m pipelines.stage_06_publish --params params.yaml --run-id <best_run_id>
+    # (Trigger qua HTTP POST /pipeline/trigger tự resolve run-id, xem app/routes_pipeline.py.)
+    cmd: python -m pipelines.stage_06_publish --params params.yaml
+    deps:
+      - pipelines/stage_06_publish.py
+      - src/tracking/mlflow_logger.py
+      - data/labels/${snapshot.tag}
+    params:
+      - snapshot
+    frozen: true   # mặc định không tự chạy; bật khi muốn deploy artifact lên MinIO
+
   writeback:
     cmd: python -m pipelines.stage_05_writeback --params params.yaml
     deps:

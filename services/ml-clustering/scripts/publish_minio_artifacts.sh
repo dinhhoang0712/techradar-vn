@@ -5,6 +5,14 @@ usage() {
   cat <<'EOF'
 Publish ML clustering runtime artifacts to MinIO as plain objects.
 
+NOTE: the pipeline now does this automatically as Stage 6 (see
+pipelines/stage_06_publish.py, wired into both `POST /pipeline/trigger` and
+`dvc.yaml`'s `publish` stage) — it also verifies each upload (head_object) before
+flipping latest.json and gates on the champion decision from Stage 3. Use this
+script only for manual/portable cases the automated stage doesn't cover (no
+MLflow run_id at hand, syncing artifacts to a different MinIO instance, etc.) —
+it does NOT verify uploads or check champion status.
+
 Required:
   --bucket <bucket>        MinIO bucket name, or set BUCKET / MLCLUSTER_MINIO_BUCKET
 

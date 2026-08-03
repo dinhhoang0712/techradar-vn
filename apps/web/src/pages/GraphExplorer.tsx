@@ -101,7 +101,10 @@ export default function GraphExplorer() {
         const n = searchParams.get('node');
         return n ? [n] : ['AI'];
     });
-    const [depth, setDepth] = useState<1 | 2>(() => (searchParams.get('depth') === '2' ? 2 : 1));
+    const [depth, setDepth] = useState<1 | 2 | 3>(() => {
+        const d = Number(searchParams.get('depth'));
+        return d === 2 || d === 3 ? d : 1;
+    });
     const [location, setLocation] = useState('');
     const [minSalary, setMinSalary] = useState('');
     const [nodeCount, setNodeCount] = useState(0);
@@ -751,6 +754,7 @@ export default function GraphExplorer() {
                             <div className="pill-group">
                                 <button className={`pill${depth === 1 ? ' active' : ''}`} onClick={() => setDepth(1)}>1 hop</button>
                                 <button className={`pill${depth === 2 ? ' active' : ''}`} onClick={() => setDepth(2)}>2 hops</button>
+                                <button className={`pill${depth === 3 ? ' active' : ''}`} onClick={() => setDepth(3)}>3 hops</button>
                             </div>
                         )}
                         <button className="btn btn-ghost" onClick={handleFitView}>Vừa khung</button>

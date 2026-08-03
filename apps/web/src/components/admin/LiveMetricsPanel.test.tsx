@@ -9,6 +9,13 @@ vi.mock('../../api/adminService', () => ({
     streamAdminLiveMetrics: vi.fn(),
 }));
 
+// Job-failure tile polls this independently of the SSE snapshot (see LiveMetricsPanel's second
+// effect) — mocked so it resolves predictably instead of hitting a real (relative-URL) fetch that
+// jsdom can't resolve.
+vi.mock('../../api/notificationService', () => ({
+    getUnreadCount: vi.fn().mockResolvedValue(0),
+}));
+
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async () => {
     const actual = await vi.importActual('react-router-dom');
@@ -48,7 +55,7 @@ describe('LiveMetricsPanel', () => {
         render(<LiveMetricsPanel />);
 
         expect(screen.getByText('Đang kết nối...')).toBeInTheDocument();
-        expect(screen.getAllByText('—')).toHaveLength(4); // crawler, new-tech, ai-requests, pending-reports counts
+        expect(screen.getAllByText('—')).toHaveLength(5); // crawler, new-tech, ai-requests, pending-reports, job-failure counts
         expect(screen.getByText('Ổn định')).toBeInTheDocument(); // pipeline defaults to healthy until proven otherwise
     });
 

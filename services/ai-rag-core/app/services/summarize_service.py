@@ -3,11 +3,13 @@ Summarization Service — tóm tắt xu hướng công nghệ từ bài viết N
 Dùng MapReduce để tránh token overflow khi có nhiều articles.
 """
 
+import calendar
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from app.api.schemas import SummarizeRequest, SummarizeResponse
+from app.core.flexible_date import parse_date
 from app.core.generator import generate
 from app.db.neo4j_client import run_query
 
@@ -43,32 +45,45 @@ def _parse_period(period: str | None) -> tuple[str, str]:
 
     if len(period) == 7:  # YYYY-MM
         year, month = period.split("-")
-        return f"{year}-{month}-01", f"{year}-{month}-31"
+        last_day = calendar.monthrange(int(year), int(month))[1]
+        return f"{year}-{month}-01", f"{year}-{month}-{last_day:02d}"
 
     return f"{period}-01-01", f"{period}-12-31"
 
 
 async def _fetch_articles(tech_name: str, start_date: str, end_date: str) -> list[dict]:
-    """Neo4j: bài viết MENTIONS tech trong khoảng thời gian."""
+    """Neo4j: bài viết MENTIONS tech trong khoảng thời gian.
+
+    published_date là string với format lẫn lộn tùy nguồn crawl (xem app.core.flexible_date),
+    nên lọc theo khoảng ngày phải làm ở Python thay vì Cypher `date($start)` (luôn trả NULL và bị
+    WHERE loại hết vì so sánh String với Date) — fetch một lượng đủ lớn rồi tự lọc/sắp xếp/giới
+    hạn 20 bài mới nhất trong kỳ.
+    """
     try:
         rows = await run_query(
             """
             MATCH (a:Article)-[:MENTIONS]->(t:Technology)
             WHERE toLower(t.name) = toLower($name)
-              AND a.published_date >= date($start)
-              AND a.published_date <= date($end)
             RETURN a.title AS title, a.content AS content,
                    a.published_date AS published_date,
                    a.sentiment_score AS sentiment_score
-            ORDER BY a.published_date DESC
-            LIMIT 20
+            LIMIT 3000
             """,
-            {"name": tech_name, "start": start_date, "end": end_date},
+            {"name": tech_name},
         )
-        return rows
     except Exception as e:
         logger.warning("fetch_articles failed: %s", e)
         return []
+
+    start = date.fromisoformat(start_date)
+    end = date.fromisoformat(end_date)
+    in_range = [
+        (parsed, row)
+        for row in rows
+        if (parsed := parse_date(row.get("published_date"))) and start <= parsed <= end
+    ]
+    in_range.sort(key=lambda pair: pair[0], reverse=True)
+    return [row for _, row in in_range[:20]]
 
 
 async def handle(req: SummarizeRequest) -> SummarizeResponse:

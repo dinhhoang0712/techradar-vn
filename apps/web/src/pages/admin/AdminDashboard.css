@@ -233,6 +233,42 @@
     color: var(--text-3);
 }
 
+/* chart-tooltip/tooltip-* trùng với CompanyExplorer.css/ComparePage.css/TrendDashboard.css vì
+   trang này không import chúng (route lazy-load riêng, CSS chunk của trang kia chưa chắc đã load). */
+.chart-tooltip {
+    background: var(--bg-2);
+    border: 1px solid var(--border-2);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    box-shadow: var(--shadow-lg);
+    min-width: 160px;
+}
+
+.tooltip-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+}
+
+.tooltip-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.tooltip-tech {
+    flex: 1;
+    color: var(--text);
+    font-weight: 500;
+}
+
+.tooltip-jobs {
+    color: var(--text);
+    font-weight: 600;
+}
+
 .keyword-empty {
     color: var(--text-3);
     text-align: center;

@@ -75,6 +75,20 @@ class CmsServiceTest {
     }
 
     @Test
+    void create_withBody_persistsFullReportContent() {
+        when(cmsRepository.insert(any())).thenAnswer(inv -> {
+            CmsContent c = inv.getArgument(0);
+            c.setId(UUID.randomUUID());
+            return Mono.just(c);
+        });
+
+        StepVerifier.create(service.create("Báo cáo tháng 7/2026", "Report", LocalDate.of(2026, 7, 1),
+                        "Pending", "# Nội dung báo cáo đầy đủ"))
+                .assertNext(created -> assertThat(created.getBody()).isEqualTo("# Nội dung báo cáo đầy đủ"))
+                .verifyComplete();
+    }
+
+    @Test
     void update_fails_whenContentNotFound() {
         when(cmsRepository.findById("missing-id")).thenReturn(Mono.empty());
 

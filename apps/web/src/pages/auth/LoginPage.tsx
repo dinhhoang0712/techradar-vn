@@ -4,6 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { loginUser, getCurrentUser, getSystemStatus, forgotPassword, resetPassword } from '../../api/authService';
 import Modal from '../../components/common/Modal';
 import AuthStatsRow from '../../components/common/AuthStatsRow';
+import PasswordInput from '../../components/common/PasswordInput';
 import { useToast } from '../../components/common/toastContext';
 import type { ApiResponse } from '../../types/api';
 import type { User } from '../../types/auth';
@@ -145,8 +146,7 @@ export default function LoginPage() {
                         </div>
                         <div className="auth-input-group">
                             <label>Password</label>
-                            <input
-                                type="password"
+                            <PasswordInput
                                 required
                                 placeholder="••••••••"
                                 value={password}
@@ -232,9 +232,8 @@ export default function LoginPage() {
                         </div>
                         <div className="form-group">
                             <label>Mật khẩu mới (tối thiểu 8 ký tự)</label>
-                            <input
+                            <PasswordInput
                                 required
-                                type="password"
                                 minLength={8}
                                 value={resetPwd}
                                 onChange={(e) => setResetPwd(e.target.value)}

@@ -96,7 +96,10 @@ services:
   # ----------------------------- RAG chat service (FastAPI) -------------------------------
   ai-rag-core:
     build:
-      context: ./services/ai-rag-core
+      # Context is repo root (not ./services/ai-rag-core) so the Dockerfile can COPY
+      # services/llm-gateway — the shared package this service editable-installs.
+      context: .
+      dockerfile: services/ai-rag-core/Dockerfile
     image: techradar/ai-rag-core:latest
     container_name: techradar-rag
     ports:
@@ -149,7 +152,9 @@ services:
   # ----------------------------- ML clustering service (FastAPI) --------------------------
   ml-clustering:
     build:
-      context: ./services/ml-clustering
+      # Context is repo root so the Dockerfile can COPY services/llm-gateway (see ai-rag-core).
+      context: .
+      dockerfile: services/ml-clustering/Dockerfile
     image: techradar/ml-clustering:latest
     container_name: techradar-clustering
     ports:
@@ -170,6 +175,11 @@ services:
       MLCLUSTER_MINIO_ENDPOINT: ${MLCLUSTER_MINIO_ENDPOINT:-http://minio:9000}
       MLCLUSTER_MINIO_ACCESS_KEY: ${MLCLUSTER_MINIO_ACCESS_KEY:-minioadmin}
       MLCLUSTER_MINIO_SECRET_KEY: ${MLCLUSTER_MINIO_SECRET_KEY:-minioadmin123}
+      # Empty by default (not "latest") so a fresh clone with no .env/.MLCLUSTER_MINIO_BUCKET
+      # still boots from the params.yaml tag + published/<tag>/ snapshot baked into the image
+      # (see Dockerfile) instead of erroring out looking for a MinIO manifest that doesn't
+      # exist yet. Set to "latest" in .env once MinIO is configured — see .env's comment for why.
+      MLCLUSTER_SNAPSHOT_TAG: ${MLCLUSTER_SNAPSHOT_TAG:-}
       # embed_tech_names_fallback() (content_features.py) lazy-loads a SentenceTransformer on
       # first use — pin its HF cache onto the already-mounted ml_clustering_cache volume so a
       # container recreate doesn't re-download the model from HuggingFace every time.
@@ -193,6 +203,12 @@ services:
           memory: 2g
     volumes:
       - ml_clustering_cache:/tmp/ml-clustering-cache
+      # Persist trained artifacts (data/models,labels,raw,metrics) + MLflow tracking DB
+      # (mlruns.db, see params.yaml's mlflow.tracking_uri) across container recreates —
+      # previously both lived in the writable layer only, so every rebuild/redeploy silently
+      # wiped the champion-comparison history the pipeline's promotion gate depends on
+      # (see app/routes_pipeline.py:_run_pipeline champion check).
+      - ml_clustering_data:/app/src/ml-clustering/data
     depends_on:
       neo4j:
         condition: service_started
@@ -293,7 +309,9 @@ services:
   # ----------------------------- Data Platform (Bronze + Silver + Gold + Scheduler) ------
   data-platform:
     build:
-      context: ./data-platform
+      # Context is repo root so the Dockerfile can COPY services/llm-gateway (see ai-rag-core).
+      context: .
+      dockerfile: data-platform/Dockerfile
     image: techradar/data-platform:latest
     container_name: techradar-data-platform
     environment:
@@ -494,6 +512,7 @@ volumes:
   redis_data:
   qdrant_data:
   ml_clustering_cache:
+  ml_clustering_data:
   embedding_hf_cache:
   minio_data:
   crawler_data:

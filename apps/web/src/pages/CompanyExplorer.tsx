@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { getCompanies } from '../api/companyService';
 import CompanyLogo from '../components/common/CompanyLogo';
+import Modal from '../components/common/Modal';
 import CompareCompaniesPanel from '../components/company/CompareCompaniesPanel';
 import SimilarCompanyPanel from '../components/company/SimilarCompanyPanel';
 import type { Company } from '../types/company';
@@ -174,50 +175,50 @@ export default function CompanyExplorer() {
                 <p className="company-empty-hint">{error}</p>
             )}
 
-            <div className={`company-layout${selected ? ' has-detail' : ''}`}>
-                <div className="company-grid">
-                    {companies.map(c => (
-                        <button
-                            type="button"
-                            key={c.id}
-                            className={`company-card card${selected?.id === c.id ? ' selected' : ''}`}
-                            onClick={() => setSelected(selected?.id === c.id ? null : c)}
-                        >
-                            <div className="company-card-header">
-                                <div className="company-card-identity">
-                                    <CompanyLogo name={c.name} size={44} />
-                                    <span className="company-card-name">{c.name}</span>
-                                </div>
-                                <span className="company-card-jobs">{c.job_count} tin</span>
+            <div className="company-grid">
+                {companies.map(c => (
+                    <button
+                        type="button"
+                        key={c.id}
+                        className={`company-card card${selected?.id === c.id ? ' selected' : ''}`}
+                        onClick={() => setSelected(selected?.id === c.id ? null : c)}
+                    >
+                        <div className="company-card-header">
+                            <div className="company-card-identity">
+                                <CompanyLogo name={c.name} size={44} />
+                                <span className="company-card-name">{c.name}</span>
                             </div>
-                            {c.location && <span className="company-card-location">{c.location}</span>}
-                            {(c.industry || c.size) && (
-                                <span className="company-card-meta">{[c.industry, c.size].filter(Boolean).join(' · ')}</span>
+                            <span className="company-card-jobs">{c.job_count} tin</span>
+                        </div>
+                        {c.location && <span className="company-card-location">{c.location}</span>}
+                        {(c.industry || c.size) && (
+                            <span className="company-card-meta">{[c.industry, c.size].filter(Boolean).join(' · ')}</span>
+                        )}
+                        <div className="skills-chips">
+                            {c.tech_stack.slice(0, 6).map(t => (
+                                <span key={t} className="skill-chip skill-chip--have">{t}</span>
+                            ))}
+                            {c.tech_stack.length > 6 && (
+                                <span className="skill-chip skill-chip--missing">+{c.tech_stack.length - 6}</span>
                             )}
-                            <div className="skills-chips">
-                                {c.tech_stack.slice(0, 6).map(t => (
-                                    <span key={t} className="skill-chip skill-chip--have">{t}</span>
-                                ))}
-                                {c.tech_stack.length > 6 && (
-                                    <span className="skill-chip skill-chip--missing">+{c.tech_stack.length - 6}</span>
-                                )}
-                            </div>
-                        </button>
-                    ))}
-                    {companies.length === 0 && (
-                        <p className="company-empty-hint">Không tìm thấy công ty nào phù hợp.</p>
-                    )}
-                </div>
+                        </div>
+                    </button>
+                ))}
+                {companies.length === 0 && (
+                    <p className="company-empty-hint">Không tìm thấy công ty nào phù hợp.</p>
+                )}
+            </div>
 
-                {selected && (
+            {selected && (
+                <Modal onClose={() => setSelected(null)} width="720px">
                     <SimilarCompanyPanel
                         key={selected.id}
                         company={selected}
                         onClose={() => setSelected(null)}
                         onCompare={(c) => setCompareSeed([c])}
                     />
-                )}
-            </div>
+                </Modal>
+            )}
 
             {companies.length > 0 && (
                 <div className="company-scroll-status" data-testid="scroll-sentinel" ref={sentinelRef}>

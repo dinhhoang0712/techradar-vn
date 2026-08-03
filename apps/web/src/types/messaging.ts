@@ -10,6 +10,25 @@ export interface Conversation {
     unread_count: number;
 }
 
+export interface MessageAttachment {
+    content_type: string;
+    filename: string;
+    size: number;
+    url: string;
+}
+
+export interface MessageReaction {
+    emoji: string;
+    count: number;
+    reacted_by_me: boolean;
+}
+
+export interface AttachmentInput {
+    content_type: string;
+    filename: string;
+    data_base64: string;
+}
+
 export interface DirectMessage {
     id: string;
     conversation_id: string;
@@ -17,7 +36,13 @@ export interface DirectMessage {
     content: string;
     created_at?: string;
     read?: boolean;
+    attachment?: MessageAttachment | null;
+    reactions?: MessageReaction[];
 }
+
+export type MessageLiveEvent =
+    | { type: 'NEW_MESSAGE'; message: DirectMessage }
+    | { type: 'REACTIONS_CHANGED'; conversation_id: string; message_id: string; reactions: MessageReaction[] };
 
 export interface MessagingContextValue {
     currentUserId: string | null;
@@ -31,5 +56,7 @@ export interface MessagingContextValue {
     loadMessages: (conversationId: string, opts?: { force?: boolean }) => Promise<void>;
     selectConversation: (conversationId: string | null) => Promise<void>;
     openConversationWith: (userId: string) => Promise<string | undefined>;
-    send: (conversationId: string, content: string) => Promise<DirectMessage | undefined>;
+    send: (conversationId: string, content: string, attachment?: AttachmentInput) => Promise<DirectMessage | undefined>;
+    setReaction: (conversationId: string, messageId: string, emoji: string) => Promise<void>;
+    removeReaction: (conversationId: string, messageId: string) => Promise<void>;
 }

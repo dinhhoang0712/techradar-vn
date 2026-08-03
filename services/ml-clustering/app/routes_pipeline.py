@@ -1,5 +1,6 @@
 """
-Pipeline trigger endpoint — chạy toàn bộ 5 DVC stages trong background thread.
+Pipeline trigger endpoint — chạy 6 stage (extract, features, train, label, publish,
+writeback) trong background thread.
 
 POST /pipeline/trigger  → khởi động pipeline nếu chưa đang chạy
 GET  /pipeline/status   → trạng thái hiện tại (idle|running|success|failed)
@@ -11,6 +12,11 @@ Snapshot tag cho mỗi lần trigger qua API được SINH TỰ ĐỘNG (xem
 nên nếu không tự bump tag, lịch chạy tự động hàng tuần (APScheduler trong
 data-platform) sẽ luôn fail từ lần thứ 2 trở đi vì tag cố định trong
 params.yaml không đổi giữa các lần trigger.
+
+Sau TRAIN, pipeline kiểm tra model mới có được promote lên champion không (xem
+is_run_promoted_to_champion) — nếu không, label/publish/writeback bị bỏ qua và
+params.yaml được trả về tag cũ (xem _run_pipeline), tránh tốn LLM cost/ghi Neo4j/
+phá cache serving cho 1 model tệ hơn cái đang chạy. `force=true` bỏ qua gate này.
 """
 
 from __future__ import annotations
@@ -26,12 +32,11 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import redis
-from conf.config import DATA_DIR, MODULE_ROOT, load_params
+from conf.config import MODULE_ROOT, load_params
 from fastapi import APIRouter, Header, HTTPException
 from loguru import logger
 
 from app.schemas import PipelineRunSummary
-from app.store import _get_minio_settings, _make_minio_client, _minio_key
 
 router = APIRouter(prefix="/pipeline", tags=["pipeline"])
 
@@ -52,13 +57,28 @@ _state: dict = {
     "error": None,
     "current_stage": None,
     "snapshot_tag": None,  # tag mới được sinh cho lần trigger này (nếu có)
+    # True nếu model mới thực sự được label/publish/writeback (promoted lên champion hoặc
+    # force=true); False nếu train thành công nhưng KHÔNG tốt hơn champion hiện tại nên bị
+    # bỏ qua bước deploy (xem _run_pipeline) — vẫn "status": "success" vì bản thân việc train
+    # không lỗi, chỉ là không có gì mới để serve.
+    "deployed": None,
+    "note": None,
 }
 
-_STAGES = [
+# Chia 2 nhóm: _TRAIN_STAGES luôn chạy; _DEPLOY_STAGES (label/publish/writeback) chỉ chạy
+# nếu model mới được promote lên champion (xem is_run_promoted_to_champion) — tránh tốn
+# LLM cost (label) + ghi Neo4j (writeback) + phá cache serving (publish) cho 1 lần retrain
+# ra model TỆ HƠN champion hiện tại. publish đứng TRƯỚC writeback (không phải sau như cũ):
+# nếu publish lỗi (MinIO down, thiếu artifact...), Neo4j graph không bị đụng vào — tránh 2 hệ
+# thống (serving API vs graph) lệch nhau khi chỉ 1 trong 2 side-effect thành công.
+_TRAIN_STAGES = [
     "pipelines.stage_01_extract",
     "pipelines.stage_02_features",
     "pipelines.stage_03_train",
+]
+_DEPLOY_STAGES = [
     "pipelines.stage_04_label",
+    "pipelines.stage_06_publish",
     "pipelines.stage_05_writeback",
 ]
 
@@ -102,52 +122,6 @@ def _resolve_best_run_id(params) -> str:
     return runs[0].info.run_id
 
 
-# Cùng danh sách rel_path mà AppStore (app/store.py) đọc cho mỗi tag khi serving qua MinIO.
-# near_clusters.json optional với AppStore nên thiếu file cũng không chặn publish.
-_PUBLISH_REL_PATHS = [
-    "models/{tag}/best_labels.parquet",
-    "labels/{tag}/cluster_labels.json",
-    "raw/snapshot_{tag}/technologies.parquet",
-    "models/{tag}/near_clusters.json",
-]
-
-
-def _publish_to_minio(tag: str) -> None:
-    """
-    stage_05_writeback chỉ ghi artifact ra local disk (data/...) — khi AppStore đang chạy ở chế
-    độ MinIO (MLCLUSTER_MINIO_BUCKET được set) nó không bao giờ nhìn vào local disk, nên nếu
-    không upload thủ công lên đây thì lần retrain vừa xong sẽ "thành công" nhưng serving vẫn
-    báo data_available=false cho tag mới. Bỏ qua hoàn toàn khi không cấu hình MinIO (deployment
-    chỉ đọc local disk không cần bước này).
-    """
-    minio_settings = _get_minio_settings()
-    if minio_settings is None:
-        return
-
-    client = _make_minio_client(minio_settings)
-    bucket = minio_settings["bucket"]
-    prefix = minio_settings.get("prefix", "")
-
-    uploaded = 0
-    for rel_template in _PUBLISH_REL_PATHS:
-        rel_path = rel_template.format(tag=tag)
-        local_path = DATA_DIR / rel_path
-        if not local_path.exists():
-            logger.info("Publish MinIO: bỏ qua {} (không tồn tại — optional)", rel_path)
-            continue
-
-        key = _minio_key(prefix, rel_path)
-        try:
-            client.upload_file(str(local_path), bucket, key)
-            uploaded += 1
-            logger.info("Publish MinIO: {} -> s3://{}/{}", rel_path, bucket, key)
-        except Exception as exc:
-            raise RuntimeError(f"Upload {rel_path} lên s3://{bucket}/{key} thất bại: {exc}") from exc
-
-    if uploaded == 0:
-        raise RuntimeError(f"Không có artifact nào cho tag={tag} để publish lên MinIO")
-
-
 def _bump_snapshot_tag(new_tag: str, params_path: Path = _PARAMS_PATH_OBJ) -> str:
     """
     Ghi đè `snapshot.tag` trong params.yaml tại chỗ (giữ nguyên comment/format
@@ -181,7 +155,14 @@ def _publish_completion() -> None:
         logger.warning("Could not publish clustering completion to Redis: {}", e)
 
 
-def _run_pipeline() -> None:
+def _run_stage(stage: str, *, extra_args: list[str] | None = None) -> None:
+    cmd = [sys.executable, "-m", stage, "--params", _PARAMS_PATH, *(extra_args or [])]
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(MODULE_ROOT))
+    if result.returncode != 0:
+        raise RuntimeError(f"Stage {stage} failed (exit {result.returncode}):\n{result.stderr[-1000:]}")
+
+
+def _run_pipeline(force: bool = False) -> None:
     t0 = datetime.now(tz=UTC)
     with _LOCK:
         _state["status"] = "running"
@@ -190,8 +171,10 @@ def _run_pipeline() -> None:
         _state["error"] = None
         _state["duration_s"] = None
         _state["snapshot_tag"] = None
+        _state["deployed"] = None
+        _state["note"] = None
 
-    logger.info("Pipeline retraining started")
+    logger.info("Pipeline retraining started (force={})", force)
 
     new_tag = _generate_snapshot_tag()
     try:
@@ -211,42 +194,59 @@ def _run_pipeline() -> None:
         return
 
     try:
-        for stage in _STAGES:
+        for stage in _TRAIN_STAGES:
+            with _LOCK:
+                _state["current_stage"] = stage
+            logger.info("Running stage: {}", stage)
+            # Lá chắn phòng hờ: tag vừa bump đã unique theo phút, nhưng nếu vẫn trùng (VD 2 lần
+            # trigger cùng phút) thì ghi đè thay vì crash toàn bộ retrain.
+            extra = ["--force"] if stage == _TRAIN_STAGES[0] else None
+            _run_stage(stage, extra_args=extra)
+
+        from src.tracking.mlflow_logger import is_run_promoted_to_champion
+
+        params_obj = load_params()
+        best_run_id = _resolve_best_run_id(params_obj)
+        promoted = force or is_run_promoted_to_champion(best_run_id, params_obj.mlflow.tracking_uri)
+
+        if not promoted:
+            # Model mới KHÔNG tốt hơn champion hiện tại (xem register_best_model ở
+            # stage_03_train) — bỏ qua label/publish/writeback để không tốn LLM cost, không
+            # ghi Neo4j, không phá cache serving cho 1 model tệ hơn cái đang chạy. params.yaml
+            # đã bị bump sang new_tag ở trên — PHẢI trả lại old_tag, nếu không lần restart/
+            # reset_store() kế tiếp sẽ cố load new_tag (thiếu label/writeback → data_available=false).
+            _bump_snapshot_tag(old_tag)
+            logger.info("Model không được promote — trả params.yaml về tag cũ: {}", old_tag)
+            note = f"Model mới (tag={new_tag}) không tốt hơn champion hiện tại — bỏ qua deploy, vẫn phục vụ {old_tag}."
+            finished = datetime.now(tz=UTC)
+            with _LOCK:
+                _state["status"] = "success"
+                _state["finished_at"] = finished.isoformat()
+                _state["current_stage"] = None
+                _state["duration_s"] = round((finished - t0).total_seconds())
+                _state["deployed"] = False
+                _state["note"] = note
+            logger.info(note)
+            _publish_completion()
+            return
+
+        for stage in _DEPLOY_STAGES:
             with _LOCK:
                 _state["current_stage"] = stage
             logger.info("Running stage: {}", stage)
 
-            cmd = [sys.executable, "-m", stage, "--params", _PARAMS_PATH]
-            if stage == _STAGES[0]:
-                # Lá chắn phòng hờ: tag vừa bump đã unique theo phút, nhưng
-                # nếu vẫn trùng (VD 2 lần trigger cùng phút) thì ghi đè thay
-                # vì crash toàn bộ retrain.
-                cmd.append("--force")
-            elif stage == _STAGES[4]:
-                # stage_05_writeback đọc near_clusters.json từ artifact của run MLflow "best"
-                # mà stage_03_train (2 stage trước) vừa log — --run-id là tham số bắt buộc, không
-                # có default, nên phải tự resolve rồi truyền vào đây.
-                cmd += ["--run-id", _resolve_best_run_id(load_params())]
+            if stage == "pipelines.stage_06_publish":
+                _run_stage(stage, extra_args=["--run-id", best_run_id])
+            elif stage == "pipelines.stage_05_writeback":
                 # CLI mặc định --dry-run (an toàn cho chạy tay), nhưng qua HTTP trigger thì phải
                 # ghi thật — thiếu cờ này khiến stage luôn no-op (chỉ in preview, exit 0) dù
                 # writeback.enabled=true, nên Neo4j không bao giờ có :Cluster/:BELONGS_TO thật.
-                cmd.append("--no-dry-run")
+                _run_stage(stage, extra_args=["--run-id", best_run_id, "--no-dry-run"])
+            else:
+                _run_stage(stage)
 
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                cwd=str(MODULE_ROOT),
-            )
-            if result.returncode != 0:
-                raise RuntimeError(f"Stage {stage} failed (exit {result.returncode}):\n{result.stderr[-1000:]}")
-
-        # stage_05_writeback only wrote to local disk — push it to MinIO too when AppStore is
-        # configured to serve from there, otherwise this retrain "succeeds" but data_available
-        # stays false for the new tag.
-        _publish_to_minio(new_tag)
-
-        # Reload store so serving immediately picks up new artifacts
+        # Reload store so serving immediately picks up new artifacts (no-op nếu MinIO không
+        # cấu hình — reset_store() đọc lại từ local disk, nơi stage_04/05 đã ghi trực tiếp).
         from app.store import get_store, reset_store
 
         reset_store()
@@ -258,6 +258,7 @@ def _run_pipeline() -> None:
             _state["finished_at"] = finished.isoformat()
             _state["current_stage"] = None
             _state["duration_s"] = round((finished - t0).total_seconds())
+            _state["deployed"] = True
         logger.info("Pipeline retraining completed in {}s", _state["duration_s"])
         _publish_completion()
 
@@ -269,6 +270,7 @@ def _run_pipeline() -> None:
             _state["current_stage"] = None
             _state["error"] = str(exc)[:500]
             _state["duration_s"] = round((finished - t0).total_seconds())
+            _state["deployed"] = False
         logger.exception("Pipeline retraining FAILED")
         _publish_completion()
 
@@ -277,11 +279,17 @@ def _run_pipeline() -> None:
 
 
 @router.post("/trigger")
-def trigger_pipeline(x_internal_auth: str | None = Header(default=None, alias="X-Internal-Auth")):
+def trigger_pipeline(
+    force: bool = False,
+    x_internal_auth: str | None = Header(default=None, alias="X-Internal-Auth"),
+):
     """
-    Khởi động pipeline retrain (5 stages) trong background thread.
+    Khởi động pipeline retrain (6 stages) trong background thread.
     Trả về ngay lập tức — dùng GET /pipeline/status để theo dõi.
     Bị từ chối nếu pipeline đang chạy.
+
+    `force=true` bỏ qua champion gate — label/publish/writeback dù model mới không tốt hơn
+    champion hiện tại (vd muốn deploy để so sánh qualitative dù metric thấp hơn 1 chút).
     """
     import os
 
@@ -296,7 +304,7 @@ def trigger_pipeline(x_internal_auth: str | None = Header(default=None, alias="X
                 detail=f"Pipeline đang chạy (stage: {_state['current_stage']}). Thử lại sau.",
             )
 
-    thread = threading.Thread(target=_run_pipeline, daemon=True, name="pipeline-retrain")
+    thread = threading.Thread(target=_run_pipeline, kwargs={"force": force}, daemon=True, name="pipeline-retrain")
     thread.start()
     return {"status": "started", "message": "Pipeline retraining started in background"}
 

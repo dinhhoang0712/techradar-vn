@@ -141,7 +141,7 @@ export default function AdminClusters() {
         if (!detail) return;
         const fields: UpdateClusterLabelFields = {};
         if (form.label.trim() && form.label !== detail.label) fields.label = form.label.trim();
-        if (form.labelEn.trim() && form.labelEn !== detail.label_en) fields.labelEn = form.labelEn.trim();
+        if (form.labelEn.trim() && form.labelEn !== detail.label_en) fields.label_en = form.labelEn.trim();
         if (form.description.trim() && form.description !== detail.description) fields.description = form.description.trim();
         if (form.domain.trim() && form.domain !== detail.domain) fields.domain = form.domain.trim();
 

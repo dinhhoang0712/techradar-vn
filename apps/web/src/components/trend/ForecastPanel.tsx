@@ -44,7 +44,7 @@ interface ForecastPanelProps {
 // và các tín hiệu (kèm trọng số) mà mô hình dùng để dự báo.
 export default function ForecastPanel({ tech, loading, forecast, onClose }: ForecastPanelProps) {
     return (
-        <div className="card forecast-panel" style={{ marginTop: 16 }}>
+        <div className="forecast-panel">
             <div className="forecast-header">
                 <h2 className="section-title">Dự báo xu hướng: <span style={{ color: 'var(--primary)' }}>{tech}</span></h2>
                 <button className="forecast-close-btn" onClick={onClose}>✕</button>

@@ -75,6 +75,42 @@ def test_retrain_clustering_polls_until_failed_and_logs_failed_with_error(
 @patch("common.db.get_pg_conn")
 @patch("scheduler.jobs.requests.get")
 @patch("scheduler.jobs.requests.post")
+def test_retrain_clustering_logs_note_when_champion_gate_skips_deploy(
+    mock_post,
+    mock_get,
+    mock_get_pg_conn,
+    mock_log_run,
+    mock_sleep,
+):
+    """status vẫn 'success' (train không lỗi) nhưng model mới không thắng champion nên
+    ml-clustering bỏ qua LABEL/PUBLISH/WRITEBACK (deployed=false, note giải thích lý do) — job
+    phải lưu note đó vào dp_pipeline_runs.error_msg, không thì admin không phân biệt được với
+    1 lần retrain deploy bình thường."""
+    mock_get_pg_conn.return_value = _fake_pg_conn()
+    mock_log_run.side_effect = [1, None]
+    mock_post.return_value = MagicMock(status_code=200, json=lambda: {"message": "started"})
+    mock_post.return_value.raise_for_status = lambda: None
+    mock_get.return_value = MagicMock(
+        json=lambda: {
+            "status": "success",
+            "duration_s": 42,
+            "deployed": False,
+            "note": "Model mới (tag=2026-07-27-1200) không tốt hơn champion hiện tại — bỏ qua deploy",
+        }
+    )
+
+    job_retrain_clustering(_settings())
+
+    final_call = mock_log_run.call_args_list[-1]
+    assert final_call.args[2] == "success"
+    assert "không tốt hơn champion" in final_call.kwargs["error_msg"]
+
+
+@patch("scheduler.jobs.time.sleep")
+@patch("common.db.log_pipeline_run")
+@patch("common.db.get_pg_conn")
+@patch("scheduler.jobs.requests.get")
+@patch("scheduler.jobs.requests.post")
 def test_retrain_clustering_times_out_when_status_never_settles(
     mock_post,
     mock_get,

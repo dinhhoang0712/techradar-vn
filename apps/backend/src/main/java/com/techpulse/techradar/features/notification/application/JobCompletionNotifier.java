@@ -7,6 +7,7 @@ import com.techpulse.techradar.features.notification.domain.Notification;
 import com.techpulse.techradar.features.notification.event.ClusteringCompletedEvent;
 import com.techpulse.techradar.features.notification.event.CrawlerCompletedEvent;
 import com.techpulse.techradar.features.notification.event.JobCompletedEvent;
+import com.techpulse.techradar.features.system.application.CmsService;
 import com.techpulse.techradar.features.system.application.DataPlatformJobStatusService;
 import com.techpulse.techradar.shared.redis.RedisFanout;
 import jakarta.annotation.PostConstruct;
@@ -15,6 +16,7 @@ import org.springframework.data.redis.listener.ReactiveRedisMessageListenerConta
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -44,6 +46,7 @@ public class JobCompletionNotifier {
     private final NotificationService notificationService;
     private final DataPlatformJobStatusService dataPlatformJobStatusService;
     private final EmailSender emailSender;
+    private final CmsService cmsService;
 
     @PostConstruct
     void subscribe() {
@@ -86,6 +89,16 @@ public class JobCompletionNotifier {
     void onCrawlerCompleted(CrawlerCompletedEvent event) {
         String title = "Crawler đã hoàn tất: " + event.getSuccessCount() + "/" + event.getTotal() + " nguồn thành công";
         notifyAllAdmins("ADMIN_CRAWL_DONE", title, null, false);
+
+        // Cho trang CMS (apps/web/src/pages/admin/AdminCMS.tsx) 1 bản ghi thật cho mỗi lần crawl —
+        // trước đây "type=Job" ở đó chỉ toàn seed data tĩnh, không phản ánh crawler thật chạy.
+        // "Job" là loại gần đúng nhất trong 3 loại hiện có (Report/Job/Keyword) cho nội dung do
+        // crawler tạo ra; trạng thái "Published" khi mọi nguồn thành công, "Analyzed" khi có
+        // nguồn lỗi (cần admin xem lại trước khi coi là dữ liệu tin cậy).
+        boolean allSucceeded = event.getSuccessCount() != null && event.getSuccessCount().equals(event.getTotal());
+        cmsService.create(title, "Job", LocalDate.now(), allSucceeded ? "Published" : "Analyzed")
+                .onErrorResume(e -> Mono.empty())
+                .subscribe();
     }
 
     void onClusteringCompleted(ClusteringCompletedEvent event) {

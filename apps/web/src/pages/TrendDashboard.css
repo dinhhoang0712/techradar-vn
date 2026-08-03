@@ -428,10 +428,6 @@
     background: var(--primary-glow);
 }
 
-.forecast-panel {
-    padding: 20px 24px;
-}
-
 .forecast-header {
     display: flex;
     align-items: center;

@@ -475,9 +475,11 @@ ml-clustering/
 > `python -m scripts.export_tech_alias_seed` để cập nhật khi `dp_tech_alias_map` có alias mới
 > đáng kể (không tự động, không có Postgres runtime dependency trong service này).
 
-### 3.2 Pipeline 5 Stages
+### 3.2 Pipeline 6 Stages
 
-Pipeline HDBSCAN chạy tuần tự qua 5 stages:
+Pipeline HDBSCAN chạy tuần tự qua 6 stages. Sau TRAIN, pipeline kiểm tra model mới có được
+promote lên champion không (§ Champion/Challenger gate bên dưới) — nếu không, LABEL/PUBLISH/
+WRITEBACK bị bỏ qua toàn bộ (không tốn LLM cost, không ghi Neo4j, không đổi artifact đang serve):
 
 ```
 Neo4j (self-hosted, docker-compose)
@@ -503,7 +505,7 @@ Stage 3 — TRAIN
   MLflow log trials
   Register model — chỉ promote "champion" nếu thắng champion cũ
      │
-     ▼
+     ▼  (bỏ qua nếu KHÔNG promote — xem ghi chú champion gate)
 Stage 4 — LABEL
   GPT-4o-mini sinh cluster labels
   - label (tiếng Việt)
@@ -512,9 +514,26 @@ Stage 4 — LABEL
   - is_coherent
      │
      ▼
+Stage 6 — PUBLISH
+  Upload artifact (best_labels.parquet, cluster_labels.json, technologies.parquet)
+  lên MinIO, verify (head_object) rồi mới cập nhật manifest latest.json —
+  chỉ khi mọi artifact bắt buộc đã verify xong mới flip manifest (không bao giờ
+  để serving thấy 1 tag publish nửa vời). No-op nếu MinIO không cấu hình.
+     │
+     ▼
 Stage 5 — WRITEBACK
-  Ghi kết quả về Neo4j (optional)
+  Ghi kết quả về Neo4j (optional) — đứng SAU publish (không phải trước như cũ):
+  nếu publish lỗi, Neo4j không bị đụng, tránh graph và serving API lệch tag nhau.
 ```
+
+> **Publish / Artifact Deployment (Stage 6 — `pipelines/stage_06_publish.py`)**: trước đây bước
+> đẩy artifact lên MinIO chỉ là 1 hàm phụ chạy SAU writeback và không bao giờ ghi `latest.json`
+> — nghĩa là chế độ `MLCLUSTER_SNAPSHOT_TAG=latest` (đọc bởi `app/store.py` để hỗ trợ reload
+> theo TTL / nhiều replica) là cấu hình chết, chưa từng hoạt động. Stage 6 khắc phục bằng cách:
+> upload artifact → `head_object` verify từng file đúng kích thước → CHỈ SAU ĐÓ mới ghi đè
+> `latest.json` (kèm `previous_tag` để audit/rollback thủ công). Nếu 1 upload thiếu/lỗi,
+> `latest.json` giữ nguyên tag cũ — serving không bao giờ thấy 1 lần publish dở dang, tránh
+> đúng lỗi 503 mô tả ở đầu tài liệu này (model mới train xong nhưng chưa lên MinIO đầy đủ).
 
 > **Alias normalization (Stage 2)** dùng `src/features/tech_aliases.py` §3.1 ở trên — merge trùng
 > lặp ngay trên snapshot Parquet của lần train đó, không đụng Neo4j sống. Tự nó không còn hoàn
@@ -533,6 +552,15 @@ Stage 5 — WRITEBACK
 > Model mới thua → **giữ nguyên** champion cũ, model mới vẫn nằm trong Registry nhưng không
 > được serve. Trước đây gán `champion` vô điều kiện — 1 lần retrain ra kết quả tệ hơn (data
 > xấu, hyperparameter kém...) sẽ âm thầm ghi đè model tốt hơn đang chạy.
+>
+> Quyết định này (tag `promoted_to_champion` trên parent MLflow run, đọc qua
+> `is_run_promoted_to_champion` trong `src/tracking/mlflow_logger.py`) trước đây CHỈ ảnh hưởng
+> alias trong Model Registry — LABEL/PUBLISH/WRITEBACK vẫn chạy full cho mọi lần train dù thua
+> champion, nên 1 retrain tệ hơn vẫn tốn LLM cost + ghi Neo4j + phát đi artifact publish (dù
+> AppStore cuối cùng vẫn serve champion cũ vì MLflow registry không đổi). Từ khi có Stage 6,
+> `app/routes_pipeline.py` đọc tag này ngay sau TRAIN và bỏ qua hẳn LABEL/PUBLISH/WRITEBACK nếu
+> không promote (trả `params.yaml` về tag cũ) — `POST /pipeline/trigger?force=true` bỏ qua gate
+> này nếu thật sự muốn deploy 1 model thua champion (vd so sánh qualitative).
 
 ### 3.3 API Endpoints
 
@@ -599,7 +627,8 @@ Query params: `?is_coherent=true` để lọc chỉ cluster coherent.
 
 **POST /pipeline/trigger**
 
-Khởi động pipeline retrain trong background thread. Trả về ngay lập tức.
+Khởi động pipeline retrain trong background thread. Trả về ngay lập tức. `?force=true` bỏ
+qua champion gate — chạy LABEL/PUBLISH/WRITEBACK dù model mới không thắng champion hiện tại.
 
 ```bash
 curl -X POST http://localhost:8001/pipeline/trigger \
@@ -612,9 +641,15 @@ curl -X POST http://localhost:8001/pipeline/trigger \
   "status": "running",
   "started_at": "2025-01-15T06:00:00+00:00",
   "current_stage": "pipelines.stage_03_train",
-  "error": null
+  "error": null,
+  "deployed": null,
+  "note": null
 }
 ```
+
+`deployed` chỉ có giá trị (`true`/`false`) khi `status` là `success`/`failed`: `false` nghĩa là
+train xong nhưng model không thắng champion nên LABEL/PUBLISH/WRITEBACK bị bỏ qua (`note` giải
+thích lý do, `status` vẫn `success` vì bản thân train không lỗi) — vẫn phục vụ tag cũ.
 
 **Lịch tự động**: Chủ nhật 06:00 Asia/Ho_Chi_Minh (APScheduler trong data-platform). `job_retrain_clustering` không chỉ fire-and-forget: sau khi trigger, nó **poll `/pipeline/status` định kỳ** cho tới khi pipeline xong (hoặc timeout) rồi ghi kết quả thật vào `dp_pipeline_runs` — xem [`DATA_PLATFORM.md` — Clustering Retrain](./DATA_PLATFORM.md#clustering-retrain).
 

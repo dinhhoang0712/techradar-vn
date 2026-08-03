@@ -9,7 +9,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements-deploy.txt .
+COPY services/ai-rag-core/requirements-deploy.txt .
+
+# llm-gateway (services/llm-gateway/) — package dùng chung, cài kiểu editable qua
+# "-e ../llm-gateway[all]" trong requirements-deploy.txt, resolve tương đối theo WORKDIR (/app)
+# nên phải nằm đúng ở /llm-gateway. Build context là repo root (xem docker-compose.yml) để
+# COPY được đường dẫn này.
+COPY services/llm-gateway /llm-gateway
 
 # Cài torch bản CPU-only TRƯỚC (mặc định pip sẽ kéo bản GPU/CUDA nặng hơn nhiều lần dù stack
 # này chỉ chạy CPU — không có cấu hình GPU nào trong docker-compose.yml). Cùng pattern đã dùng
@@ -61,7 +67,10 @@ ENV HOME=/root
 
 COPY --from=builder --chown=appuser:appuser /root/.local /root/.local
 COPY --from=builder --chown=appuser:appuser /root/.cache /root/.cache
-COPY --chown=appuser:appuser . .
+# llm-gateway was pip-installed --editable, so /root/.local only holds a path reference — the
+# actual source must be copied into the runtime stage too, at the same /llm-gateway path.
+COPY --from=builder --chown=appuser:appuser /llm-gateway /llm-gateway
+COPY --chown=appuser:appuser services/ai-rag-core/ .
 
 EXPOSE 8000
 

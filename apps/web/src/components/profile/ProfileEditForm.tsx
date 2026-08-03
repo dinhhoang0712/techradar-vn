@@ -1,4 +1,5 @@
 import type { Dispatch, SetStateAction, FormEvent } from 'react';
+import PasswordInput from '../common/PasswordInput';
 
 export interface ProfileFormState {
     full_name: string;
@@ -88,9 +89,8 @@ export default function ProfileEditForm({ form, setForm, saving, onSubmit, onCan
 
             <div className="form-group">
                 <label htmlFor="password" className="form-label">Mật khẩu mới (Để trống nếu không đổi)</label>
-                <input
+                <PasswordInput
                     id="password"
-                    type="password"
                     className="form-input"
                     value={form.password || ''}
                     onChange={(e) => setForm(prev => ({ ...prev, password: e.target.value }))}

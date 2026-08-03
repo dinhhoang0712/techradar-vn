@@ -15,13 +15,24 @@ pydantic==2.8.2
 pydantic-settings==2.4.0
 python-dotenv==1.0.1
 
-# LangChain + LLM providers
+# LangChain — chỉ còn dùng cho app/agent/executor.py (tool-calling agent cần LLM object
+# kiểu LangChain). Đường generate()/generate_stream() chính (chat, RAG, các service khác)
+# đã chuyển sang llm-gateway ở dưới.
 langchain==0.2.16
 langchain-core==0.2.43
 langchain-google-genai==1.0.10
 google-generativeai==0.7.2
 langchain-openai==0.1.25
 langchain-groq==0.1.9
+
+# LLM Gateway — package dùng chung nhiều service (xem services/llm-gateway/): fallback
+# giữa provider, rate limit theo token, tính cost. Cài kiểu editable từ path local trong
+# repo — cùng dạng monorepo, không phải package publish lên PyPI.
+# LƯU Ý: dòng -e path-tương-đối này hoạt động khi cài trực tiếp vào venv (pip install -r
+# requirements.txt từ thư mục services/ai-rag-core/). Dockerfile hiện tại build context chỉ
+# scope tới services/ai-rag-core/ nên KHÔNG thấy được services/llm-gateway/ — cần sửa build
+# context + Dockerfile riêng trước khi build lại image Docker (chưa làm ở đây).
+-e ../llm-gateway[all]
 
 # Evaluation (RAGAS)
 datasets==2.20.0

@@ -2,56 +2,136 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.core.generator import generate  # type: ignore # noqa
-from app.core.generator_stream import generate_stream  # type: ignore # noqa
+from app.config import get_settings
+from app.core.generator import _build_provider, generate, get_gateway
+from app.core.generator_stream import generate_stream
+from llm_gateway.exceptions import AllProvidersFailedError
+from llm_gateway.types import LLMResponse, TokenUsage
+
+
+@pytest.fixture(autouse=True)
+def _clear_caches():
+    """get_settings() và get_gateway() đều @lru_cache — phải xoá giữa các test để 1 test
+    đổi env var không lọt sang test khác."""
+    get_settings.cache_clear()
+    get_gateway.cache_clear()
+    yield
+    get_settings.cache_clear()
+    get_gateway.cache_clear()
 
 
 @pytest.mark.asyncio
-async def test_generate_success(monkeypatch):
-    """Kiểm tra gọi Gemini thành công."""
-    mock_llm = MagicMock()
-    mock_llm.ainvoke = AsyncMock(return_value=MagicMock(content="OK"))
-    monkeypatch.setattr("app.core.generator.get_llm", lambda: mock_llm)
-    assert await generate([{"role": "user", "content": "Hi"}]) == "OK"
+async def test_generate_returns_text_from_gateway(monkeypatch):
+    fake_gateway = MagicMock()
+    fake_gateway.chat = AsyncMock(
+        return_value=LLMResponse(text="OK", usage=TokenUsage(1, 1), provider="openai", model="gpt-4o-mini")
+    )
+    monkeypatch.setattr("app.core.generator.get_gateway", lambda: fake_gateway)
+
+    result = await generate([{"role": "user", "content": "Hi"}])
+
+    assert result == "OK"
 
 
 @pytest.mark.asyncio
-async def test_generate_retry_then_success(monkeypatch):
-    """Kiểm tra logic retry khi gặp lỗi 503 rồi thành công."""
-    mock_llm = MagicMock()
-    mock_llm.ainvoke = AsyncMock(side_effect=[Exception("503 Service Unavailable"), MagicMock(content="Fixed")])
-    monkeypatch.setattr("app.core.generator.get_llm", lambda: mock_llm)
-    monkeypatch.setattr("app.core.generator._RETRY_DELAY", 0.01)
-    assert await generate([{"role": "user", "content": "Hi"}]) == "Fixed"
+async def test_generate_raises_runtime_error_when_all_providers_fail(monkeypatch):
+    fake_gateway = MagicMock()
+    fake_gateway.chat = AsyncMock(side_effect=AllProvidersFailedError([]))
+    monkeypatch.setattr("app.core.generator.get_gateway", lambda: fake_gateway)
 
-
-@pytest.mark.asyncio
-async def test_generate_max_retries_reached(monkeypatch):
-    """Kiểm tra khi retry hết số lần vẫn lỗi -> raise RuntimeError."""
-    mock_llm = MagicMock()
-    mock_llm.ainvoke = AsyncMock(side_effect=Exception("503 Server Busy"))
-    monkeypatch.setattr("app.core.generator.get_llm", lambda: mock_llm)
-    monkeypatch.setattr("app.core.generator._RETRY_DELAY", 0.01)
-
-    with pytest.raises(RuntimeError) as exc:
+    with pytest.raises(RuntimeError, match="LLM lỗi"):
         await generate([{"role": "user", "content": "Hi"}])
-    assert "lỗi:" in str(exc.value)
-    assert "503 Server Busy" in str(exc.value)
 
 
 @pytest.mark.asyncio
-async def test_generate_stream_success(monkeypatch):
-    """Kiểm tra stream thành công từ Gemini."""
-    mock_llm = MagicMock()
+async def test_generate_stream_yields_chunks_from_gateway(monkeypatch):
+    fake_gateway = MagicMock()
 
-    async def mock_astream(messages):
-        yield MagicMock(content="A")
-        yield MagicMock(content="B")
+    async def fake_chat_stream(messages):
+        yield "A"
+        yield "B"
 
-    mock_llm.astream = mock_astream
-    monkeypatch.setattr("app.core.generator_stream.get_llm", lambda: mock_llm)
+    fake_gateway.chat_stream = fake_chat_stream
+    # generator_stream.py làm "from app.core.generator import get_gateway" -> patch phải nhắm
+    # đúng namespace app.core.generator_stream (nơi generate_stream() thực sự gọi get_gateway()
+    # đã import vào), patch app.core.generator.get_gateway KHÔNG có tác dụng ở đây.
+    monkeypatch.setattr("app.core.generator_stream.get_gateway", lambda: fake_gateway)
 
-    chunks = []
-    async for chunk in generate_stream([{"role": "user", "content": "Hi"}]):
-        chunks.append(chunk)
+    chunks = [c async for c in generate_stream([{"role": "user", "content": "Hi"}])]
+
     assert chunks == ["A", "B"]
+
+
+@pytest.mark.asyncio
+async def test_generate_stream_raises_runtime_error_when_all_providers_fail(monkeypatch):
+    fake_gateway = MagicMock()
+
+    async def fake_chat_stream(messages):
+        raise AllProvidersFailedError([])
+        yield  # không bao giờ chạy tới — chỉ để hàm là async generator hợp lệ
+
+    fake_gateway.chat_stream = fake_chat_stream
+    monkeypatch.setattr("app.core.generator_stream.get_gateway", lambda: fake_gateway)
+
+    with pytest.raises(RuntimeError, match="LLM lỗi"):
+        async for _ in generate_stream([{"role": "user", "content": "Hi"}]):
+            pass
+
+
+def test_build_provider_returns_none_without_api_key(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "")
+    get_settings.cache_clear()
+
+    assert _build_provider("openai", get_settings()) is None
+
+
+def test_build_provider_uses_llm_model_for_primary_provider(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "groq")
+    monkeypatch.setenv("GROQ_API_KEY", "fake-key")
+    monkeypatch.setenv("LLM_MODEL", "llama-custom")
+    get_settings.cache_clear()
+
+    provider = _build_provider("groq", get_settings())
+
+    assert provider is not None
+    assert provider.model == "llama-custom"  # provider CHÍNH dùng llm_model, giữ đúng hành vi cũ
+
+
+def test_build_provider_uses_fallback_model_for_non_primary_provider(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("GROQ_API_KEY", "fake-key")
+    get_settings.cache_clear()
+    settings = get_settings()
+
+    provider = _build_provider("groq", settings)
+
+    assert provider is not None
+    assert provider.model == settings.groq_model  # groq không phải provider chính -> dùng groq_model riêng
+
+
+def test_get_gateway_builds_fallback_chain_only_from_providers_with_api_key(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "fake-openai")
+    monkeypatch.setenv("GROQ_API_KEY", "fake-groq")
+    monkeypatch.setenv("GEMINI_API_KEY", "")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+    get_settings.cache_clear()
+    get_gateway.cache_clear()
+
+    gateway = get_gateway()
+
+    assert [p.name for p in gateway.providers] == ["openai", "groq"]
+
+
+def test_get_gateway_puts_primary_provider_first(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "groq")
+    monkeypatch.setenv("OPENAI_API_KEY", "fake-openai")
+    monkeypatch.setenv("GROQ_API_KEY", "fake-groq")
+    monkeypatch.setenv("GEMINI_API_KEY", "")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+    get_settings.cache_clear()
+    get_gateway.cache_clear()
+
+    gateway = get_gateway()
+
+    assert [p.name for p in gateway.providers] == ["groq", "openai"]

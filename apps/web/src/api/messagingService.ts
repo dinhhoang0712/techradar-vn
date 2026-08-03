@@ -1,6 +1,6 @@
 import { apiClient } from '../utils/apiClient';
 import type { ApiResponse } from '../types/api';
-import type { Conversation, DirectMessage } from '../types/messaging';
+import type { AttachmentInput, Conversation, DirectMessage, MessageLiveEvent, MessageReaction } from '../types/messaging';
 
 const API_BASE_URL = '/api/v1';
 
@@ -31,13 +31,17 @@ export const getMessages = async (conversationId: string, page = 0, size = 30): 
 };
 
 /**
- * Gửi tin nhắn vào một cuộc trò chuyện.
+ * Gửi tin nhắn vào một cuộc trò chuyện, có thể kèm 1 ảnh/file đính kèm.
  * Endpoint: POST /conversations/{id}/messages
  */
-export const sendMessage = async (conversationId: string, content: string): Promise<ApiResponse<DirectMessage>> => {
+export const sendMessage = async (
+    conversationId: string,
+    content: string,
+    attachment?: AttachmentInput,
+): Promise<ApiResponse<DirectMessage>> => {
     return await apiClient(`/conversations/${encodeURIComponent(conversationId)}/messages`, {
         method: 'POST',
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, attachment: attachment ?? null }),
     });
 };
 
@@ -50,11 +54,41 @@ export const markConversationRead = async (conversationId: string): Promise<unkn
 };
 
 /**
- * Stream SSE tin nhắn đến trong thời gian thực, gộp mọi cuộc trò chuyện của người dùng.
+ * Đặt (hoặc thay) reaction của mình trên 1 tin nhắn.
+ * Endpoint: POST /conversations/{conversationId}/messages/{messageId}/reactions
+ */
+export const setMessageReaction = async (
+    conversationId: string,
+    messageId: string,
+    emoji: string,
+): Promise<ApiResponse<MessageReaction[]>> => {
+    return await apiClient(
+        `/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/reactions`,
+        { method: 'POST', body: JSON.stringify({ emoji }) },
+    );
+};
+
+/**
+ * Bỏ reaction của mình trên 1 tin nhắn.
+ * Endpoint: DELETE /conversations/{conversationId}/messages/{messageId}/reactions
+ */
+export const removeMessageReaction = async (
+    conversationId: string,
+    messageId: string,
+): Promise<ApiResponse<MessageReaction[]>> => {
+    return await apiClient(
+        `/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/reactions`,
+        { method: 'DELETE' },
+    );
+};
+
+/**
+ * Stream SSE các sự kiện nhắn tin thời gian thực, gộp mọi cuộc trò chuyện của người dùng — mỗi
+ * event là 1 MessageLiveEvent (`type: 'NEW_MESSAGE' | 'REACTIONS_CHANGED'`).
  * EventSource gốc không gắn được header Authorization nên phải dùng fetch + ReadableStream
  * (giống hệt cách apps/web/src/api/notificationService.ts#streamNotifications xử lý).
  *
- *   onMessage(m)  — callback mỗi khi có DirectMessageResponse mới
+ *   onEvent(e)    — callback mỗi khi có MessageLiveEvent mới
  *   onError(err)  — callback khi stream lỗi hẳn (bỏ qua AbortError, và các lần mất kết nối
  *                   tạm thời tự reconnect được — xem RECONNECT_DELAY_MS)
  * Trả về AbortController; gọi .abort() khi unmount để đóng stream.
@@ -62,7 +96,7 @@ export const markConversationRead = async (conversationId: string): Promise<unkn
 const RECONNECT_DELAY_MS = 3000;
 
 export const streamConversations = (
-    onMessage: (message: DirectMessage) => void,
+    onEvent: (event: MessageLiveEvent) => void,
     onError?: (err: Error) => void,
 ): AbortController => {
     const controller = new AbortController();
@@ -105,7 +139,7 @@ export const streamConversations = (
                         if (line.startsWith('data:')) {
                             const raw = line.slice(5).trimStart();
                             try {
-                                onMessage(JSON.parse(raw));
+                                onEvent(JSON.parse(raw));
                             } catch {
                                 /* dòng data không phải JSON — bỏ qua */
                             }

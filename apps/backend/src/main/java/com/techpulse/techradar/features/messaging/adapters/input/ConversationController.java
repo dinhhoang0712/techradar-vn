@@ -1,10 +1,13 @@
 package com.techpulse.techradar.features.messaging.adapters.input;
 
 import com.techpulse.techradar.features.messaging.application.GetConversationsUseCase;
+import com.techpulse.techradar.features.messaging.application.GetMessageAttachmentUseCase;
 import com.techpulse.techradar.features.messaging.application.GetMessagesUseCase;
 import com.techpulse.techradar.features.messaging.application.GetOrCreateConversationUseCase;
 import com.techpulse.techradar.features.messaging.application.MarkReadUseCase;
+import com.techpulse.techradar.features.messaging.application.RemoveMessageReactionUseCase;
 import com.techpulse.techradar.features.messaging.application.SendMessageUseCase;
+import com.techpulse.techradar.features.messaging.application.SetMessageReactionUseCase;
 import com.techpulse.techradar.features.messaging.realtime.MessageBroadcaster;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import com.techpulse.techradar.shared.security.SecurityUtils;
@@ -14,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.codec.ServerSentEvent;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -43,6 +47,9 @@ public class ConversationController {
     private final SendMessageUseCase sendMessageUseCase;
     private final MarkReadUseCase markReadUseCase;
     private final MessageBroadcaster messageBroadcaster;
+    private final SetMessageReactionUseCase setMessageReactionUseCase;
+    private final RemoveMessageReactionUseCase removeMessageReactionUseCase;
+    private final GetMessageAttachmentUseCase getMessageAttachmentUseCase;
 
     @Operation(summary = "List the current user's conversations, most recently active first")
     @GetMapping
@@ -79,16 +86,57 @@ public class ConversationController {
                 .map(list -> ResponseEntity.ok(ApiResponse.success(list, "Messages")));
     }
 
-    @Operation(summary = "Send a message in a conversation")
+    @Operation(summary = "Send a message in a conversation, optionally with a file/image attachment")
     @PostMapping("/{id}/messages")
     public Mono<ResponseEntity<ApiResponse<MessagingDtos.DirectMessageResponse>>> send(
             @PathVariable String id,
             @RequestBody MessagingDtos.SendMessageRequest request
     ) {
         return SecurityUtils.currentUserId()
-                .flatMap(senderId -> sendMessageUseCase.execute(id, senderId, request.getContent()))
+                .flatMap(senderId -> sendMessageUseCase.execute(id, senderId, request.getContent(), toAttachmentPayload(request.getAttachment())))
                 .map(MessagingDtos.DirectMessageResponse::from)
                 .map(message -> ResponseEntity.ok(ApiResponse.success(message, "Message sent")));
+    }
+
+    private static SendMessageUseCase.AttachmentPayload toAttachmentPayload(MessagingDtos.AttachmentInputDto dto) {
+        return dto == null ? null : new SendMessageUseCase.AttachmentPayload(dto.getContentType(), dto.getFilename(), dto.getDataBase64());
+    }
+
+    @Operation(summary = "Serve a message's file/image attachment (only the conversation's two participants can fetch it)")
+    @GetMapping("/{conversationId}/messages/{messageId}/attachment")
+    public Mono<ResponseEntity<byte[]>> attachment(@PathVariable String conversationId, @PathVariable String messageId) {
+        return SecurityUtils.currentUserId()
+                .flatMap(viewerId -> getMessageAttachmentUseCase.execute(conversationId, messageId, viewerId))
+                .map(att -> ResponseEntity.ok()
+                        .header("Content-Type", att.contentType())
+                        .header("Content-Disposition", "inline; filename=\"" + att.filename() + "\"")
+                        .header("X-Content-Type-Options", "nosniff")
+                        .body(att.data()));
+    }
+
+    @Operation(summary = "Set (or replace) the current user's reaction on a message")
+    @PostMapping("/{conversationId}/messages/{messageId}/reactions")
+    public Mono<ResponseEntity<ApiResponse<List<MessagingDtos.MessageReactionResponse>>>> setReaction(
+            @PathVariable String conversationId,
+            @PathVariable String messageId,
+            @RequestBody MessagingDtos.SetReactionRequest request
+    ) {
+        return SecurityUtils.currentUserId()
+                .flatMap(userId -> setMessageReactionUseCase.execute(conversationId, messageId, userId, request.getEmoji()))
+                .map(reactions -> ResponseEntity.ok(ApiResponse.success(
+                        reactions.stream().map(MessagingDtos.MessageReactionResponse::from).toList(), "Reaction set")));
+    }
+
+    @Operation(summary = "Remove the current user's reaction from a message")
+    @DeleteMapping("/{conversationId}/messages/{messageId}/reactions")
+    public Mono<ResponseEntity<ApiResponse<List<MessagingDtos.MessageReactionResponse>>>> removeReaction(
+            @PathVariable String conversationId,
+            @PathVariable String messageId
+    ) {
+        return SecurityUtils.currentUserId()
+                .flatMap(userId -> removeMessageReactionUseCase.execute(conversationId, messageId, userId))
+                .map(reactions -> ResponseEntity.ok(ApiResponse.success(
+                        reactions.stream().map(MessagingDtos.MessageReactionResponse::from).toList(), "Reaction removed")));
     }
 
     @Operation(summary = "Mark every message in a conversation from the other person as read")
@@ -100,15 +148,16 @@ public class ConversationController {
     }
 
     @Operation(
-            summary = "Live stream of incoming messages across all of the current user's conversations",
-            description = "One SSE connection covers every conversation; each event's data is a DirectMessageResponse. " +
-                          "Requires the same Bearer auth as any other endpoint (send it as a normal Authorization header, " +
-                          "e.g. via fetch + ReadableStream — the browser's native EventSource can't set custom headers)."
+            summary = "Live stream of messaging events across all of the current user's conversations",
+            description = "One SSE connection covers every conversation; each event's data is a MessageLiveEventResponse " +
+                          "whose `type` discriminates a new message from a reaction change. Requires the same Bearer auth " +
+                          "as any other endpoint (send it as a normal Authorization header, e.g. via fetch + ReadableStream " +
+                          "— the browser's native EventSource can't set custom headers)."
     )
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<ServerSentEvent<MessagingDtos.DirectMessageResponse>> stream() {
+    public Flux<ServerSentEvent<MessagingDtos.MessageLiveEventResponse>> stream() {
         return SecurityUtils.currentUserId()
                 .flatMapMany(messageBroadcaster::subscribe)
-                .map(message -> ServerSentEvent.builder(MessagingDtos.DirectMessageResponse.from(message)).build());
+                .map(event -> ServerSentEvent.builder(MessagingDtos.MessageLiveEventResponse.from(event)).build());
     }
 }

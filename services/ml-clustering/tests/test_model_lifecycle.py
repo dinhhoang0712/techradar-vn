@@ -1,10 +1,11 @@
 """Kiểm tra chu trình huấn luyện, đánh giá và gán nhãn mô hình phân cụm."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
 import pandas as pd
 import pytest
+from llm_gateway.types import LLMResponse, TokenUsage
 
 from src.clustering.evaluator import evaluate_clustering
 from src.clustering.trainer import train_hdbscan, train_kmeans
@@ -67,16 +68,26 @@ def test_optimal_trial_selection_accuracy():
 
 
 def test_llm_labeling_automatic_retry_logic():
-    """Kiểm tra cơ chế tự động thử lại khi gặp lỗi định dạng từ phía AI gán nhãn."""
-    with patch("src.labeling.llm_labeler._call_llm_raw") as mock_raw:
-        mock_raw.side_effect = [
-            "error",
-            '{"label": "Cloud", "label_en": "Cloud", "description": "D", "domain": "IT", "confidence": 1.0, "outliers": []}',
+    """Kiểm tra cơ chế tự động thử lại khi gặp lỗi định dạng (response không phải JSON hợp lệ)
+    từ phía AI gán nhãn — giờ đi qua llm-gateway (xem services/llm-gateway/) nên mock ở tầng
+    gateway.chat() thay vì _call_llm_raw (hàm này không còn tồn tại, logic gọi provider đã
+    chuyển vào llm_gateway.providers.*)."""
+    fake_gateway = MagicMock()
+    fake_gateway.chat = AsyncMock(
+        side_effect=[
+            LLMResponse(text="error", usage=TokenUsage(1, 1), provider="gemini", model="m"),
+            LLMResponse(
+                text='{"label": "Cloud", "label_en": "Cloud", "description": "D", "domain": "IT",'
+                ' "confidence": 1.0, "outliers": []}',
+                usage=TokenUsage(1, 1),
+                provider="gemini",
+                model="m",
+            ),
         ]
-        with patch("time.sleep", return_value=None):
-            res = call_gemini("prompt", LabelingParams(provider="gemini"))
-        assert res["label"] == "Cloud"
-        assert mock_raw.call_count == 2
+    )
+    res = call_gemini("prompt", LabelingParams(provider="gemini"), gateway=fake_gateway)
+    assert res["label"] == "Cloud"
+    assert fake_gateway.chat.await_count == 2
 
 
 def test_hdbscan_training_exposes_soft_clustering_attrs():

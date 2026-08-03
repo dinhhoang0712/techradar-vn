@@ -293,12 +293,16 @@ export default function AdminAutomation() {
                 dataPlatform.startPolling();
             } else {
                 notify({ title: res?.message || 'Không có data-platform nào đang lắng nghe', variant: 'error' });
+                // delivered=false không throw, nên không rơi vào catch bên dưới — vẫn phải refetch,
+                // nếu không card đứng yên ở dữ liệu cũ và trông y hệt như trước khi bấm.
+                dataPlatform.load();
             }
         } catch (error) {
             console.error(`Failed to trigger data platform job ${jobId}:`, error);
             notify({ title: (error as Error).message || 'Kích hoạt thất bại. Vui lòng thử lại.', variant: 'error' });
             // 409/429 nghĩa là job đã đang chạy (lần trước, lịch cron, hoặc debounce) — vẫn theo dõi tới khi xong.
             if (error instanceof ApiError && (error.status === 409 || error.status === 429)) dataPlatform.startPolling();
+            else dataPlatform.load();
         } finally {
             setTriggeringJobId(null);
         }

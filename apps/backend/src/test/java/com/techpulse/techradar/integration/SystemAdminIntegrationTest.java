@@ -162,4 +162,15 @@ class SystemAdminIntegrationTest extends IntegrationTestSupport {
         assertThat(activityLog.topKeywords(10).collectList().block()).contains("KafkaTrackTest");
         assertThat(activityLog.monthlyVisits().collectList().block()).isNotNull();
     }
+
+    @Test
+    void activityLog_recordAiRequest_isCountedTowardsAiRequestsToday() {
+        // Regression test for V34: chk_activity_type (V4) originally only allowed 'visit'/'search',
+        // so every recordAiRequest() insert violated it and was silently swallowed by
+        // AiProxyRequestHandler's best-effort .onErrorResume() — the admin live-metrics "Request AI
+        // hôm nay" tile always read 0 no matter how much AI-proxy traffic there was.
+        activityLog.recordAiRequest().block();
+
+        assertThat(activityLog.countToday("ai_request").block()).isGreaterThanOrEqualTo(1L);
+    }
 }

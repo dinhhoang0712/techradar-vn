@@ -98,6 +98,42 @@ def test_load_alias_map_empty_when_no_rows():
 
 
 # ---------------------------------------------------------------------------
+# _load_reviewed_pairs
+# ---------------------------------------------------------------------------
+
+
+def test_load_reviewed_pairs_normalizes_case_and_whitespace():
+    conn = FakeConn(
+        fetchall_result=[
+            {"name_a": " Postgres ", "name_b": "PostgreSQL"},
+            {"name_a": "K8s", "name_b": "kubernetes"},
+        ]
+    )
+
+    result = tech_dedup._load_reviewed_pairs(conn)
+
+    assert frozenset({"postgres", "postgresql"}) in result
+    assert frozenset({"k8s", "kubernetes"}) in result
+    assert len(result) == 2
+
+
+def test_load_reviewed_pairs_includes_rejected_and_approved_not_just_pending():
+    # No status filter in the query — rejected pairs must count too, otherwise a pair the admin
+    # explicitly rejected keeps getting re-suggested by the LLM on every subsequent run.
+    conn = FakeConn(fetchall_result=[{"name_a": "AI Integration", "name_b": "AI"}])
+
+    result = tech_dedup._load_reviewed_pairs(conn)
+
+    assert "SELECT name_a, name_b FROM dp_tech_alias_review_queue" in conn.cursors[-1].executed[0][0]
+    assert frozenset({"ai integration", "ai"}) in result
+
+
+def test_load_reviewed_pairs_empty_when_no_rows():
+    conn = FakeConn(fetchall_result=[])
+    assert tech_dedup._load_reviewed_pairs(conn) == set()
+
+
+# ---------------------------------------------------------------------------
 # _save_new_aliases / _save_review_queue
 # ---------------------------------------------------------------------------
 

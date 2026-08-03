@@ -22,6 +22,12 @@ google-generativeai==0.7.2
 langchain-openai==0.1.25
 tiktoken==0.7.0
 
+# LLM Gateway — package dùng chung nhiều service (services/llm-gateway/): fallback giữa
+# provider, rate limit theo token, tính cost. generator.py import trực tiếp; [all] kéo theo
+# openai/groq/google-generativeai/anthropic/redis SDK. Cài editable từ path local trong repo —
+# Dockerfile COPY services/llm-gateway vào /llm-gateway để path này resolve được lúc build.
+-e ../llm-gateway[all]
+
 # Embedding, NER, and reranking
 sentence-transformers==3.0.1
 transformers==4.44.2

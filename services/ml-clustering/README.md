@@ -37,15 +37,21 @@ Swagger: http://localhost:8001/docs
 
 ---
 
-## Pipeline 5 stages
+## Pipeline 6 stages
 
 ```
 Stage 1: EXTRACT    Neo4j → Parquet (technologies, jobs, articles, edges)
 Stage 2: FEATURES   Alias normalization + noise filter + embedding + UMAP
 Stage 3: TRAIN      HDBSCAN grid search (18 combos) → best DBCV score (không phải Silhouette —
                     DBCV phù hợp hơn cho density-based clustering như HDBSCAN)
+                    Register model — chỉ promote "champion" nếu thắng champion cũ. Model KHÔNG
+                    thắng → Stage 4/6/5 bên dưới bị bỏ qua (xem app/routes_pipeline.py), trừ khi
+                    trigger qua API với ?force=true.
 Stage 4: LABEL      GPT-4o-mini đặt tên + mô tả cho từng cluster
-Stage 5: WRITEBACK  Ghi cluster_id về Neo4j (không sử dụng)
+Stage 6: PUBLISH    Upload artifact lên MinIO + verify (head_object) rồi mới flip latest.json —
+                    no-op nếu MLCLUSTER_MINIO_BUCKET không cấu hình (xem pipelines/stage_06_publish.py)
+Stage 5: WRITEBACK  Ghi cluster_id về Neo4j (không sử dụng) — chạy SAU publish, không phải trước,
+                    để graph không bị đụng nếu publish lỗi
 ```
 
 **Chạy pipeline:**

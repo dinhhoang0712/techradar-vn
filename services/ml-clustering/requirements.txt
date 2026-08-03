@@ -26,12 +26,15 @@ dvc-s3==3.2.0          # đổi sang dvc-gs / dvc-azure tuỳ remote
 pathspec==0.12.1       # DVC 3.55 imports pathspec.patterns.gitwildmatch._DIR_MARK
 mlflow==2.16.2
 
-# LLM auto-label
+# LLM auto-label (Stage 4 — src/labeling/llm_labeler.py, qua llm-gateway dùng chung với
+# ai-rag-core/data-platform — xem services/llm-gateway/). SDK dưới đây vẫn cần khai báo trực
+# tiếp ở đây vì llm_gateway.providers.* import chúng — không kéo theo qua package llm-gateway.
 langchain==0.2.16
 langchain-google-genai==1.0.10
 google-generativeai==0.7.2
 openai>=1.40.0,<2.0.0
 groq>=0.9.0,<1.0.0
+-e ../llm-gateway
 sentence-transformers==3.0.1
 transformers>=4.41.0,<5.0.0
 datasets>=2.19.0,<3.0.0

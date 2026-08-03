@@ -10,6 +10,7 @@ import type { TechSummary } from '../types/summarize';
 import { CHART_PALETTE as PALETTE } from '../utils/chartPalette';
 import { useAsync } from '../hooks/useAsync';
 import MaintenanceOverlay from '../components/common/MaintenanceOverlay';
+import Modal from '../components/common/Modal';
 import { useToast } from '../components/common/toastContext';
 import TrendChart from '../components/trend/TrendChart';
 import SummaryPanel from '../components/trend/SummaryPanel';
@@ -235,6 +236,14 @@ export default function TrendDashboard() {
             setLoadingForecast(false);
         }
     }, [forecastTech, notify]);
+
+    // Deep-link từ ReportPage: /dashboard?forecastTech=<tên công nghệ> mở sẵn panel dự báo cho
+    // đúng công nghệ đó, không cần công nghệ có mặt trong top10Data/selectedTechs.
+    useEffect(() => {
+        const tech = new URLSearchParams(window.location.search).get('forecastTech');
+        if (tech) handleForecast(tech);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const handleSummarize = useCallback(async (techName: string) => {
         if (summaryTech === techName) {
@@ -468,23 +477,27 @@ export default function TrendDashboard() {
 
             {/* Tóm tắt tin tức (POST /chat/summarize) */}
             {summaryTech && (
-                <SummaryPanel
-                    tech={summaryTech}
-                    loading={loadingSummary}
-                    summary={summary}
-                    error={summaryError}
-                    onClose={() => { setSummary(null); setSummaryTech(null); }}
-                />
+                <Modal onClose={() => { setSummary(null); setSummaryTech(null); }} width="600px">
+                    <SummaryPanel
+                        tech={summaryTech}
+                        loading={loadingSummary}
+                        summary={summary}
+                        error={summaryError}
+                        onClose={() => { setSummary(null); setSummaryTech(null); }}
+                    />
+                </Modal>
             )}
 
             {/* Forecast panel */}
             {forecastTech && (
-                <ForecastPanel
-                    tech={forecastTech}
-                    loading={loadingForecast}
-                    forecast={forecast}
-                    onClose={() => { setForecast(null); setForecastTech(null); }}
-                />
+                <Modal onClose={() => { setForecast(null); setForecastTech(null); }} width="720px">
+                    <ForecastPanel
+                        tech={forecastTech}
+                        loading={loadingForecast}
+                        forecast={forecast}
+                        onClose={() => { setForecast(null); setForecastTech(null); }}
+                    />
+                </Modal>
             )}
         </div>
     );

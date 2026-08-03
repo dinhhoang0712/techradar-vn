@@ -14,6 +14,7 @@ trong vòng grid search vì sẽ tốn rất nhiều token.
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import hashlib
 import json
@@ -23,8 +24,18 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from conf.config import LabelingParams, get_settings
+from conf.config import LabelingParams, Settings, get_settings
+from llm_gateway import GenerationConfig, LLMGateway, Message
+from llm_gateway.exceptions import AllProvidersFailedError
 from loguru import logger
+
+_PARSE_RETRY_ATTEMPTS = 2
+
+# Thứ tự thử khi provider chính (params.provider) lỗi/hết rate limit — provider nào có
+# API key trong .env mới được đưa vào fallback chain; không có key thì tự bỏ qua.
+_PROVIDER_ORDER = ("gemini", "openai", "groq")
+_MODEL_FIELD = {"gemini": "gemini_model", "openai": "openai_model", "groq": "groq_model"}
+_API_KEY_FIELD = {"gemini": "gemini_api_key", "openai": "openai_api_key", "groq": "groq_api_key"}
 
 _REQUIRED_KEYS = {"label", "label_en", "description", "domain", "confidence", "outliers"}
 
@@ -247,58 +258,73 @@ def render_prompt(
     )
 
 
-def _call_llm_raw(prompt: str, params: LabelingParams) -> str:
-    """Gọi LLM (OpenAI, Gemini hoặc Groq) và trả về raw text."""
-    provider = getattr(params, "provider", "gemini")
+def _build_provider(name: str, settings: Settings, params: LabelingParams):
+    api_key = getattr(settings, _API_KEY_FIELD[name])
+    if not api_key:
+        return None  # không có key -> bỏ qua, không phải lỗi
+    model = getattr(params, _MODEL_FIELD[name])
 
-    if provider == "openai":
-        from openai import OpenAI
+    if name == "openai":
+        from llm_gateway.providers.openai_provider import OpenAIProvider
 
-        client = OpenAI(api_key=get_settings().openai_api_key)
-        response = client.chat.completions.create(
-            model=params.openai_model,
-            temperature=params.temperature,
-            response_format={"type": "json_object"},
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return response.choices[0].message.content.strip()
-    elif provider == "groq":
-        from groq import Groq
+        return OpenAIProvider(api_key=api_key, model=model)
+    if name == "groq":
+        from llm_gateway.providers.groq_provider import GroqProvider
 
-        client = Groq(api_key=get_settings().groq_api_key)
-        response = client.chat.completions.create(
-            model=params.groq_model,
-            temperature=params.temperature,
-            response_format={"type": "json_object"},
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return response.choices[0].message.content.strip()
-    else:
-        import google.generativeai as genai
+        return GroqProvider(api_key=api_key, model=model)
+    if name == "gemini":
+        from llm_gateway.providers.gemini_provider import GeminiProvider
 
-        api_key = get_settings().gemini_api_key
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel(
-            model_name=params.gemini_model,
-            generation_config=genai.GenerationConfig(
-                temperature=params.temperature,
-                response_mime_type="application/json",
-            ),
-        )
-        response = model.generate_content(prompt)
-        return response.text.strip()
+        return GeminiProvider(api_key=api_key, model=model)
+    return None
+
+
+def build_gateway(params: LabelingParams, settings: Settings | None = None) -> LLMGateway:
+    """Provider chính = params.provider (giữ đúng hành vi cũ trước khi có gateway). Provider
+    khác có API key trong .env tự động thành fallback — KHÁC hành vi cũ: trước đây 1 provider
+    lỗi là dừng luôn, giờ gateway tự rơi sang provider kế tiếp còn key.
+    """
+    settings = settings or get_settings()
+    order = [params.provider] + [p for p in _PROVIDER_ORDER if p != params.provider]
+    providers = [p for name in order if (p := _build_provider(name, settings, params)) is not None]
+    return LLMGateway(providers, max_retries=4, retry_delay=2.0)
+
+
+def _call_llm_via_gateway(gateway: LLMGateway, prompt: str, params: LabelingParams) -> str:
+    """Bridge sync -> async: label_all_clusters() chạy trong script batch đồng bộ (Stage 4,
+    sau khi đã chốt clustering), chưa có event loop nào đang chạy nên asyncio.run() an toàn."""
+    config = GenerationConfig(temperature=params.temperature, json_mode=True)
+    try:
+        response = asyncio.run(gateway.chat([Message(role="user", content=prompt)], config))
+    except AllProvidersFailedError as e:
+        raise RuntimeError(f"LLM lỗi: {e}") from e
+    return response.text.strip()
+
+
+def _strip_markdown_fence(text: str) -> str:
+    if not text.startswith("```"):
+        return text
+    lines = text.splitlines()
+    start = 1
+    end = len(lines) - 1 if lines[-1].strip() == "```" else len(lines)
+    return "\n".join(lines[start:end]).strip()
 
 
 def call_gemini(
     prompt: str,
     params: LabelingParams,
     cache_dir: str | Path | None = None,
+    gateway: LLMGateway | None = None,
 ) -> dict:
     """
-    Gọi LLM (OpenAI GPT hoặc Gemini), parse output thành dict.
+    Gọi LLM qua llm-gateway (dùng chung với ai-rag-core/data-platform — xem
+    services/llm-gateway/), parse output thành dict.
 
     - Cache key = sha256(prompt) → file JSON trong `cache_dir`.
-    - Retry 4 lần với backoff khi lỗi.
+    - Gateway tự retry cùng provider (max_retries=4) + fallback sang provider khác nếu còn
+      API key trong .env — xem build_gateway().
+    - Nếu response trả về không parse được thành JSON hợp lệ, gọi lại LLM tối đa
+      _PARSE_RETRY_ATTEMPTS lần (khác lỗi API — đây là response "thành công" nhưng sai format).
     - Validate JSON: keys ["label","label_en","description","domain","confidence","outliers"].
     - Strip markdown fence nếu có.
     """
@@ -313,23 +339,12 @@ def call_gemini(
     else:
         cache_path = None
 
-    provider = getattr(params, "provider", "gemini")
+    gateway = gateway or build_gateway(params)
+
     last_exc: Exception | None = None
-    for attempt in range(4):
-        if attempt > 0:
-            wait = 2**attempt  # 2s, 4s, 8s
-            logger.warning("{} retry {}/3 sau {}s (lỗi: {})", provider, attempt, wait, last_exc)
-            time.sleep(wait)
+    for attempt in range(1, _PARSE_RETRY_ATTEMPTS + 1):
         try:
-            text = _call_llm_raw(prompt, params)
-
-            # Strip markdown fence nếu có
-            if text.startswith("```"):
-                lines = text.splitlines()
-                start = 1
-                end = len(lines) - 1 if lines[-1].strip() == "```" else len(lines)
-                text = "\n".join(lines[start:end]).strip()
-
+            text = _strip_markdown_fence(_call_llm_via_gateway(gateway, prompt, params))
             data: dict = json.loads(text)
 
             missing = _REQUIRED_KEYS - set(data.keys())
@@ -342,9 +357,16 @@ def call_gemini(
 
         except Exception as exc:
             last_exc = exc
-            continue
+            if attempt < _PARSE_RETRY_ATTEMPTS:
+                logger.warning(
+                    "Response không parse được (lần {}/{}), gọi lại LLM: {}",
+                    attempt,
+                    _PARSE_RETRY_ATTEMPTS,
+                    exc,
+                )
+                continue
 
-    raise RuntimeError(f"{provider} thất bại sau 4 lần thử: {last_exc}") from last_exc
+    raise RuntimeError(f"LLM trả response không parse được sau {_PARSE_RETRY_ATTEMPTS} lần thử: {last_exc}") from last_exc
 
 
 def label_all_clusters(
@@ -382,6 +404,10 @@ def label_all_clusters(
     cluster_ids = sorted(cid for cid in cluster_to_members if cid != -1)
     logger.info("Bắt đầu gán nhãn {} cụm với {} ...", len(cluster_ids), params.provider.upper())
 
+    # Build gateway 1 lần cho cả batch (không phải mỗi cluster) — tránh tạo lại SDK client
+    # mỗi lần gọi, và để fallback chain nhất quán trong suốt lần gán nhãn này.
+    gateway = build_gateway(params)
+
     result: dict[int, ClusterLabel] = {}
     for cluster_id in cluster_ids:
         members = cluster_to_members[cluster_id]
@@ -394,7 +420,7 @@ def label_all_clusters(
                 n_members=len(members),
                 top_members=top_names,
             )
-            data = call_gemini(prompt, params, cache_dir=params.cache_dir)
+            data = call_gemini(prompt, params, cache_dir=params.cache_dir, gateway=gateway)
             delay = _inter_cluster_delay_seconds(params.provider)
             if delay > 0:
                 time.sleep(delay)

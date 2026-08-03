@@ -4,6 +4,7 @@ import { fetchAdminUsers, createAdminUser, updateAdminUser, deleteAdminUser, sen
 import type { AdminUser } from '../../types/admin';
 import Modal from '../../components/common/Modal';
 import Avatar from '../../components/common/Avatar';
+import PasswordInput from '../../components/common/PasswordInput';
 import { useToast } from '../../components/common/toastContext';
 import './AdminUsers.css';
 
@@ -228,7 +229,7 @@ export default function AdminUsers() {
                         </div>
                         <div className="form-group">
                             <label>{editTarget ? 'Mật khẩu mới' : 'Mật khẩu'}</label>
-                            <input required={!editTarget} type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder={editTarget ? "Bỏ trống nếu không đổi" : ""} />
+                            <PasswordInput required={!editTarget} value={password} onChange={e => setPassword(e.target.value)} placeholder={editTarget ? "Bỏ trống nếu không đổi" : ""} />
                         </div>
                         <div className="form-row">
                             <div className="form-group">

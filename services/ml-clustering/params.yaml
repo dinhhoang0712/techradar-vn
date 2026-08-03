@@ -154,7 +154,12 @@ clustering:
 
 mlflow:
   experiment_name: "tech_clustering_v1"
-  tracking_uri: "sqlite:///mlruns.db"
+  # Trong data/ (không phải mlruns.db ở cwd) — data/ là named volume trong docker-compose.yml
+  # (ml_clustering_data), sống sót qua container recreate/rebuild. Trước đây mlruns.db nằm ở
+  # writable layer của container, mất sạch mỗi lần redeploy — làm champion gate (xem
+  # register_best_model / is_run_promoted_to_champion) luôn coi lần train kế tiếp là "lần đầu",
+  # không so sánh được với model đang serve.
+  tracking_uri: "sqlite:///data/mlruns.db"
   registry_model_name: "tech_clusterer"
 
 labeling:

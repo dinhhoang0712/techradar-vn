@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 from mlflow.exceptions import MlflowException
 
-from src.tracking.mlflow_logger import register_best_model
+from src.tracking.mlflow_logger import is_run_promoted_to_champion, register_best_model
 
 
 def _mock_register_model(version="2"):
@@ -101,3 +101,58 @@ def test_promotes_when_champion_run_missing_the_metric(mock_mlflow):
 
     assert result["promoted"] is True
     client.set_registered_model_alias.assert_called_once_with("tech-clusters", "champion", 4)
+
+
+# ---------------------------------------------------------------------------
+# is_run_promoted_to_champion — dùng bởi stage_06_publish + routes_pipeline để quyết định
+# publish/writeback hay bỏ qua. Tag `promoted_to_champion` nằm trên PARENT run của run_id
+# truyền vào (xem docstring hàm), nên test phải mock get_run trả về tags.mlflow.parentRunId
+# rồi 1 lần get_run thứ 2 cho chính parent đó.
+# ---------------------------------------------------------------------------
+
+
+def test_is_promoted_reads_tag_from_parent_run():
+    best_run = MagicMock(data=MagicMock(tags={"mlflow.parentRunId": "parent-1"}))
+    parent_run = MagicMock(data=MagicMock(tags={"promoted_to_champion": "True"}))
+    client = MagicMock()
+    client.get_run.side_effect = lambda rid: {"best-1": best_run, "parent-1": parent_run}[rid]
+
+    with patch("mlflow.tracking.MlflowClient", return_value=client):
+        assert is_run_promoted_to_champion("best-1", "http://mlflow") is True
+
+
+def test_is_promoted_false_when_parent_tag_says_not_promoted():
+    best_run = MagicMock(data=MagicMock(tags={"mlflow.parentRunId": "parent-1"}))
+    parent_run = MagicMock(data=MagicMock(tags={"promoted_to_champion": "False"}))
+    client = MagicMock()
+    client.get_run.side_effect = lambda rid: {"best-1": best_run, "parent-1": parent_run}[rid]
+
+    with patch("mlflow.tracking.MlflowClient", return_value=client):
+        assert is_run_promoted_to_champion("best-1", "http://mlflow") is False
+
+
+def test_is_promoted_fails_open_when_no_parent_run_id():
+    best_run = MagicMock(data=MagicMock(tags={}))
+    client = MagicMock()
+    client.get_run.return_value = best_run
+
+    with patch("mlflow.tracking.MlflowClient", return_value=client):
+        assert is_run_promoted_to_champion("best-1", "http://mlflow") is True
+
+
+def test_is_promoted_fails_open_when_parent_missing_promotion_tag():
+    best_run = MagicMock(data=MagicMock(tags={"mlflow.parentRunId": "parent-1"}))
+    parent_run = MagicMock(data=MagicMock(tags={}))
+    client = MagicMock()
+    client.get_run.side_effect = lambda rid: {"best-1": best_run, "parent-1": parent_run}[rid]
+
+    with patch("mlflow.tracking.MlflowClient", return_value=client):
+        assert is_run_promoted_to_champion("best-1", "http://mlflow") is True
+
+
+def test_is_promoted_fails_open_when_mlflow_query_raises():
+    client = MagicMock()
+    client.get_run.side_effect = RuntimeError("tracking server unreachable")
+
+    with patch("mlflow.tracking.MlflowClient", return_value=client):
+        assert is_run_promoted_to_champion("best-1", "http://mlflow") is True

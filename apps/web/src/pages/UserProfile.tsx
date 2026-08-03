@@ -11,6 +11,7 @@ import type { ProfileFormState } from '../components/profile/ProfileEditForm';
 import ProfileViewDetails from '../components/profile/ProfileViewDetails';
 import type { ProfileViewData } from '../components/profile/ProfileViewDetails';
 import Modal from '../components/common/Modal';
+import PasswordInput from '../components/common/PasswordInput';
 import type { UserProfileData, UpdateProfilePayload } from '../types/userProfile';
 import type { NextSkill } from '../types/career';
 import './UserProfile.css';
@@ -315,8 +316,7 @@ export default function UserProfile() {
                     <p className="modal-body-text">
                         Nhập mật khẩu hiện tại để xác nhận xóa vĩnh viễn tài khoản. Hành động này không thể hoàn tác.
                     </p>
-                    <input
-                        type="password"
+                    <PasswordInput
                         className="profile-danger-password-input"
                         placeholder="Mật khẩu hiện tại"
                         value={deleteAccountPassword}

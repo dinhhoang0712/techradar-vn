@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    fetchTechAliasReviewQueue, approveTechAlias, rejectTechAlias,
+    fetchTechAliasReviewQueue, fetchTechAliasReviewCount, approveTechAlias, rejectTechAlias,
     fetchCompanyDuplicates, mergeCompanyDuplicate, KG_REVIEW_CHANGED_EVENT,
 } from '../../api/adminService';
 import type { TechAliasReviewItem, CompanyDuplicateGroup } from '../../api/adminService';
@@ -22,8 +22,17 @@ export default function AdminKgReview() {
     const [tab, setTab] = useState<Tab>('tech');
     const notify = useToast();
 
+    // Sliding tab indicator — measured from real button widths since the two tabs have
+    // different label lengths + optional badges, so a fixed 50/50 split misaligns (badge spills past the pill).
+    const tabRefs = useRef<Record<Tab, HTMLButtonElement | null>>({ tech: null, company: null });
+    const [indicatorStyle, setIndicatorStyle] = useState<{ left: number; width: number } | null>(null);
+
     // --- Technology alias tab ---
     const [items, setItems] = useState<TechAliasReviewItem[]>([]);
+    // Tổng số đang pending trong toàn bộ hàng đợi (Postgres COUNT, giống sidebar) — KHÔNG dùng
+    // items.length cho badge vì items chỉ là 1 trang (PAGE_SIZE=20), sẽ lệch hẳn với con số thật
+    // khi hàng đợi có hàng trăm dòng pending.
+    const [totalPending, setTotalPending] = useState<number | null>(null);
     const [page, setPage] = useState(0);
     const [hasMore, setHasMore] = useState(true);
     const [loadingItems, setLoadingItems] = useState(true);
@@ -59,6 +68,18 @@ export default function AdminKgReview() {
 
     useEffect(() => { loadItems(page); }, [page, loadItems]);
 
+    const loadTotalPending = useCallback(() => {
+        fetchTechAliasReviewCount()
+            .then(res => setTotalPending(res?.data?.pending ?? 0))
+            .catch(() => {});
+    }, []);
+
+    useEffect(() => {
+        loadTotalPending();
+        window.addEventListener(KG_REVIEW_CHANGED_EVENT, loadTotalPending);
+        return () => window.removeEventListener(KG_REVIEW_CHANGED_EVENT, loadTotalPending);
+    }, [loadTotalPending]);
+
     const loadGroups = useCallback(async () => {
         try {
             setLoadingGroups(true);
@@ -77,6 +98,16 @@ export default function AdminKgReview() {
     useEffect(() => {
         if (tab === 'company' && !groupsLoaded) loadGroups();
     }, [tab, groupsLoaded, loadGroups]);
+
+    useEffect(() => {
+        const measure = () => {
+            const el = tabRefs.current[tab];
+            if (el) setIndicatorStyle({ left: el.offsetLeft, width: el.offsetWidth });
+        };
+        measure();
+        window.addEventListener('resize', measure);
+        return () => window.removeEventListener('resize', measure);
+    }, [tab, items.length, groups.length]);
 
     const sideFor = (item: TechAliasReviewItem): 'a' | 'b' => canonicalSide[item.id] || 'b';
     const canonicalName = (item: TechAliasReviewItem) => (sideFor(item) === 'a' ? item.name_a : item.name_b);
@@ -122,22 +153,38 @@ export default function AdminKgReview() {
         const { group, canonicalId } = mergeTarget;
         const core = group.normalized_core;
         setMergingCore(core);
-        try {
-            const duplicateIds = group.companies.map(c => c.id).filter(id => id !== canonicalId);
-            for (const duplicateId of duplicateIds) {
+        // Thử gộp TỪNG công ty độc lập — 1 công ty lỗi (VD token hết hạn giữa chừng) không được
+        // phép chặn các công ty còn lại trong nhóm, và người dùng cần biết chính xác cái nào lỗi
+        // thay vì 1 toast chung chung "thử lại sau" không rõ đã gộp được bao nhiêu.
+        const duplicates = group.companies.filter(c => c.id !== canonicalId);
+        const failed: { name: string; message: string }[] = [];
+        for (const duplicate of duplicates) {
+            try {
                 // eslint-disable-next-line no-await-in-loop -- merges must apply sequentially against the same canonical node
-                await mergeCompanyDuplicate(duplicateId, canonicalId);
+                await mergeCompanyDuplicate(duplicate.id, canonicalId);
+            } catch (error) {
+                console.error(`Failed to merge company duplicate ${duplicate.id}:`, error);
+                failed.push({ name: duplicate.name, message: (error as Error).message || 'lỗi không rõ' });
             }
+        }
+
+        const mergedCount = duplicates.length - failed.length;
+        if (failed.length === 0) {
             setGroups(prev => prev.filter(g => g.normalized_core !== core));
             notify({ title: `Đã gộp ${group.companies.length} công ty`, variant: 'success' });
-        } catch (error) {
-            console.error('Failed to merge company duplicates:', error);
-            notify({ title: 'Không gộp được toàn bộ nhóm — thử lại sau', variant: 'error' });
+        } else if (mergedCount > 0) {
+            notify({
+                title: `Đã gộp ${mergedCount}/${duplicates.length} công ty — lỗi: ${failed.map(f => f.name).join(', ')}`,
+                variant: 'error',
+            });
             loadGroups();
-        } finally {
-            setMergingCore(null);
-            setMergeTarget(null);
+        } else {
+            notify({ title: `Không gộp được: ${failed[0].message}`, variant: 'error' });
+            loadGroups();
         }
+
+        setMergingCore(null);
+        setMergeTarget(null);
     };
 
     return (
@@ -150,15 +197,28 @@ export default function AdminKgReview() {
             </div>
 
             <div className="kg-tabs">
-                <button className={`kg-tab${tab === 'tech' ? ' active' : ''}`} onClick={() => setTab('tech')}>
+                <button
+                    ref={el => { tabRefs.current.tech = el; }}
+                    className={`kg-tab${tab === 'tech' ? ' active' : ''}`}
+                    onClick={() => setTab('tech')}
+                >
                     Alias Công nghệ
-                    {items.length > 0 && <span className="kg-tab-badge">{items.length}</span>}
+                    {!!totalPending && <span className="kg-tab-badge">{totalPending}</span>}
                 </button>
-                <button className={`kg-tab${tab === 'company' ? ' active' : ''}`} onClick={() => setTab('company')}>
+                <button
+                    ref={el => { tabRefs.current.company = el; }}
+                    className={`kg-tab${tab === 'company' ? ' active' : ''}`}
+                    onClick={() => setTab('company')}
+                >
                     Công ty nghi trùng
                     {groups.length > 0 && <span className="kg-tab-badge">{groups.length}</span>}
                 </button>
-                <div className={`kg-tab-indicator ${tab}`} />
+                {indicatorStyle && (
+                    <div
+                        className="kg-tab-indicator"
+                        style={{ left: indicatorStyle.left, width: indicatorStyle.width }}
+                    />
+                )}
             </div>
 
             {tab === 'tech' && (

@@ -24,11 +24,25 @@ Chạy: định kỳ (mặc định 5:30 sáng, ngay sau neo4j_enricher).
 
 from __future__ import annotations
 
+import asyncio
 import json
 
 from common.db import get_neo4j_driver, get_pg_conn, log_pipeline_run
 from config import Settings
+from llm_gateway import GenerationConfig, LLMGateway, Message
+from llm_gateway.exceptions import AllProvidersFailedError
 from loguru import logger
+
+# Thứ tự thử khi provider chính (tech_dedup_llm_provider) lỗi/hết rate limit — provider nào
+# có API key trong .env mới được đưa vào fallback chain; không có key thì tự bỏ qua.
+# Job này TRƯỚC ĐÂY không có retry/fallback nào cả (lỗi 1 lần là raise, cả job fail).
+_PROVIDER_ORDER = ("gemini", "openai", "groq")
+_MODEL_FIELD = {
+    "gemini": "tech_dedup_gemini_model",
+    "openai": "tech_dedup_openai_model",
+    "groq": "tech_dedup_groq_model",
+}
+_API_KEY_FIELD = {"gemini": "gemini_api_key", "openai": "openai_api_key", "groq": "groq_api_key"}
 
 _LLM_PROMPT_TEMPLATE = """Bạn là chuyên gia phân loại công nghệ IT. Dưới đây là danh sách tên công nghệ \
 trích xuất tự động từ nhiều nguồn khác nhau (bài viết, job posting), có thể \
@@ -68,6 +82,21 @@ def _load_alias_map(conn) -> dict[str, str]:
         cur.execute("SELECT alias_normalized, canonical_name FROM dp_tech_alias_map")
         rows = cur.fetchall()
     return {r["alias_normalized"]: r["canonical_name"] for r in rows}
+
+
+def _load_reviewed_pairs(conn) -> set[frozenset[str]]:
+    """
+    Mọi cặp (name_a, name_b) ĐÃ TỪNG được đưa vào dp_tech_alias_review_queue, bất kể status
+    (pending/approved/rejected) — dùng để KHÔNG hỏi lại 1 cặp đã từng đưa ra quyết định.
+    Quan trọng nhất là 'rejected': admin từ chối gộp không thêm gì vào dp_tech_alias_map (đúng,
+    vì 2 tên KHÔNG phải alias của nhau), nên 2 tên đó vẫn "chưa có alias" ở Giai đoạn B — nếu
+    không loại trừ ở đây, LLM (temperature=0.0, cùng input) sẽ tự tin đề xuất lại y hệt cặp đó
+    ở lần chạy tech_dedup kế tiếp, vô thời hạn.
+    """
+    with conn.cursor() as cur:
+        cur.execute("SELECT name_a, name_b FROM dp_tech_alias_review_queue")
+        rows = cur.fetchall()
+    return {frozenset((r["name_a"].strip().lower(), r["name_b"].strip().lower())) for r in rows}
 
 
 def _save_new_aliases(conn, new_aliases: dict[str, str]) -> None:
@@ -349,43 +378,55 @@ def _parse_llm_categories(raw: str) -> list[dict]:
     return data.get("categories", [])
 
 
-def _call_llm(names: list[str], settings: Settings) -> str:
-    """Trả raw text từ LLM (chưa parse) — dùng chung cho cả _parse_llm_response (groups) lẫn
-    _parse_llm_categories (categories), vì 2 nhiệm vụ này nằm trong cùng 1 lần gọi LLM."""
-    provider = settings.tech_dedup_llm_provider
+def _build_provider(name: str, settings: Settings):
+    api_key = getattr(settings, _API_KEY_FIELD[name])
+    if not api_key:
+        return None  # không có key -> bỏ qua, không phải lỗi
+    model = getattr(settings, _MODEL_FIELD[name])
+
+    if name == "openai":
+        from llm_gateway.providers.openai_provider import OpenAIProvider
+
+        return OpenAIProvider(api_key=api_key, model=model)
+    if name == "groq":
+        from llm_gateway.providers.groq_provider import GroqProvider
+
+        return GroqProvider(api_key=api_key, model=model)
+    if name == "gemini":
+        from llm_gateway.providers.gemini_provider import GeminiProvider
+
+        return GeminiProvider(api_key=api_key, model=model)
+    return None
+
+
+def build_gateway(settings: Settings) -> LLMGateway:
+    """Provider chính = settings.tech_dedup_llm_provider (giữ đúng hành vi cũ). Provider khác
+    có API key trong .env tự động thành fallback — job này TRƯỚC ĐÂY không có retry/fallback
+    nào (lỗi 1 lần là raise, cả job fail); giờ tự retry cùng provider rồi rơi sang provider
+    kế tiếp còn key.
+    """
+    primary = settings.tech_dedup_llm_provider
+    order = [primary] + [p for p in _PROVIDER_ORDER if p != primary]
+    providers = [p for name in order if (p := _build_provider(name, settings)) is not None]
+    return LLMGateway(providers, max_retries=3, retry_delay=5.0)
+
+
+def _call_llm(names: list[str], settings: Settings, gateway: LLMGateway | None = None) -> str:
+    """Trả raw text từ LLM (chưa parse) qua llm-gateway (dùng chung với ai-rag-core/ml-clustering
+    — xem services/llm-gateway/) — dùng chung cho cả _parse_llm_response (groups) lẫn
+    _parse_llm_categories (categories), vì 2 nhiệm vụ này nằm trong cùng 1 lần gọi LLM.
+
+    Bridge sync -> async: run() là job APScheduler đồng bộ, chưa có event loop nào đang chạy
+    nên asyncio.run() an toàn ở đây.
+    """
     prompt = _LLM_PROMPT_TEMPLATE.format(names="\n".join(f"- {n}" for n in names))
-
-    if provider == "openai":
-        from openai import OpenAI
-
-        client = OpenAI(api_key=settings.openai_api_key)
-        response = client.chat.completions.create(
-            model=settings.tech_dedup_openai_model,
-            temperature=0.0,
-            response_format={"type": "json_object"},
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return response.choices[0].message.content
-    elif provider == "groq":
-        from groq import Groq
-
-        client = Groq(api_key=settings.groq_api_key)
-        response = client.chat.completions.create(
-            model=settings.tech_dedup_groq_model,
-            temperature=0.0,
-            response_format={"type": "json_object"},
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return response.choices[0].message.content
-    else:
-        import google.generativeai as genai
-
-        genai.configure(api_key=settings.gemini_api_key)
-        model = genai.GenerativeModel(
-            model_name=settings.tech_dedup_gemini_model,
-            generation_config=genai.GenerationConfig(temperature=0.0, response_mime_type="application/json"),
-        )
-        return model.generate_content(prompt).text
+    gateway = gateway or build_gateway(settings)
+    config = GenerationConfig(temperature=0.0, json_mode=True)
+    try:
+        response = asyncio.run(gateway.chat([Message(role="user", content=prompt)], config))
+    except AllProvidersFailedError as e:
+        raise RuntimeError(f"LLM lỗi: {e}") from e
+    return response.text
 
 
 def run(settings: Settings) -> dict:
@@ -428,6 +469,7 @@ def run(settings: Settings) -> dict:
             new_aliases: dict[str, str] = {}
             review_entries: list[dict] = []
             name_to_canonical: dict[str, str] = {}
+            reviewed_pairs = _load_reviewed_pairs(pg_conn)
 
             for group in groups:
                 group_names = group.get("names", [])
@@ -451,6 +493,14 @@ def run(settings: Settings) -> dict:
                     for n in group_names:
                         if n == canonical:
                             continue
+                        pair_key = frozenset((n.strip().lower(), canonical.strip().lower()))
+                        if pair_key in reviewed_pairs:
+                            logger.info(
+                                "Tech Dedup: bỏ qua '{}' <-> '{}' — đã có quyết định (pending/approved/rejected) từ trước",
+                                n, canonical,
+                            )
+                            continue
+                        reviewed_pairs.add(pair_key)
                         review_entries.append(
                             {
                                 "name_a": n,

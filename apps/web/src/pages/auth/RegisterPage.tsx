@@ -3,6 +3,7 @@ import type { FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { registerUser } from '../../api/authService';
 import AuthStatsRow from '../../components/common/AuthStatsRow';
+import PasswordInput from '../../components/common/PasswordInput';
 import { useToast } from '../../components/common/toastContext';
 import { ApiError } from '../../types/api';
 import './Auth.css';
@@ -107,8 +108,7 @@ export default function RegisterPage() {
                         </div>
                         <div className="auth-input-group">
                             <label>Password</label>
-                            <input
-                                type="password"
+                            <PasswordInput
                                 required
                                 placeholder="Ít nhất 8 ký tự"
                                 value={password}
@@ -118,8 +118,7 @@ export default function RegisterPage() {
                         </div>
                         <div className="auth-input-group">
                             <label>Confirm Password</label>
-                            <input
-                                type="password"
+                            <PasswordInput
                                 required
                                 placeholder="Nhập lại mật khẩu"
                                 value={confirmPwd}

@@ -7,9 +7,12 @@ Forecast Service — dự báo xu hướng công nghệ dựa trên:
 """
 
 import logging
+import statistics
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from app.api.schemas import ForecastRequest, ForecastResponse, ForecastSignal
+from app.core.flexible_date import parse_date
 from app.core.generator import generate
 from app.core.retriever_sql import sql_tech_timeseries
 from app.db.neo4j_client import run_query
@@ -32,8 +35,6 @@ def _compute_signals(timeseries: list[dict]) -> tuple[list[ForecastSignal], dict
 
     if not timeseries:
         return signals, {}
-
-    import statistics
 
     growth_rates = [float(r["growth_rate"]) for r in timeseries if r.get("growth_rate") is not None]
     mom_values = [float(r["mom_growth"]) for r in timeseries if r.get("mom_growth") is not None]
@@ -102,29 +103,38 @@ def _compute_signals(timeseries: list[dict]) -> tuple[list[ForecastSignal], dict
 
 
 async def _get_sentiment_signal(tech_name: str) -> ForecastSignal | None:
-    """Neo4j: article sentiment 3 tháng gần nhất."""
+    """Neo4j: article sentiment 3 tháng gần nhất.
+
+    published_date là string với format lẫn lộn tùy nguồn crawl (xem app.core.flexible_date), nên
+    lọc "3 tháng gần nhất" phải làm ở Python thay vì Cypher `date() - duration('P3M')` (luôn trả
+    NULL và bị WHERE loại hết vì so sánh String với Date).
+    """
     try:
         rows = await run_query(
             """
             MATCH (t:Technology)<-[:MENTIONS]-(a:Article)
             WHERE toLower(t.name) = toLower($name)
-              AND a.published_date >= date() - duration('P3M')
-            RETURN count(a) AS recent_count,
-                   avg(a.sentiment_score) AS avg_sentiment
+            RETURN a.published_date AS published_date, a.sentiment_score AS sentiment_score
             """,
             {"name": tech_name},
         )
-        if rows and rows[0].get("recent_count"):
-            count = rows[0]["recent_count"]
-            sentiment = rows[0].get("avg_sentiment") or 0.0
-            return ForecastSignal(
-                signal=f"Số bài viết gần đây (3 tháng): {count}, sentiment trung bình: {sentiment:.2f}",
-                value=float(sentiment),
-                weight=0.20,
-            )
     except Exception as e:
         logger.warning("Sentiment signal failed for %s: %s", tech_name, e)
-    return None
+        return None
+
+    cutoff = datetime.now(tz=UTC).date() - timedelta(days=90)
+    recent = [r for r in rows if (parsed := parse_date(r.get("published_date"))) and parsed >= cutoff]
+    if not recent:
+        return None
+
+    count = len(recent)
+    scores = [r["sentiment_score"] for r in recent if r.get("sentiment_score") is not None]
+    sentiment = statistics.mean(scores) if scores else 0.0
+    return ForecastSignal(
+        signal=f"Số bài viết gần đây (3 tháng): {count}, sentiment trung bình: {sentiment:.2f}",
+        value=float(sentiment),
+        weight=0.20,
+    )
 
 
 async def _llm_synthesize(

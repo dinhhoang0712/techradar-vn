@@ -78,15 +78,11 @@
     position: absolute;
     top: 4px;
     bottom: 4px;
-    left: 4px;
-    width: calc(50% - 4px);
     background: var(--gradient-brand);
     border-radius: var(--radius);
     box-shadow: var(--shadow-primary);
-    transition: transform var(--t-spring);
+    transition: left var(--t-spring), width var(--t-spring);
 }
-
-.kg-tab-indicator.company { transform: translateX(100%); }
 
 /* --- Panel & cards --- */
 

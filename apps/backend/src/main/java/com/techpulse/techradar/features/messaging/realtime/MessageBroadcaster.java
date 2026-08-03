@@ -1,7 +1,6 @@
 package com.techpulse.techradar.features.messaging.realtime;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.techpulse.techradar.features.messaging.domain.DirectMessage;
 import com.techpulse.techradar.shared.redis.RedisFanout;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -44,21 +43,21 @@ public class MessageBroadcaster {
         // autoCancel=false: a user closing their last tab must not permanently kill this sink —
         // with the default autoCancel=true, the sink terminates once its subscriber count hits
         // zero and silently refuses every subsequent subscribe() for this same UserChannel object.
-        final Sinks.Many<DirectMessage> sink = Sinks.many().multicast().onBackpressureBuffer(Queues.SMALL_BUFFER_SIZE, false);
+        final Sinks.Many<MessageLiveEvent> sink = Sinks.many().multicast().onBackpressureBuffer(Queues.SMALL_BUFFER_SIZE, false);
         final AtomicInteger subscribers = new AtomicInteger(0);
     }
 
-    private record LiveMessageEvent(String userId, DirectMessage message) {
+    private record LiveMessageEvent(String userId, MessageLiveEvent event) {
     }
 
     @PostConstruct
     void subscribeToRedis() {
         RedisFanout.subscribe(redisListenerContainer, objectMapper, CHANNEL, LiveMessageEvent.class,
-                event -> deliverLocally(event.userId(), event.message()));
+                event -> deliverLocally(event.userId(), event.event()));
     }
 
     /** Subscribes the given user to their own live message stream (call once per SSE connection). */
-    public Flux<DirectMessage> subscribe(String userId) {
+    public Flux<MessageLiveEvent> subscribe(String userId) {
         // compute() (not computeIfAbsent() + a separate incrementAndGet()) so a concurrent
         // subscribe() for the same user can never observe the gap between "get-or-create the
         // channel" and "record this subscriber on it" — that gap is exactly what let a resubscribe
@@ -79,17 +78,17 @@ public class MessageBroadcaster {
                 }));
     }
 
-    /** Publishes a message to a user's live stream, across all backend instances. */
-    public void publish(String userId, DirectMessage message) {
-        RedisFanout.publish(redisTemplate, objectMapper, CHANNEL, new LiveMessageEvent(userId, message));
+    /** Publishes an event to a user's live stream, across all backend instances. */
+    public void publish(String userId, MessageLiveEvent event) {
+        RedisFanout.publish(redisTemplate, objectMapper, CHANNEL, new LiveMessageEvent(userId, event));
     }
 
-    private void deliverLocally(String userId, DirectMessage message) {
+    private void deliverLocally(String userId, MessageLiveEvent event) {
         UserChannel channel = channels.get(userId);
         if (channel == null) {
             return;
         }
-        Sinks.EmitResult result = channel.sink.tryEmitNext(message);
+        Sinks.EmitResult result = channel.sink.tryEmitNext(event);
         if (result.isFailure()) {
             log.warn("Failed to emit live message to user {}: {}", userId, result);
         }

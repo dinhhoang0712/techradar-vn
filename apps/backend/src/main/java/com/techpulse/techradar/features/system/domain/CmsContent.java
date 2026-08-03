@@ -22,6 +22,7 @@ public class CmsContent {
     private String type;          // Report | Job | Keyword
     private LocalDate contentDate;
     private String status;        // Published | Analyzed | Pending | Archived
+    private String body;          // Full content (currently only populated for generated Report rows)
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

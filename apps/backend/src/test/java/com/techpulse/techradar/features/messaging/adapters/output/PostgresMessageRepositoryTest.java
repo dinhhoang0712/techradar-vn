@@ -1,5 +1,7 @@
 package com.techpulse.techradar.features.messaging.adapters.output;
 
+import com.techpulse.techradar.features.messaging.ports.MessageRepository.AttachmentInput;
+import com.techpulse.techradar.features.messaging.ports.MessageRepository.AttachmentRow;
 import com.techpulse.techradar.features.messaging.ports.MessageRepository.MessageRow;
 import io.r2dbc.spi.Row;
 import io.r2dbc.spi.RowMetadata;
@@ -40,6 +42,8 @@ class PostgresMessageRepositoryTest {
     @Mock
     private RowsFetchSpec<MessageRow> rowsFetchSpec;
     @Mock
+    private RowsFetchSpec<AttachmentRow> attachmentRowsFetchSpec;
+    @Mock
     private FetchSpec<Map<String, Object>> fetchSpec;
     @Mock
     private Row row;
@@ -62,34 +66,48 @@ class PostgresMessageRepositoryTest {
 
     private void stubRow(UUID id, UUID conversationId, UUID senderId, String content,
                           LocalDateTime createdAt, LocalDateTime readAt) {
+        stubRow(id, conversationId, senderId, content, createdAt, readAt, null, null, null);
+    }
+
+    private void stubRow(UUID id, UUID conversationId, UUID senderId, String content,
+                          LocalDateTime createdAt, LocalDateTime readAt,
+                          String attachmentContentType, String attachmentFilename, Integer attachmentSize) {
         when(row.get("id", UUID.class)).thenReturn(id);
         when(row.get("conversation_id", UUID.class)).thenReturn(conversationId);
         when(row.get("sender_id", UUID.class)).thenReturn(senderId);
         when(row.get("content", String.class)).thenReturn(content);
         when(row.get("created_at", LocalDateTime.class)).thenReturn(createdAt);
         when(row.get("read_at", LocalDateTime.class)).thenReturn(readAt);
+        when(row.get("attachment_content_type", String.class)).thenReturn(attachmentContentType);
+        when(row.get("attachment_filename", String.class)).thenReturn(attachmentFilename);
+        when(row.get("attachment_size", Integer.class)).thenReturn(attachmentSize);
     }
+
+    private static final String INSERT_SQL =
+            "INSERT INTO direct_message (id, conversation_id, sender_id, content, created_at, " +
+            "attachment_content_type, attachment_filename, attachment_size, attachment_data) " +
+            "VALUES (:id, :conversation_id, :sender_id, :content, :created_at, " +
+            ":attachment_content_type, :attachment_filename, :attachment_size, :attachment_data) " +
+            "RETURNING id, conversation_id, sender_id, content, created_at, read_at, " +
+            "attachment_content_type, attachment_filename, attachment_size";
 
     @Test
     @SuppressWarnings("unchecked")
-    void insert_bindsAllFiveColumns_andReturnsTheInsertedRow() {
+    void insert_withNoAttachment_bindsCoreColumnsAndNullsOutAttachmentColumns() {
         UUID messageId = UUID.randomUUID();
         UUID conversationId = UUID.randomUUID();
         UUID senderId = UUID.randomUUID();
         LocalDateTime createdAt = LocalDateTime.now();
 
-        when(dbClient.sql(
-                "INSERT INTO direct_message (id, conversation_id, sender_id, content, created_at) " +
-                        "VALUES (:id, :conversation_id, :sender_id, :content, :created_at) " +
-                        "RETURNING id, conversation_id, sender_id, content, created_at, read_at"))
-                .thenReturn(executeSpec);
+        when(dbClient.sql(INSERT_SQL)).thenReturn(executeSpec);
         when(executeSpec.bind(anyString(), any())).thenReturn(executeSpec);
+        when(executeSpec.bindNull(anyString(), any())).thenReturn(executeSpec);
         when(executeSpec.map(any(BiFunction.class))).thenReturn(rowsFetchSpec);
 
-        MessageRow expected = new MessageRow(messageId, conversationId, senderId, "hi", createdAt, null);
+        MessageRow expected = new MessageRow(messageId, conversationId, senderId, "hi", createdAt, null, null, null, null);
         when(rowsFetchSpec.one()).thenReturn(Mono.just(expected));
 
-        StepVerifier.create(repository.insert(messageId, conversationId, senderId, "hi", createdAt))
+        StepVerifier.create(repository.insert(messageId, conversationId, senderId, "hi", createdAt, null))
                 .expectNext(expected)
                 .verifyComplete();
 
@@ -98,13 +116,40 @@ class PostgresMessageRepositoryTest {
         verify(executeSpec).bind("sender_id", senderId);
         verify(executeSpec).bind("content", "hi");
         verify(executeSpec).bind("created_at", createdAt);
+        verify(executeSpec).bindNull("attachment_content_type", String.class);
+        verify(executeSpec).bindNull("attachment_filename", String.class);
+        verify(executeSpec).bindNull("attachment_size", Integer.class);
+        verify(executeSpec).bindNull("attachment_data", byte[].class);
     }
 
     @Test
     @SuppressWarnings("unchecked")
-    void insert_rowMapper_mapsAllSixColumns_includingNullReadAt() {
+    void insert_withAnAttachment_bindsAllFourAttachmentColumns() {
+        UUID messageId = UUID.randomUUID();
+        UUID conversationId = UUID.randomUUID();
+        UUID senderId = UUID.randomUUID();
+        LocalDateTime createdAt = LocalDateTime.now();
+        AttachmentInput attachment = new AttachmentInput("image/png", "photo.png", 3, new byte[]{1, 2, 3});
+
+        when(dbClient.sql(INSERT_SQL)).thenReturn(executeSpec);
+        when(executeSpec.bind(anyString(), any())).thenReturn(executeSpec);
+        when(executeSpec.map(any(BiFunction.class))).thenReturn(rowsFetchSpec);
+        when(rowsFetchSpec.one()).thenReturn(Mono.empty());
+
+        repository.insert(messageId, conversationId, senderId, "hi", createdAt, attachment).subscribe();
+
+        verify(executeSpec).bind("attachment_content_type", "image/png");
+        verify(executeSpec).bind("attachment_filename", "photo.png");
+        verify(executeSpec).bind("attachment_size", 3);
+        verify(executeSpec).bind("attachment_data", attachment.data());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void insert_rowMapper_mapsEveryColumn_includingAttachmentMetadata() {
         when(dbClient.sql(anyString())).thenReturn(executeSpec);
         when(executeSpec.bind(anyString(), any())).thenReturn(executeSpec);
+        when(executeSpec.bindNull(anyString(), any())).thenReturn(executeSpec);
         when(executeSpec.map(any(BiFunction.class))).thenReturn(rowsFetchSpec);
         when(rowsFetchSpec.one()).thenReturn(Mono.empty());
 
@@ -112,9 +157,9 @@ class PostgresMessageRepositoryTest {
         UUID conversationId = UUID.randomUUID();
         UUID senderId = UUID.randomUUID();
         LocalDateTime createdAt = LocalDateTime.now();
-        stubRow(id, conversationId, senderId, "hello there", createdAt, null);
+        stubRow(id, conversationId, senderId, "hello there", createdAt, null, "image/png", "photo.png", 42);
 
-        repository.insert(id, conversationId, senderId, "hello there", createdAt).subscribe();
+        repository.insert(id, conversationId, senderId, "hello there", createdAt, null).subscribe();
 
         MessageRow mapped = captureRowMapper().apply(row, rowMetadata);
         assertThat(mapped.id()).isEqualTo(id);
@@ -123,6 +168,9 @@ class PostgresMessageRepositoryTest {
         assertThat(mapped.content()).isEqualTo("hello there");
         assertThat(mapped.createdAt()).isEqualTo(createdAt);
         assertThat(mapped.readAt()).isNull();
+        assertThat(mapped.attachmentContentType()).isEqualTo("image/png");
+        assertThat(mapped.attachmentFilename()).isEqualTo("photo.png");
+        assertThat(mapped.attachmentSize()).isEqualTo(42);
     }
 
     @Test
@@ -131,7 +179,8 @@ class PostgresMessageRepositoryTest {
         UUID conversationId = UUID.randomUUID();
 
         when(dbClient.sql(
-                "SELECT id, conversation_id, sender_id, content, created_at, read_at FROM direct_message " +
+                "SELECT id, conversation_id, sender_id, content, created_at, read_at, " +
+                        "attachment_content_type, attachment_filename, attachment_size FROM direct_message " +
                         "WHERE conversation_id = :conversation_id " +
                         "ORDER BY created_at ASC LIMIT :limit OFFSET :offset"))
                 .thenReturn(executeSpec);
@@ -166,6 +215,53 @@ class PostgresMessageRepositoryTest {
         MessageRow mapped = captureRowMapper().apply(row, rowMetadata);
         assertThat(mapped.readAt()).isEqualTo(readAt);
         assertThat(mapped.content()).isEqualTo("read message");
+        assertThat(mapped.attachmentContentType()).isNull();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void findById_bindsId_andReturnsTheRow() {
+        UUID id = UUID.randomUUID();
+        UUID conversationId = UUID.randomUUID();
+        UUID senderId = UUID.randomUUID();
+        LocalDateTime createdAt = LocalDateTime.now();
+
+        when(dbClient.sql(
+                "SELECT id, conversation_id, sender_id, content, created_at, read_at, " +
+                        "attachment_content_type, attachment_filename, attachment_size FROM direct_message " +
+                        "WHERE id = :id"))
+                .thenReturn(executeSpec);
+        when(executeSpec.bind(anyString(), any())).thenReturn(executeSpec);
+        when(executeSpec.map(any(BiFunction.class))).thenReturn(rowsFetchSpec);
+        MessageRow expected = new MessageRow(id, conversationId, senderId, "hi", createdAt, null, null, null, null);
+        when(rowsFetchSpec.one()).thenReturn(Mono.just(expected));
+
+        StepVerifier.create(repository.findById(id)).expectNext(expected).verifyComplete();
+
+        verify(executeSpec).bind("id", id);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void findAttachmentData_bindsId_andOnlyReturnsRowsWithNonNullAttachmentData() {
+        UUID id = UUID.randomUUID();
+        byte[] bytes = {1, 2, 3};
+
+        when(dbClient.sql(
+                "SELECT attachment_content_type, attachment_filename, attachment_data FROM direct_message " +
+                        "WHERE id = :id AND attachment_data IS NOT NULL"))
+                .thenReturn(executeSpec);
+        when(executeSpec.bind(anyString(), any())).thenReturn(executeSpec);
+        when(executeSpec.map(any(BiFunction.class))).thenReturn(attachmentRowsFetchSpec);
+        when(row.get("attachment_content_type", String.class)).thenReturn("image/png");
+        when(row.get("attachment_filename", String.class)).thenReturn("photo.png");
+        when(row.get("attachment_data", byte[].class)).thenReturn(bytes);
+        AttachmentRow expected = new AttachmentRow("image/png", "photo.png", bytes);
+        when(attachmentRowsFetchSpec.one()).thenReturn(Mono.just(expected));
+
+        StepVerifier.create(repository.findAttachmentData(id)).expectNext(expected).verifyComplete();
+
+        verify(executeSpec).bind("id", id);
     }
 
     @Test

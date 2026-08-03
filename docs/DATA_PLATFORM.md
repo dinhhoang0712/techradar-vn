@@ -422,9 +422,9 @@ rồi `qdrant-writer` consume và ghi vào Qdrant; chỉ chạy khi bật profil
 
 **Chạy**: 6:00 AM, mỗi Chủ nhật
 
-Gọi `POST {ML_CLUSTERING_BASE_URL}/pipeline/trigger`. `ml-clustering` service chạy DVC pipeline (5 stages: `stage_01_extract` → `stage_02_features` → `stage_03_train` → `stage_04_label` → `stage_05_writeback`). Sau khi trigger thành công, job block lại và **poll `GET /pipeline/status`** định kỳ (`CLUSTERING_RETRAIN_POLL_INTERVAL_S`, mặc định 30s) cho tới khi pipeline xong hoặc hết `CLUSTERING_RETRAIN_MAX_WAIT_S` (mặc định 7200s), rồi ghi kết quả thật vào `dp_pipeline_runs` — trước đây chỉ log việc trigger HTTP thành công, không biết pipeline có thật sự chạy xong hay lỗi (vd hết quota LLM ở Stage 4).
+Gọi `POST {ML_CLUSTERING_BASE_URL}/pipeline/trigger`. `ml-clustering` service chạy pipeline 6 stage: `stage_01_extract` → `stage_02_features` → `stage_03_train` → (champion gate) → `stage_04_label` → `stage_06_publish` → `stage_05_writeback`. Sau khi trigger thành công, job block lại và **poll `GET /pipeline/status`** định kỳ (`CLUSTERING_RETRAIN_POLL_INTERVAL_S`, mặc định 30s) cho tới khi pipeline xong hoặc hết `CLUSTERING_RETRAIN_MAX_WAIT_S` (mặc định 7200s), rồi ghi kết quả thật vào `dp_pipeline_runs` — trước đây chỉ log việc trigger HTTP thành công, không biết pipeline có thật sự chạy xong hay lỗi (vd hết quota LLM ở Stage 4).
 
-Trong `ml-clustering`, model mới chỉ được gán alias `champion` trong MLflow Model Registry nếu tốt hơn (hoặc bằng) champion hiện tại theo cùng `primary_metric` dùng để chọn best trial — model cũ vẫn được đăng ký (giữ lịch sử) nhưng không ghi đè champion nếu kém hơn. Xem [`AI_PLATFORM.md` §3.2](./AI_PLATFORM.md#32-pipeline-5-stages).
+Trong `ml-clustering`, model mới chỉ được gán alias `champion` trong MLflow Model Registry nếu tốt hơn (hoặc bằng) champion hiện tại theo cùng `primary_metric` dùng để chọn best trial — model cũ vẫn được đăng ký (giữ lịch sử) nhưng không ghi đè champion nếu kém hơn. Kể từ khi có Stage 6 (publish), quyết định này còn quyết định pipeline có chạy tiếp LABEL/PUBLISH/WRITEBACK hay dừng lại ở TRAIN (`dp_pipeline_runs` sẽ thấy `deployed=false` — xem `GET /pipeline/status`). Xem [`AI_PLATFORM.md` §3.2](./AI_PLATFORM.md#32-pipeline-6-stages).
 
 ---
 

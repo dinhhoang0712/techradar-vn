@@ -16,6 +16,7 @@ import reactor.test.StepVerifier;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -74,12 +75,13 @@ class MessageBroadcasterRedisCrossInstanceTest {
     @Test
     void publishOnOneInstance_isDeliveredToASubscriberOnAnotherInstance() {
         String recipientUserId = "cross-instance-user-" + System.identityHashCode(this);
-        DirectMessage message = new DirectMessage(
+        DirectMessage directMessage = new DirectMessage(
                 "msg-1", "conv-1", "sender-1", "hello from instance A",
-                LocalDateTime.of(2026, 7, 15, 12, 0), false);
+                LocalDateTime.of(2026, 7, 15, 12, 0), false, null, List.of());
+        MessageLiveEvent event = MessageLiveEvent.newMessage(directMessage);
 
         // "instance B" holds the recipient's SSE connection.
-        Flux<DirectMessage> received = instanceB.subscribe(recipientUserId);
+        Flux<MessageLiveEvent> received = instanceB.subscribe(recipientUserId);
 
         StepVerifier.create(received.take(1).timeout(Duration.ofSeconds(5)))
                 .then(() -> {
@@ -91,19 +93,20 @@ class MessageBroadcasterRedisCrossInstanceTest {
                         Thread.currentThread().interrupt();
                     }
                     // "instance A" is where the sender's request landed.
-                    instanceA.publish(recipientUserId, message);
+                    instanceA.publish(recipientUserId, event);
                 })
-                .assertNext(delivered -> assertThat(delivered).isEqualTo(message))
+                .assertNext(delivered -> assertThat(delivered).isEqualTo(event))
                 .verifyComplete();
     }
 
     @Test
     void publish_toAUserWithNoLocalSubscriberOnEitherInstance_isANoOp() {
-        DirectMessage message = new DirectMessage(
+        DirectMessage directMessage = new DirectMessage(
                 "msg-2", "conv-1", "sender-1", "nobody is listening",
-                LocalDateTime.of(2026, 7, 15, 12, 0), false);
+                LocalDateTime.of(2026, 7, 15, 12, 0), false, null, List.of());
+        MessageLiveEvent event = MessageLiveEvent.newMessage(directMessage);
 
-        instanceA.publish("nobody-is-subscribed-" + System.identityHashCode(this), message);
+        instanceA.publish("nobody-is-subscribed-" + System.identityHashCode(this), event);
         // No assertion beyond "this doesn't throw / hang" — absence of a subscriber must be a no-op.
     }
 }

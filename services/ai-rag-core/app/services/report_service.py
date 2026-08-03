@@ -8,6 +8,7 @@ Report Generator Service — tạo báo cáo xu hướng tổng hợp theo perio
 
 import calendar
 import logging
+from collections import Counter
 from datetime import UTC, date, datetime
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from sqlalchemy import text
 
 from app.api.schemas import ReportRequest, ReportResponse
 from app.config import get_settings
+from app.core.flexible_date import parse_date
 from app.core.generator import generate
 from app.db.neo4j_client import run_query
 from app.db.postgres_client import get_session_factory
@@ -71,23 +73,32 @@ async def _top_growing_techs(start_date: str, end_date: str, top_n: int) -> list
 
 
 async def _top_mentioned_techs(start_date: str, end_date: str, limit: int = 10) -> list[dict]:
-    """Neo4j: tech được mention nhiều nhất trong khoảng thời gian."""
+    """Neo4j: tech được mention nhiều nhất trong khoảng thời gian.
+
+    published_date là string với format lẫn lộn tùy nguồn crawl (xem app.core.flexible_date), nên
+    lọc theo khoảng ngày phải làm ở Python thay vì Cypher `date($start)` (luôn trả NULL và bị WHERE
+    loại hết vì so sánh String với Date) — đếm mention theo tech ở application code thay vì Cypher.
+    """
     try:
         rows = await run_query(
             """
             MATCH (a:Article)-[:MENTIONS]->(t:Technology)
-            WHERE a.published_date >= date($start)
-              AND a.published_date <= date($end)
-            RETURN t.name AS tech_name, count(a) AS mention_count
-            ORDER BY mention_count DESC
-            LIMIT $limit
+            RETURN t.name AS tech_name, a.published_date AS published_date
             """,
-            {"start": start_date, "end": end_date, "limit": limit},
         )
-        return rows
     except Exception as e:
         logger.warning("top_mentioned_techs query failed: %s", e)
         return []
+
+    start = date.fromisoformat(start_date)
+    end = date.fromisoformat(end_date)
+    counts: Counter[str] = Counter()
+    for row in rows:
+        parsed = parse_date(row.get("published_date"))
+        if parsed and start <= parsed <= end:
+            counts[row["tech_name"]] += 1
+
+    return [{"tech_name": name, "mention_count": count} for name, count in counts.most_common(limit)]
 
 
 async def _fetch_cluster_labels(tech_names: list[str]) -> dict[str, str]:

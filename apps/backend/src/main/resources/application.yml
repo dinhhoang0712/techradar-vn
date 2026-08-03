@@ -152,6 +152,14 @@ app:
       enabled: ${ANALYTICS_ETL_ENABLED:false}
       cron: ${ANALYTICS_ETL_CRON:0 0 3 * * *}
 
+  report:
+    monthly:
+      # Generates last month's technology trend report via the ai-rag-core /report LLM call and
+      # catalogs it in the admin CMS (cms_content, type=Report, status=Pending for admin review).
+      # Off by default (real LLM cost each run) — set enabled=true to schedule it.
+      enabled: ${REPORT_MONTHLY_ENABLED:false}
+      cron: ${REPORT_MONTHLY_CRON:0 0 5 1 * *}
+
   notifications:
     # Min month-over-month growth (%) for a technology to raise a trend alert during the ETL.
     # Each alert is published to Kafka (trend.alerts) and fanned out to subscribed users. Also

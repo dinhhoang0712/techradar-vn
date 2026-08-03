@@ -108,6 +108,14 @@
     justify-content: space-between;
     gap: 10px;
     margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.report-table-header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
 }
 
 .report-period-badge {
@@ -118,6 +126,23 @@
     font-size: 0.78rem;
     font-weight: 600;
     padding: 3px 12px;
+    white-space: nowrap;
+}
+
+.cluster-filter-select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 0.82rem;
+    padding: 6px 10px;
+    outline: none;
+    font-family: inherit;
+}
+
+.btn-secondary.sm {
+    padding: 6px 12px;
+    font-size: 0.82rem;
 }
 
 .report-tech-table {
@@ -148,6 +173,21 @@
     letter-spacing: 0.05em;
 }
 
+.sortable-head {
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    text-transform: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+    cursor: pointer;
+    text-align: left;
+}
+
+.sortable-head:hover { color: var(--text-2); }
+
 .report-table-row {
     border-bottom: 1px solid var(--border);
     transition: background 0.1s;
@@ -157,7 +197,22 @@
 .report-table-row:hover { background: var(--surface); }
 
 .rank { color: var(--primary); font-weight: 700; font-size: 0.85rem; }
-.tech-name { font-weight: 600; color: var(--text); font-size: 0.9rem; }
+.tech-name {
+    font-weight: 600;
+    color: var(--text);
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.forecast-link {
+    font-size: 0.8rem;
+    text-decoration: none;
+    opacity: 0.55;
+    transition: opacity 0.15s;
+}
+.forecast-link:hover { opacity: 1; }
+.metric-source-icon { font-size: 0.78rem; margin-right: 4px; }
 .cluster-label {
     font-size: 0.8rem;
     color: var(--text-2);
@@ -269,3 +324,145 @@
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Compare-with-another-period toggle */
+.compare-toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-2);
+    cursor: pointer;
+}
+
+/* Report history dropdown */
+.history-dropdown-wrap { position: relative; }
+
+.history-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 20;
+    min-width: 260px;
+    max-height: 320px;
+    overflow-y: auto;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: var(--shadow-lg, 0 8px 24px rgba(0,0,0,0.35));
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.history-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.history-item-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    background: none;
+    border: none;
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    text-align: left;
+}
+
+.history-item-main:hover { background: var(--surface); }
+.history-item-period { color: var(--text); font-size: 0.85rem; font-weight: 600; }
+.history-item-time { color: var(--text-3); font-size: 0.72rem; }
+
+.history-item-remove {
+    background: none;
+    border: none;
+    color: var(--text-3);
+    font-size: 1rem;
+    line-height: 1;
+    padding: 6px 8px;
+    cursor: pointer;
+    border-radius: 6px;
+}
+
+.history-item-remove:hover { background: var(--danger-glow); color: var(--danger-light); }
+
+/* Compare view */
+.report-compare-card { padding: 20px 24px; }
+
+.compare-delta-strip {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 12px 0 18px;
+}
+
+.compare-delta-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.compare-delta-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-3);
+    white-space: nowrap;
+}
+
+.compare-delta-label.new { color: var(--green); }
+.compare-delta-label.dropped { color: var(--danger-light); }
+
+.compare-delta-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.compare-chip {
+    font-size: 0.78rem;
+    padding: 3px 10px;
+}
+
+.compare-chip.new { border-color: var(--green); color: var(--green); }
+.compare-chip.dropped { border-color: var(--danger-light); color: var(--danger-light); }
+
+.compare-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.compare-columns .report-table-card { padding: 0; border: none; }
+
+@media (max-width: 860px) {
+    .compare-columns { grid-template-columns: 1fr; }
+}
+
+/* Growth chart */
+.report-chart-card { padding: 20px 24px; }
+
+/* Chart tooltip — cùng cấu trúc class với TrendChart/ForecastPanel để dùng chung mental model. */
+.chart-tooltip {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 0.8rem;
+}
+
+.tooltip-month { margin: 0 0 4px; color: var(--text-3); font-size: 0.72rem; }
+
+.tooltip-row { display: flex; align-items: center; gap: 6px; }
+
+.tooltip-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+.tooltip-tech { color: var(--text-2); }
+
+.tooltip-jobs { font-weight: 600; color: var(--text); margin-left: auto; }
+.tooltip-jobs.up { color: var(--green); }
+.tooltip-jobs.down { color: var(--danger-light); }

@@ -8,7 +8,9 @@ import com.techpulse.techradar.features.notification.domain.Notification;
 import com.techpulse.techradar.features.notification.event.ClusteringCompletedEvent;
 import com.techpulse.techradar.features.notification.event.CrawlerCompletedEvent;
 import com.techpulse.techradar.features.notification.event.JobCompletedEvent;
+import com.techpulse.techradar.features.system.application.CmsService;
 import com.techpulse.techradar.features.system.application.DataPlatformJobStatusService;
+import com.techpulse.techradar.features.system.domain.CmsContent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,6 +22,7 @@ import org.springframework.data.redis.listener.ReactiveRedisMessageListenerConta
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -46,6 +49,8 @@ class JobCompletionNotifierTest {
     private DataPlatformJobStatusService dataPlatformJobStatusService;
     @Mock
     private EmailSender emailSender;
+    @Mock
+    private CmsService cmsService;
     @Captor
     private ArgumentCaptor<Notification> notificationCaptor;
 
@@ -54,7 +59,7 @@ class JobCompletionNotifierTest {
     @BeforeEach
     void setUp() {
         notifier = new JobCompletionNotifier(redisListenerContainer, new ObjectMapper(), userRepository,
-                notificationService, dataPlatformJobStatusService, emailSender);
+                notificationService, dataPlatformJobStatusService, emailSender, cmsService);
     }
 
     private static User admin(String email) {
@@ -147,6 +152,7 @@ class JobCompletionNotifierTest {
         User admin = admin("admin@example.com");
         when(userRepository.findAdmins()).thenReturn(Flux.just(admin));
         when(notificationService.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
+        when(cmsService.create(any(), any(), any(), any())).thenReturn(Mono.just(CmsContent.builder().build()));
 
         notifier.onCrawlerCompleted(new CrawlerCompletedEvent(6, 8));
 
@@ -156,6 +162,18 @@ class JobCompletionNotifierTest {
         assertThat(saved.getTitle()).isEqualTo("Crawler đã hoàn tất: 6/8 nguồn thành công");
         assertThat(saved.getUserId()).isEqualTo(admin.getId());
         verify(emailSender, never()).sendNotification(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void onCrawlerCompleted_writesCmsRow_analyzedWhenPartialSuccess_publishedWhenAllSucceeded() {
+        when(userRepository.findAdmins()).thenReturn(Flux.empty());
+        when(cmsService.create(any(), any(), any(), any())).thenReturn(Mono.just(CmsContent.builder().build()));
+
+        notifier.onCrawlerCompleted(new CrawlerCompletedEvent(6, 8));
+        verify(cmsService).create("Crawler đã hoàn tất: 6/8 nguồn thành công", "Job", LocalDate.now(), "Analyzed");
+
+        notifier.onCrawlerCompleted(new CrawlerCompletedEvent(8, 8));
+        verify(cmsService).create("Crawler đã hoàn tất: 8/8 nguồn thành công", "Job", LocalDate.now(), "Published");
     }
 
     @Test

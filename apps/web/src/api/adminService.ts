@@ -308,7 +308,7 @@ export const batchPredictClusters = async (techNames: string[]): Promise<ApiResp
 
 export interface UpdateClusterLabelFields {
     label?: string;
-    labelEn?: string;
+    label_en?: string;
     description?: string;
     domain?: string;
 }
@@ -358,7 +358,7 @@ interface SendAdminNotificationOptions {
 export const sendAdminNotification = async ({ title, body, link, userId }: SendAdminNotificationOptions): Promise<ApiResponse<{ recipients: number }>> => {
     return await apiClient('/admin/notifications', {
         method: 'POST',
-        body: JSON.stringify({ title, body, link, userId })
+        body: JSON.stringify({ title, body, link, user_id: userId })
     });
 };
 
@@ -435,7 +435,7 @@ export const fetchTechAliasReviewCount = async (): Promise<ApiResponse<{ pending
 export const approveTechAlias = async (id: number, canonicalName?: string): Promise<unknown> => {
     return await apiClient(`/admin/kg-review/tech-aliases/${id}/approve`, {
         method: 'POST',
-        body: JSON.stringify({ canonicalName: canonicalName || null }),
+        body: JSON.stringify({ canonical_name: canonicalName || null }),
     });
 };
 
@@ -450,6 +450,6 @@ export const fetchCompanyDuplicates = async (): Promise<ApiResponse<CompanyDupli
 export const mergeCompanyDuplicate = async (duplicateId: string, canonicalId: string): Promise<unknown> => {
     return await apiClient('/admin/kg-review/company-duplicates/merge', {
         method: 'POST',
-        body: JSON.stringify({ duplicateId, canonicalId }),
+        body: JSON.stringify({ duplicate_id: duplicateId, canonical_id: canonicalId }),
     });
 };

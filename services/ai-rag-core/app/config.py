@@ -21,11 +21,21 @@ class Settings(BaseSettings):
     # Chọn local hay AuraDB — đặt USE_LOCAL_NEO4J=true trong .env khi dev
     use_local_neo4j: bool = False
 
-    # LLM
+    # LLM — llm_provider vẫn là provider CHÍNH (giữ đúng hành vi cũ). Mọi provider khác có
+    # API key khai báo dưới đây sẽ tự thành fallback chain (xem app/core/generator.py::get_gateway) —
+    # không cần cấu hình thêm để bật fallback, chỉ cần điền key.
     gemini_api_key: str = ""
     openai_api_key: str = ""
     groq_api_key: str = ""
-    llm_provider: str = "openai"  # "openai" | "gemini" | "groq"
+    anthropic_api_key: str = ""
+    llm_provider: str = "openai"  # "openai" | "gemini" | "groq" | "claude"
+
+    # Model cho provider CHÍNH (llm_provider) vẫn dùng llm_model bên dưới, như trước đây.
+    # Các field này chỉ áp dụng cho provider khi nó đóng vai trò FALLBACK (không phải provider chính).
+    openai_model: str = "gpt-4o-mini"
+    groq_model: str = "llama-3.3-70b-versatile"
+    gemini_model: str = "gemini-1.5-flash"
+    anthropic_model: str = "claude-sonnet-5"
 
     # PostgreSQL
     postgres_host: str = "localhost"

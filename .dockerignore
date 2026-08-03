@@ -1,0 +1,39 @@
+# Shared build context root for ai-rag-core / ml-clustering / data-platform (docker-compose.yml
+# sets context: . for these so their Dockerfiles can COPY services/llm-gateway, the package all
+# three editable-install). Without this file, every build would tar up the whole monorepo,
+# including multi-GB local .venv/node_modules/db-dump trees.
+
+# Trees no Python service build reads from.
+apps/
+db-dump/
+docs/
+infrastructure/
+.claude/
+.git/
+.github/
+
+# Secrets / local env files — never bake into an image.
+**/.env
+**/.env.*
+
+# Python/Node build & cache junk, wherever it appears.
+**/__pycache__/
+**/*.pyc
+**/.venv/
+**/venv/
+**/node_modules/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/*.egg-info/
+**/.dvc/cache/
+**/.dvc/tmp/
+**/mlruns/
+**/mlflow.db
+**/*.log
+**/*.md
+**/tests/
+
+# ml-clustering seeds data/ from committed published/<tag>/ snapshots at build time (see its
+# Dockerfile) — the local working data/ tree isn't a build input.
+services/ml-clustering/data/

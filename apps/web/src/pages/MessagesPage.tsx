@@ -1,12 +1,22 @@
 import { useState, useEffect, useRef } from 'react';
-import type { FormEvent } from 'react';
+import type { FormEvent, ChangeEvent } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useMessagingContext } from '../contexts/messagingStore';
 import { useToast } from '../components/common/toastContext';
 import Avatar from '../components/common/Avatar';
+import MessageBubble from '../components/messaging/MessageBubble';
 import { timeAgo } from '../utils/timeAgo';
+import { fileToBase64 } from '../utils/fileToBase64';
 import type { Conversation } from '../types/messaging';
 import './MessagesPage.css';
+
+// Phải khớp với FileUploadValidator.MAX_BYTES ở backend (apps/backend/.../shared/util/FileUploadValidator.java).
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+
+interface PendingAttachment {
+    file: File;
+    dataUrl: string;
+}
 
 interface ConversationRowProps {
     conversation: Conversation;
@@ -48,10 +58,13 @@ export default function MessagesPage() {
         refreshConversations,
         loadMessages,
         send,
+        setReaction,
+        removeReaction,
     } = useMessagingContext()!;
 
     const [input, setInput] = useState('');
     const [sending, setSending] = useState(false);
+    const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null);
     const threadRef = useRef<HTMLDivElement>(null);
 
     const paramConversation = searchParams.get('conversation');
@@ -81,15 +94,51 @@ export default function MessagesPage() {
     const handleSend = async (e: FormEvent) => {
         e.preventDefault();
         const content = input.trim();
-        if (!content || !activeConversationId) return;
+        if ((!content && !pendingAttachment) || !activeConversationId) return;
         setSending(true);
         try {
-            await send(activeConversationId, content);
+            const attachment = pendingAttachment
+                ? {
+                    content_type: pendingAttachment.file.type || 'application/octet-stream',
+                    filename: pendingAttachment.file.name,
+                    data_base64: pendingAttachment.dataUrl,
+                }
+                : undefined;
+            await send(activeConversationId, content, attachment);
             setInput('');
+            setPendingAttachment(null);
         } catch (err) {
             notify({ title: 'Không thể gửi tin nhắn', body: (err as Error).message, variant: 'error' });
         } finally {
             setSending(false);
+        }
+    };
+
+    const handleQuickLike = async () => {
+        if (!activeConversationId || sending) return;
+        setSending(true);
+        try {
+            await send(activeConversationId, '👍');
+        } catch (err) {
+            notify({ title: 'Không thể gửi tin nhắn', body: (err as Error).message, variant: 'error' });
+        } finally {
+            setSending(false);
+        }
+    };
+
+    const handleAttachmentSelect = async (e: ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.target.value = ''; // cho phép chọn lại cùng 1 file
+        if (!file) return;
+        if (file.size > MAX_ATTACHMENT_BYTES) {
+            notify({ title: 'File quá lớn (tối đa 10MB)', variant: 'error' });
+            return;
+        }
+        try {
+            const dataUrl = await fileToBase64(file);
+            setPendingAttachment({ file, dataUrl });
+        } catch {
+            notify({ title: 'Không thể đọc file', variant: 'error' });
         }
     };
 
@@ -164,20 +213,42 @@ export default function MessagesPage() {
                                 <div className="messages-state">Chưa có tin nhắn. Hãy bắt đầu cuộc trò chuyện!</div>
                             ) : (
                                 activeMessages.map((m) => (
-                                    <div key={m.id} className={`msg-row${m.sender_id === currentUserId ? ' own' : ''}`}>
-                                        <div className="msg-bubble">
-                                            <span className="msg-text">{m.content}</span>
-                                            <span className="msg-time">{timeAgo(m.created_at)}</span>
-                                        </div>
-                                        {m.sender_id === currentUserId && m.read && m.id === lastOwnMessageId && (
-                                            <span className="msg-seen">Đã xem</span>
-                                        )}
-                                    </div>
+                                    <MessageBubble
+                                        key={m.id}
+                                        message={m}
+                                        own={m.sender_id === currentUserId}
+                                        showSeen={m.sender_id === currentUserId && !!m.read && m.id === lastOwnMessageId}
+                                        onReact={(emoji) => setReaction(activeConversationId, m.id, emoji)}
+                                        onRemoveReaction={() => removeReaction(activeConversationId, m.id)}
+                                    />
                                 ))
                             )}
                         </div>
 
+                        {pendingAttachment && (
+                            <div className="thread-pending-attachment">
+                                {pendingAttachment.file.type.startsWith('image/') ? (
+                                    <img src={pendingAttachment.dataUrl} alt="" className="thread-pending-attachment-thumb" />
+                                ) : (
+                                    <span className="thread-pending-attachment-icon" aria-hidden="true">📎</span>
+                                )}
+                                <span className="thread-pending-attachment-name">{pendingAttachment.file.name}</span>
+                                <button
+                                    type="button"
+                                    className="thread-pending-attachment-remove"
+                                    onClick={() => setPendingAttachment(null)}
+                                    aria-label="Bỏ file đính kèm"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        )}
+
                         <form className="thread-input-bar" onSubmit={handleSend}>
+                            <label className="thread-attach-btn" aria-label="Đính kèm ảnh hoặc file">
+                                📎
+                                <input type="file" hidden onChange={handleAttachmentSelect} disabled={sending} />
+                            </label>
                             <input
                                 className="thread-input"
                                 placeholder="Nhập tin nhắn..."
@@ -186,9 +257,21 @@ export default function MessagesPage() {
                                 maxLength={2000}
                                 disabled={sending}
                             />
-                            <button type="submit" className="btn btn-primary" disabled={sending || !input.trim()}>
-                                Gửi
-                            </button>
+                            {input.trim() || pendingAttachment ? (
+                                <button type="submit" className="btn btn-primary" disabled={sending}>
+                                    Gửi
+                                </button>
+                            ) : (
+                                <button
+                                    type="button"
+                                    className="thread-like-btn"
+                                    onClick={handleQuickLike}
+                                    disabled={sending}
+                                    aria-label="Gửi biểu tượng thích"
+                                >
+                                    👍
+                                </button>
+                            )}
                         </form>
                     </>
                 )}

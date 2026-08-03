@@ -11,14 +11,19 @@ WORKDIR /app/src/ml-clustering
 # with the source commit — python:3.11-slim doesn't ship it.
 RUN apt-get update && apt-get install -y --no-install-recommends gosu git && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt ./
+COPY services/ml-clustering/requirements.txt ./
+# llm-gateway (services/llm-gateway/) — package dùng chung, cài kiểu editable qua "-e
+# ../llm-gateway" trong requirements.txt, resolve tương đối theo WORKDIR nên phải nằm đúng ở
+# /app/src/llm-gateway (mirror host layout, xem comment WORKDIR ở trên). Build context là repo
+# root (xem docker-compose.yml) để COPY được đường dẫn này.
+COPY services/llm-gateway /app/src/llm-gateway
 # CPU-only torch FIRST — sentence-transformers/transformers below pull torch transitively, and
 # without this index pip defaults to the CUDA wheel (~5x larger) even though nothing here uses a
 # GPU. Same pattern as ai-rag-core/embedding-service's Dockerfiles.
 RUN pip install --no-cache-dir --timeout 600 torch==2.4.1 --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir --timeout 600 -r requirements.txt
 
-COPY . .
+COPY services/ml-clustering/ .
 
 # Seed data/ from the committed published/<tag>/ snapshots so a fresh `git clone` +
 # `docker compose up` serves real clusters immediately — no MinIO config, no running the ML

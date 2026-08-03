@@ -97,3 +97,67 @@ async def test_fetch_cluster_labels_fails_soft_when_ml_clustering_is_unreachable
     monkeypatch.setattr(report_service.httpx, "AsyncClient", _BoomAsyncClient)
 
     assert await report_service._fetch_cluster_labels(["Kafka"]) == {}
+
+
+@pytest.mark.asyncio
+async def test_top_mentioned_techs_counts_only_mentions_inside_the_date_range(monkeypatch):
+    # Regression: published_date is a plain string in Neo4j, so a Cypher `date($start)` comparison
+    # always evaluates to NULL and silently drops every row — counting must happen here instead.
+    rows = [
+        {"tech_name": "Kafka", "published_date": "2026-05-01"},
+        {"tech_name": "Kafka", "published_date": "2026-06-01"},
+        {"tech_name": "Kafka", "published_date": "2026-08-01"},  # outside range
+        {"tech_name": "Redis", "published_date": "2026-05-15"},
+    ]
+
+    async def fake_run_query(cypher, params=None):
+        return rows
+
+    monkeypatch.setattr(report_service, "run_query", fake_run_query)
+
+    result = await report_service._top_mentioned_techs("2026-04-01", "2026-07-31")
+
+    assert result == [
+        {"tech_name": "Kafka", "mention_count": 2},
+        {"tech_name": "Redis", "mention_count": 1},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_top_mentioned_techs_handles_mixed_date_formats(monkeypatch):
+    rows = [
+        {"tech_name": "Kafka", "published_date": "2026-05-01"},
+        {"tech_name": "Kafka", "published_date": "20/05/2026"},
+        {"tech_name": "Kafka", "published_date": "not-a-date"},
+    ]
+
+    async def fake_run_query(cypher, params=None):
+        return rows
+
+    monkeypatch.setattr(report_service, "run_query", fake_run_query)
+
+    result = await report_service._top_mentioned_techs("2026-04-01", "2026-07-31")
+
+    assert result == [{"tech_name": "Kafka", "mention_count": 2}]
+
+
+@pytest.mark.asyncio
+async def test_top_mentioned_techs_respects_the_limit(monkeypatch):
+    async def fake_run_query(cypher, params=None):
+        return [{"tech_name": f"tech{i}", "published_date": "2026-05-01"} for i in range(5)]
+
+    monkeypatch.setattr(report_service, "run_query", fake_run_query)
+
+    result = await report_service._top_mentioned_techs("2026-04-01", "2026-07-31", limit=2)
+
+    assert len(result) == 2
+
+
+@pytest.mark.asyncio
+async def test_top_mentioned_techs_returns_empty_list_when_the_query_fails(monkeypatch):
+    async def fake_run_query(cypher, params=None):
+        raise ConnectionError("neo4j unreachable")
+
+    monkeypatch.setattr(report_service, "run_query", fake_run_query)
+
+    assert await report_service._top_mentioned_techs("2026-04-01", "2026-07-31") == []

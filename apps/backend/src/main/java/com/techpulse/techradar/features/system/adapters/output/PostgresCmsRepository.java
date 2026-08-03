@@ -20,7 +20,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class PostgresCmsRepository implements CmsRepository {
 
-    private static final String COLUMNS = "id, title, type, content_date, status, created_at, updated_at";
+    private static final String COLUMNS = "id, title, type, content_date, status, body, created_at, updated_at";
 
     private final DatabaseClient dbClient;
 
@@ -51,8 +51,8 @@ public class PostgresCmsRepository implements CmsRepository {
         }
 
         DatabaseClient.GenericExecuteSpec spec = dbClient.sql(
-                "INSERT INTO cms_content (id, title, type, content_date, status, created_at, updated_at) " +
-                "VALUES (:id, :title, :type, :content_date, :status, :created_at, :updated_at)")
+                "INSERT INTO cms_content (id, title, type, content_date, status, body, created_at, updated_at) " +
+                "VALUES (:id, :title, :type, :content_date, :status, :body, :created_at, :updated_at)")
                 .bind("id", id)
                 .bind("title", c.getTitle())
                 .bind("status", c.getStatus())
@@ -60,6 +60,7 @@ public class PostgresCmsRepository implements CmsRepository {
                 .bind("updated_at", now);
         spec = bindNullable(spec, "type", c.getType());
         spec = bindNullableDate(spec, "content_date", c.getContentDate());
+        spec = bindNullable(spec, "body", c.getBody());
 
         return spec.fetch().rowsUpdated().thenReturn(c);
     }
@@ -74,13 +75,14 @@ public class PostgresCmsRepository implements CmsRepository {
 
         DatabaseClient.GenericExecuteSpec spec = dbClient.sql(
                 "UPDATE cms_content SET title = :title, type = :type, content_date = :content_date, " +
-                "status = :status, updated_at = :updated_at WHERE id = :id")
+                "status = :status, body = :body, updated_at = :updated_at WHERE id = :id")
                 .bind("id", c.getId())
                 .bind("title", c.getTitle())
                 .bind("status", c.getStatus())
                 .bind("updated_at", now);
         spec = bindNullable(spec, "type", c.getType());
         spec = bindNullableDate(spec, "content_date", c.getContentDate());
+        spec = bindNullable(spec, "body", c.getBody());
 
         return spec.fetch().rowsUpdated().thenReturn(c);
     }
@@ -100,6 +102,7 @@ public class PostgresCmsRepository implements CmsRepository {
                 .type(row.get("type", String.class))
                 .contentDate(row.get("content_date", LocalDate.class))
                 .status(row.get("status", String.class))
+                .body(row.get("body", String.class))
                 .createdAt(row.get("created_at", LocalDateTime.class))
                 .updatedAt(row.get("updated_at", LocalDateTime.class))
                 .build();

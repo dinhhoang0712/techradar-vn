@@ -8,10 +8,12 @@ import {
     sendMessage,
     markConversationRead,
     streamConversations,
+    setMessageReaction,
+    removeMessageReaction,
 } from '../api/messagingService';
 import { getUserProfile } from '../api/userService';
 import { useToast } from '../components/common/toastContext';
-import type { Conversation, DirectMessage } from '../types/messaging';
+import type { AttachmentInput, Conversation, DirectMessage, MessageReaction } from '../types/messaging';
 
 export function MessagingProvider({ children }: { children: ReactNode }) {
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -57,12 +59,30 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         refreshConversations();
     }, []);
 
+    // Cập nhật reactions của 1 tin nhắn tại chỗ — dùng chung cho cả sự kiện SSE (REACTIONS_CHANGED)
+    // lẫn phản hồi trực tiếp từ setReaction()/removeReaction() của chính mình.
+    const applyReactions = (conversationId: string, messageId: string, reactions: MessageReaction[]) => {
+        setMessagesByConversation((prev) => {
+            if (!prev[conversationId]) return prev;
+            return {
+                ...prev,
+                [conversationId]: prev[conversationId].map((m) => (m.id === messageId ? { ...m, reactions } : m)),
+            };
+        });
+    };
+
     // Live stream — một kết nối duy nhất cho toàn bộ cuộc trò chuyện, mở khi provider mount.
     useEffect(() => {
         if (!localStorage.getItem('access_token')) return undefined;
 
         const controller = streamConversations(
-            (msg) => {
+            (event) => {
+                if (event.type === 'REACTIONS_CHANGED') {
+                    applyReactions(event.conversation_id, event.message_id, event.reactions);
+                    return;
+                }
+
+                const msg = event.message;
                 const isActive = activeConversationIdRef.current === msg.conversation_id;
 
                 setMessagesByConversation((prev) => {
@@ -135,8 +155,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         return conversationId;
     };
 
-    const send = async (conversationId: string, content: string) => {
-        const res = await sendMessage(conversationId, content);
+    const send = async (conversationId: string, content: string, attachment?: AttachmentInput) => {
+        const res = await sendMessage(conversationId, content, attachment);
         const msg = res?.data;
         if (msg) {
             setMessagesByConversation((prev) => ({
@@ -158,6 +178,16 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         return msg;
     };
 
+    const setReaction = async (conversationId: string, messageId: string, emoji: string) => {
+        const res = await setMessageReaction(conversationId, messageId, emoji);
+        applyReactions(conversationId, messageId, res?.data ?? []);
+    };
+
+    const removeReaction = async (conversationId: string, messageId: string) => {
+        const res = await removeMessageReaction(conversationId, messageId);
+        applyReactions(conversationId, messageId, res?.data ?? []);
+    };
+
     return (
         <MessagingContext.Provider
             value={{
@@ -173,6 +203,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
                 selectConversation,
                 openConversationWith,
                 send,
+                setReaction,
+                removeReaction,
             }}
         >
             {children}

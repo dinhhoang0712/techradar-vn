@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { ToastProvider } from '../components/common/ToastProvider';
 import TrendDashboard from './TrendDashboard';
 import { getRadarTop4, getRadarTop10, getRadarSearch, streamRadar } from '../api/trendService';
+import { getForecast } from '../api/forecastService';
 import type { RadarSnapshotEvent } from '../types/trend';
 
 vi.mock('../api/trendService', () => ({
@@ -18,6 +19,7 @@ const mockedGetRadarTop4 = vi.mocked(getRadarTop4);
 const mockedGetRadarTop10 = vi.mocked(getRadarTop10);
 const mockedGetRadarSearch = vi.mocked(getRadarSearch);
 const mockedStreamRadar = vi.mocked(streamRadar);
+const mockedGetForecast = vi.mocked(getForecast);
 
 describe('TrendDashboard live radar stream', () => {
     let liveHandler: (snapshot: RadarSnapshotEvent) => void;
@@ -74,5 +76,21 @@ describe('TrendDashboard live radar stream', () => {
 
         unmount();
         expect(abortFn).toHaveBeenCalledTimes(1);
+    });
+
+    it('mở sẵn panel dự báo khi URL có ?forecastTech= (deep-link từ ReportPage)', async () => {
+        mockInitialLoad();
+        mockedGetForecast.mockResolvedValueOnce({
+            data: { technology: 'Kotlin', predicted_direction: 'growing', confidence: 0.8, reasoning: '', signals: [], trend_data: [], current_status: {} },
+        } as never);
+        window.history.pushState({}, '', '/dashboard?forecastTech=Kotlin');
+
+        render(<ToastProvider><TrendDashboard /></ToastProvider>);
+
+        expect(await screen.findByText('↑ Tăng trưởng')).toBeInTheDocument();
+        expect(document.querySelector('.forecast-panel')?.textContent).toContain('Kotlin');
+        expect(mockedGetForecast).toHaveBeenCalledWith('Kotlin', 6);
+
+        window.history.pushState({}, '', '/');
     });
 });

@@ -9,6 +9,8 @@ import com.techpulse.techradar.features.radar.domain.TechCount;
 import com.techpulse.techradar.features.radar.domain.TechDateSample;
 import com.techpulse.techradar.features.radar.ports.RadarGraphReadPort;
 import com.techpulse.techradar.features.radar.ports.TechAnalyticsWritePort;
+import com.techpulse.techradar.features.system.application.CmsService;
+import com.techpulse.techradar.features.system.domain.CmsContent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,7 +30,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
@@ -59,12 +63,19 @@ class RadarAnalyticsEtlServiceTest {
     @Mock
     private ReactiveStringRedisTemplate redisTemplate;
 
+    @Mock
+    private CmsService cmsService;
+
     private RadarAnalyticsEtlService service;
 
     @BeforeEach
     void setUp() {
-        service = new RadarAnalyticsEtlService(graphReadPort, writePort, kafkaProducer, redisTemplate, new ObjectMapper());
+        service = new RadarAnalyticsEtlService(graphReadPort, writePort, kafkaProducer, redisTemplate, new ObjectMapper(), cmsService);
         ReflectionTestUtils.setField(service, "trendThreshold", THRESHOLD);
+        // Not every test's snapshot data produces a ranked current-month row (see
+        // writeKeywordDigest_* tests below for the cases that do) — lenient so the other tests
+        // don't fail Mockito's unnecessary-stubbing check when this is never invoked.
+        lenient().when(cmsService.create(any(), any(), any(), any())).thenReturn(Mono.just(CmsContent.builder().build()));
     }
 
     @Test
@@ -176,5 +187,39 @@ class RadarAnalyticsEtlServiceTest {
         ArgumentCaptor<String> jsonCaptor = ArgumentCaptor.forClass(String.class);
         verify(valueOps, timeout(1000).times(2)).set(eq("radar:status"), jsonCaptor.capture());
         assertThat(jsonCaptor.getAllValues().get(1)).contains("\"state\":\"idle\"").contains("\"rowsUpserted\":null");
+    }
+
+    @Test
+    void rebuild_writesCmsKeywordDigest_rankedByDemandForCurrentMonthOnly() {
+        YearMonth current = YearMonth.now();
+        when(graphReadPort.findArticleMentionDates()).thenReturn(List.of());
+        when(graphReadPort.findJobPostingDates()).thenReturn(List.of(
+                new TechDateSample("Java", current.atDay(5).toString()),
+                new TechDateSample("Python", current.atDay(5).toString())));
+        // Both have 1 job posting this month, but ranking is by CURRENT DEMAND SNAPSHOT, not
+        // posting count -> Python (20) outranks Java (5) despite the tie in postings.
+        when(graphReadPort.findJobDemandSnapshot()).thenReturn(List.of(
+                new TechCount("Java", 5), new TechCount("Python", 20)));
+        when(writePort.upsert(any())).thenReturn(Mono.just(1L));
+
+        StepVerifier.create(service.rebuild()).expectNext(2L).verifyComplete();
+
+        verify(cmsService, timeout(1000)).create(
+                eq("Từ khóa nổi bật: Python, Java"), eq("Keyword"), eq(current.atDay(1)), eq("Analyzed"));
+    }
+
+    @Test
+    void rebuild_skipsCmsKeywordDigest_whenNoCurrentMonthRowHasARanking() {
+        // No job-demand snapshot -> rankByDemand() has nothing to rank, so every row's rank is
+        // null (see TechAnalyticsTransformer.buildRows) -> nothing to summarize this month.
+        when(graphReadPort.findArticleMentionDates()).thenReturn(List.of());
+        when(graphReadPort.findJobPostingDates()).thenReturn(List.of(
+                new TechDateSample("Java", YearMonth.now().atDay(5).toString())));
+        when(graphReadPort.findJobDemandSnapshot()).thenReturn(List.of());
+        when(writePort.upsert(any())).thenReturn(Mono.just(1L));
+
+        StepVerifier.create(service.rebuild()).expectNext(1L).verifyComplete();
+
+        verify(cmsService, never()).create(any(), any(), any(), any());
     }
 }

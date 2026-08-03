@@ -9,10 +9,13 @@ loguru==0.7.2
 redis==5.0.8
 
 # LLM providers (gold/tech_dedup.py — Giai đoạn B, chỉ import khi có tên chưa
-# resolve qua dp_tech_alias_map và TECH_DEDUP_LLM_PROVIDER tương ứng được chọn)
+# resolve qua dp_tech_alias_map và TECH_DEDUP_LLM_PROVIDER tương ứng được chọn).
+# Gọi qua llm-gateway (dùng chung với ai-rag-core/ml-clustering) — SDK dưới đây vẫn cần khai
+# báo trực tiếp vì llm_gateway.providers.* import chúng, không kéo theo qua package llm-gateway.
 openai>=1.40.0,<2.0.0
 google-generativeai==0.7.2
 groq>=0.9.0,<1.0.0
+-e ../services/llm-gateway
 
 # Testing
 pytest==8.4.2

@@ -64,7 +64,7 @@ class PostgresCmsRepositoryTest {
         return captor.getValue();
     }
 
-    private static final String COLUMNS = "id, title, type, content_date, status, created_at, updated_at";
+    private static final String COLUMNS = "id, title, type, content_date, status, body, created_at, updated_at";
 
     // ---- findAll ----
 
@@ -83,7 +83,7 @@ class PostgresCmsRepositoryTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void findAll_rowMapper_mapsAllSevenColumns() {
+    void findAll_rowMapper_mapsAllEightColumns() {
         when(dbClient.sql(anyString())).thenReturn(executeSpec);
         when(executeSpec.map(any(BiFunction.class))).thenReturn(rowsFetchSpec);
         when(rowsFetchSpec.all()).thenReturn(Flux.empty());
@@ -97,6 +97,7 @@ class PostgresCmsRepositoryTest {
         when(row.get("type", String.class)).thenReturn("Report");
         when(row.get("content_date", LocalDate.class)).thenReturn(contentDate);
         when(row.get("status", String.class)).thenReturn("Published");
+        when(row.get("body", String.class)).thenReturn("# Nội dung báo cáo");
         when(row.get("created_at", LocalDateTime.class)).thenReturn(createdAt);
         when(row.get("updated_at", LocalDateTime.class)).thenReturn(updatedAt);
 
@@ -108,6 +109,7 @@ class PostgresCmsRepositoryTest {
         assertThat(mapped.getType()).isEqualTo("Report");
         assertThat(mapped.getContentDate()).isEqualTo(contentDate);
         assertThat(mapped.getStatus()).isEqualTo("Published");
+        assertThat(mapped.getBody()).isEqualTo("# Nội dung báo cáo");
         assertThat(mapped.getCreatedAt()).isEqualTo(createdAt);
         assertThat(mapped.getUpdatedAt()).isEqualTo(updatedAt);
     }
@@ -151,11 +153,12 @@ class PostgresCmsRepositoryTest {
                 .type("Report")
                 .contentDate(LocalDate.of(2026, 7, 20))
                 .status("Published")
+                .body("# New Report body")
                 .build();
 
         when(dbClient.sql(
-                "INSERT INTO cms_content (id, title, type, content_date, status, created_at, updated_at) " +
-                        "VALUES (:id, :title, :type, :content_date, :status, :created_at, :updated_at)"))
+                "INSERT INTO cms_content (id, title, type, content_date, status, body, created_at, updated_at) " +
+                        "VALUES (:id, :title, :type, :content_date, :status, :body, :created_at, :updated_at)"))
                 .thenReturn(executeSpec);
         when(executeSpec.bind(anyString(), any())).thenReturn(executeSpec);
         when(executeSpec.fetch()).thenReturn(fetchSpec);
@@ -174,10 +177,11 @@ class PostgresCmsRepositoryTest {
         verify(executeSpec).bind("type", "Report");
         verify(executeSpec).bind("content_date", LocalDate.of(2026, 7, 20));
         verify(executeSpec).bind("status", "Published");
+        verify(executeSpec).bind("body", "# New Report body");
     }
 
     @Test
-    void insert_bindsNullTypeAndContentDate_andDefaultsStatusToPending_whenAbsent() {
+    void insert_bindsNullTypeContentDateAndBody_andDefaultsStatusToPending_whenAbsent() {
         CmsContent content = CmsContent.builder().title("Draft").build();
 
         when(dbClient.sql(anyString())).thenReturn(executeSpec);
@@ -193,6 +197,7 @@ class PostgresCmsRepositoryTest {
         verify(executeSpec).bind("status", "Pending");
         verify(executeSpec).bindNull("type", String.class);
         verify(executeSpec).bindNull("content_date", LocalDate.class);
+        verify(executeSpec).bindNull("body", String.class);
     }
 
     // ---- update ----
@@ -206,11 +211,12 @@ class PostgresCmsRepositoryTest {
                 .type("Job")
                 .contentDate(LocalDate.of(2026, 7, 21))
                 .status("Analyzed")
+                .body("# Updated body")
                 .build();
 
         when(dbClient.sql(
                 "UPDATE cms_content SET title = :title, type = :type, content_date = :content_date, " +
-                        "status = :status, updated_at = :updated_at WHERE id = :id"))
+                        "status = :status, body = :body, updated_at = :updated_at WHERE id = :id"))
                 .thenReturn(executeSpec);
         when(executeSpec.bind(anyString(), any())).thenReturn(executeSpec);
         when(executeSpec.fetch()).thenReturn(fetchSpec);
@@ -228,10 +234,11 @@ class PostgresCmsRepositoryTest {
         verify(executeSpec).bind("type", "Job");
         verify(executeSpec).bind("content_date", LocalDate.of(2026, 7, 21));
         verify(executeSpec).bind("status", "Analyzed");
+        verify(executeSpec).bind("body", "# Updated body");
     }
 
     @Test
-    void update_bindsNullTypeAndContentDate_andDefaultsStatusToPending_whenAbsent() {
+    void update_bindsNullTypeContentDateAndBody_andDefaultsStatusToPending_whenAbsent() {
         UUID id = UUID.randomUUID();
         CmsContent content = CmsContent.builder().id(id).title("Untyped").build();
 
@@ -248,6 +255,7 @@ class PostgresCmsRepositoryTest {
         verify(executeSpec).bind("status", "Pending");
         verify(executeSpec).bindNull("type", String.class);
         verify(executeSpec).bindNull("content_date", LocalDate.class);
+        verify(executeSpec).bindNull("body", String.class);
     }
 
     // ---- deleteById ----

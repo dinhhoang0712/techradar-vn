@@ -239,6 +239,47 @@ def register_best_model(
     return {"version": version, "promoted": promoted, "reason": reason}
 
 
+def is_run_promoted_to_champion(run_id: str, tracking_uri: str) -> bool:
+    """
+    Đọc tag `promoted_to_champion` — set bởi stage_03_train trên PARENT run của `run_id`
+    (run_id trỏ tới nested run "best" mà register_best_model chấm điểm, còn tag lại được
+    set trên parent — xem `mlflow.set_tag("promoted_to_champion", ...)` ngay sau
+    `register_best_model()` trong stage_03_train.py, gọi khi context của nested run "best"
+    đã đóng nên rơi vào run đang active lúc đó = parent). Dùng bởi cả stage_06_publish (CLI/
+    dvc repro) và app/routes_pipeline.py (HTTP trigger) để quyết định publish/writeback hay
+    không — 1 nguồn sự thật duy nhất cho "model mới có tốt hơn champion hiện tại không".
+
+    Trả True (fail-open) nếu không tìm thấy parent run hoặc tag — tương thích ngược cho
+    caller không có khái niệm champion, và tránh chặn deploy vô cớ vì lỗi đọc MLflow tạm thời.
+    """
+    from mlflow.tracking import MlflowClient
+
+    client = MlflowClient(tracking_uri=tracking_uri)
+    try:
+        run = client.get_run(run_id)
+    except Exception as exc:
+        logger.warning("Không đọc được run %s để kiểm tra promotion — fail-open (coi như promoted): %s", run_id, exc)
+        return True
+
+    parent_run_id = run.data.tags.get("mlflow.parentRunId")
+    if not parent_run_id:
+        logger.warning("Run %s không có parent run — fail-open (coi như promoted)", run_id)
+        return True
+
+    try:
+        parent_run = client.get_run(parent_run_id)
+    except Exception as exc:
+        logger.warning("Không đọc được parent run %s — fail-open (coi như promoted): %s", parent_run_id, exc)
+        return True
+
+    promoted_tag = parent_run.data.tags.get("promoted_to_champion")
+    if promoted_tag is None:
+        logger.warning("Parent run %s thiếu tag promoted_to_champion — fail-open (coi như promoted)", parent_run_id)
+        return True
+
+    return promoted_tag == "True"
+
+
 def write_metrics_file(
     metrics: dict[str, float | int],
     out_path: str | Path,

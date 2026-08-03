@@ -8,6 +8,7 @@ import com.techpulse.techradar.features.radar.domain.TechAnalyticsRow;
 import com.techpulse.techradar.features.radar.domain.TechAnalyticsTransformer;
 import com.techpulse.techradar.features.radar.ports.RadarGraphReadPort;
 import com.techpulse.techradar.features.radar.ports.TechAnalyticsWritePort;
+import com.techpulse.techradar.features.system.application.CmsService;
 import com.techpulse.techradar.shared.redis.RedisJsonStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +22,7 @@ import reactor.core.scheduler.Schedulers;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -41,12 +43,15 @@ import java.util.List;
 public class RadarAnalyticsEtlService {
 
     private static final String STATUS_KEY = "radar:status";
+    /** How many top-ranked technologies go into the CMS "keyword digest" row per rebuild. */
+    private static final int KEYWORD_DIGEST_TOP_N = 5;
 
     private final RadarGraphReadPort graphReadPort;
     private final TechAnalyticsWritePort writePort;
     private final KafkaProducerService kafkaProducer;
     private final ReactiveStringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
+    private final CmsService cmsService;
 
     /** Minimum month-over-month growth (%) for a technology to raise a trend alert. */
     @Value("${app.notifications.trend-threshold:30}")
@@ -69,6 +74,7 @@ public class RadarAnalyticsEtlService {
                                 .doOnSuccess(n -> {
                                     log.info("tech_analytics ETL upserted {} rows", n);
                                     emitTrendAlerts(rows);
+                                    writeKeywordDigest(rows);
                                 })))
                 .doOnSuccess(count -> writeStatus(RadarStatus.idle(startedAt, Instant.now().toString(), count)).subscribe())
                 .doOnError(e -> {
@@ -108,6 +114,30 @@ public class RadarAnalyticsEtlService {
             }
             log.info("Published {} trend alert(s) (threshold {}% MoM)", alerts.size(), trendThreshold);
         });
+    }
+
+    /**
+     * Writes a "Từ khóa nổi bật" (top technologies this month) row to {@code cms_content} — before
+     * this, the admin CMS page's "Keyword" entries were static seed data with nothing ever
+     * refreshing them. {@code status="Analyzed"}: the ETL only proposes the digest, an admin still
+     * decides whether to publish it.
+     */
+    private void writeKeywordDigest(List<TechAnalyticsRow> rows) {
+        LocalDate currentMonth = YearMonth.now().atDay(1);
+        List<String> topNames = rows.stream()
+                .filter(r -> currentMonth.equals(r.month()))
+                .filter(r -> r.ranking() != null)
+                .sorted(Comparator.comparingInt(TechAnalyticsRow::ranking))
+                .map(TechAnalyticsRow::tech)
+                .limit(KEYWORD_DIGEST_TOP_N)
+                .toList();
+        if (topNames.isEmpty()) {
+            return;
+        }
+        String title = "Từ khóa nổi bật: " + String.join(", ", topNames);
+        cmsService.create(title, "Keyword", currentMonth, "Analyzed")
+                .onErrorResume(e -> Mono.empty())
+                .subscribe();
     }
 
     /** Reads the raw graph signals and runs them through the pure {@link TechAnalyticsTransformer}. */

@@ -53,9 +53,9 @@ export const filterGraph = async ({ locations, nodeTypes, minSalary, maxSalary, 
         method: 'POST',
         body: JSON.stringify({
             locations: locations?.length ? locations : null,
-            nodeTypes: nodeTypes?.length ? nodeTypes : null,
-            minSalary: minSalary === '' || minSalary == null ? null : Number(minSalary),
-            maxSalary: maxSalary === '' || maxSalary == null ? null : Number(maxSalary),
+            node_types: nodeTypes?.length ? nodeTypes : null,
+            min_salary: minSalary === '' || minSalary == null ? null : Number(minSalary),
+            max_salary: maxSalary === '' || maxSalary == null ? null : Number(maxSalary),
             sentiment: sentiment || null,
         }),
     });

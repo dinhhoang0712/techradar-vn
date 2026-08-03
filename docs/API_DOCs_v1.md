@@ -2318,42 +2318,46 @@ hay không — hỗ trợ admin quyết định nhanh hơn, không tự động 
 
 ### CMS Management
 
+> `AdminCmsController` quản lý bảng `cms_content` (crawled reports / jobs / keywords hiển thị
+> trong admin CMS). **Không có phân trang** — `list()` không nhận `page`/`size` và trả về
+> nguyên mảng phẳng trong `data`. **Không có field `content`** — cột nội dung đầy đủ tên là
+> `body` (migration V35, `TEXT`, nullable), và `CmsContentRequest` (DTO nhận request cho
+> create/update) **không có field `body`/`content` nào cả** — gọi qua API này luôn lưu
+> `body = null`; `body` chỉ được điền nội bộ bởi `MonthlyReportSchedulerService` qua một overload
+> khác của `CmsService.create(...)`, không thể touch được từ route admin này.
+
 #### GET `/admin/cms`
 
-Lấy danh sách nội dung CMS.
+Lấy toàn bộ nội dung CMS (không phân trang), mới tạo trước.
 
-**Authentication:** Admin role required
-
-**Query Parameters:**
-- `page`: Số trang (mặc định: 0)
-- `size`: Số item mỗi trang (mặc định: 20)
+**Authentication:** Admin role required (`cms:manage`)
 
 **Response:**
 ```json
 {
   "success": true,
-  "data": {
-    "content": [
-      {
-        "id": "770e8400-e29b-41d4-a716-446655440000",
-        "title": "Technology Trends Report Q2 2024",
-        "type": "REPORT",
-        "content": "Full report content...",
-        "content_date": "2024-06-30",
-        "status": "PUBLISHED",
-        "created_at": "2024-06-30T10:00:00Z"
-      }
-    ],
-    "total_elements": 25,
-    "total_pages": 2,
-    "current_page": 0,
-    "size": 20
-  },
-  "message": null,
+  "data": [
+    {
+      "id": "770e8400-e29b-41d4-a716-446655440000",
+      "title": "Technology Trends Report Q2 2024",
+      "type": "Report",
+      "content_date": "2024-06-30",
+      "status": "Published",
+      "body": null,
+      "created_at": "2024-06-30T10:00:00Z",
+      "updated_at": "2024-06-30T10:00:00Z"
+    }
+  ],
+  "message": "CMS content",
   "error_code": null,
   "timestamp": 1719792000000
 }
 ```
+
+**Fields (mỗi item, khớp `CmsContent`):**
+- `type`: chuỗi tự do, giá trị thực tế đang dùng là `Report` | `Job` | `Keyword` (không phải enum ràng buộc ở tầng API)
+- `status`: chuỗi tự do, giá trị thực tế đang dùng là `Published` | `Analyzed` | `Pending` | `Archived`
+- `body`: nội dung đầy đủ — luôn `null` khi tạo/sửa qua API admin này (xem lưu ý ở trên)
 
 ---
 
@@ -2361,80 +2365,47 @@ Lấy danh sách nội dung CMS.
 
 Tạo nội dung CMS mới.
 
-**Authentication:** Admin role required
+**Authentication:** Admin role required (`cms:manage`)
 
 **Request Body:**
 ```json
 {
   "title": "Technology Trends Report Q3 2024",
-  "type": "REPORT",
-  "content": "Full report content...",
+  "type": "Report",
   "content_date": "2024-09-30",
-  "status": "DRAFT"
+  "status": "Pending"
 }
 ```
 
-**Fields:**
-- `title` (required): Tiêu đề
-- `type` (optional): Loại nội dung (`REPORT`, `ARTICLE`, `NEWS`), mặc định `ARTICLE`
-- `content` (required): Nội dung
-- `content_date` (optional): Ngày của nội dung
-- `status` (optional): Status (`DRAFT`, `PUBLISHED`, `ARCHIVED`), mặc định `DRAFT`
+**Fields (khớp `CmsContentRequest` — KHÔNG có field `content`/`body`):**
+- `title` (string, required — `@NotBlank`)
+- `type` (string, optional) — không ràng buộc enum ở tầng validation; giá trị đang dùng: `Report` | `Job` | `Keyword`
+- `content_date` (`LocalDate`, optional, format `yyyy-MM-dd`)
+- `status` (string, optional, mặc định `"Pending"` nếu bỏ trống — xem `CmsService.create`); giá trị đang dùng: `Published` | `Analyzed` | `Pending` | `Archived`
 
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "id": "880e8400-e29b-41d4-a716-446655440000",
-    "title": "Technology Trends Report Q3 2024",
-    "type": "REPORT",
-    "content": "Full report content...",
-    "content_date": "2024-09-30",
-    "status": "DRAFT",
-    "created_at": "2024-07-01T10:00:00Z"
-  },
-  "message": "Content created successfully",
-  "error_code": null,
-  "timestamp": 1719792000000
-}
-```
+**Response:** `201 Created`, body CMS content vừa tạo (shape như `GET /admin/cms`, `body` luôn `null`), `message: "CMS content created"`
 
 ---
 
 #### PUT `/admin/cms/{id}`
 
-Cập nhật nội dung CMS.
+Cập nhật nội dung CMS. Field nào gửi rỗng/`null` thì giữ nguyên giá trị cũ (partial update ở tầng
+service — `title`/`status` chỉ ghi đè nếu có text, `type`/`content_date` chỉ ghi đè nếu không
+`null`); `body` không thể sửa qua endpoint này.
 
-**Authentication:** Admin role required
+**Authentication:** Admin role required (`cms:manage`)
 
-**Request Body:** (tất cả fields optional)
+**Request Body:** (cùng shape `CmsContentRequest` như POST, mọi field coi như optional ở tầng service)
 ```json
 {
   "title": "Updated Title",
-  "content": "Updated content...",
-  "status": "PUBLISHED"
+  "status": "Published"
 }
 ```
 
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "id": "880e8400-e29b-41d4-a716-446655440000",
-    "title": "Updated Title",
-    "type": "REPORT",
-    "content": "Updated content...",
-    "content_date": "2024-09-30",
-    "status": "PUBLISHED",
-    "created_at": "2024-07-01T10:00:00Z"
-  },
-  "message": "Content updated successfully",
-  "error_code": null,
-  "timestamp": 1719792000000
-}
-```
+**Response:** `200 OK`, body CMS content sau khi cập nhật (shape như `GET /admin/cms`), `message: "CMS content updated"`
+
+**Error Responses:** `404 Not Found` nếu `id` không tồn tại
 
 ---
 
@@ -2442,18 +2413,11 @@ Cập nhật nội dung CMS.
 
 Xóa nội dung CMS.
 
-**Authentication:** Admin role required
+**Authentication:** Admin role required (`cms:manage`)
 
-**Response:**
-```json
-{
-  "success": true,
-  "data": null,
-  "message": "Content deleted successfully",
-  "error_code": null,
-  "timestamp": 1719792000000
-}
-```
+**Response:** `204 No Content`, body `ApiResponse<Void>` với `message: "CMS content deleted"`
+
+**Error Responses:** `404 Not Found` nếu `id` không tồn tại
 
 ---
 
@@ -2990,27 +2954,163 @@ Lấy hội thoại 1-1 với `userId`, tạo mới nếu chưa có (upsert theo
 
 **Query params:** `page` (default `0`), `size` (default `30`)
 
-**Response (wrapped):** mảng `{ id, sender_id, content, created_at }`, cũ nhất trước.
+**Response (wrapped):** mảng message, cũ nhất trước — mỗi item khớp `DirectMessageResponse`:
+```json
+[
+  {
+    "id": "m1...",
+    "conversation_id": "c1...",
+    "sender_id": "u1...",
+    "content": "Xin chào!",
+    "created_at": "2026-07-15T10:00:00Z",
+    "read": true,
+    "attachment": null,
+    "reactions": [
+      { "emoji": "👍", "count": 2, "reacted_by_me": true }
+    ]
+  }
+]
+```
+
+**Fields:**
+- `attachment` (nullable): `null` nếu message không có file đính kèm, ngược lại
+  `{ content_type, filename, size, url }` — xem shape đầy đủ ở `POST /conversations/{id}/messages` bên dưới
+- `reactions`: luôn là 1 mảng (rỗng nếu chưa ai react), mỗi phần tử `{ emoji, count, reacted_by_me }`
+  — `reacted_by_me` tính theo user gọi API (viewer), KHÔNG phải sender
 
 ---
 
 ### POST `/conversations/{id}/messages`
 
-Gửi tin nhắn — sau khi lưu Postgres sẽ push realtime tới người nhận qua SSE, đồng thời tạo
-notification `NEW_MESSAGE` (kèm preview 140 ký tự, `link=/messages?conversation={id}`) cho
+Gửi tin nhắn, có thể kèm 1 file/ảnh đính kèm (base64, không có endpoint upload riêng — file đi
+thẳng trong cùng request). Sau khi lưu Postgres sẽ push realtime tới người nhận qua SSE, đồng thời
+tạo notification `NEW_MESSAGE` (kèm preview 140 ký tự, `link=/messages?conversation={id}`) cho
 người nhận.
 
 **Authentication:** Required (Bearer JWT)
 
 **Request Body:**
 ```json
-{ "content": "Xin chào!" }
+{
+  "content": "Xin chào!",
+  "attachment": {
+    "content_type": "image/png",
+    "filename": "screenshot.png",
+    "data_base64": "iVBORw0KGgoAAAANSUhEUgA..."
+  }
+}
 ```
 
 **Fields:**
-- `content` (string, required, ≤ 2000 ký tự)
+- `content` (string) — required trừ khi có `attachment` (được phép rỗng nếu message chỉ gồm file); nếu có, tối đa 2000 ký tự sau khi trim
+- `attachment` (object, optional, có thể là `null`/bỏ qua hoàn toàn):
+  - `content_type` (string, required nếu có `attachment`) — phải khớp đúng 1 trong allowlist (xem bên dưới), so sánh không phân biệt hoa/thường
+  - `filename` (string, optional) — ký tự `\r \n " \ /` bị thay bằng `_`; cắt về tối đa 255 ký tự; bỏ trống → mặc định `"file"`
+  - `data_base64` (string, required nếu có `attachment`) — payload base64 của file; cho phép có tiền tố data-URL (`data:image/png;base64,...`, phần trước dấu phẩy bị bỏ)
 
-**Response (wrapped):** `{ id, sender_id, content, created_at }`
+**Giới hạn file đính kèm (`FileUploadValidator`):**
+- Kích thước sau khi decode base64: tối đa **10 MB**
+- Content-type allowlist: `image/png`, `image/jpeg`, `image/jpg`, `image/webp`, `image/gif`,
+  `application/pdf`, `application/msword`,
+  `application/vnd.openxmlformats-officedocument.wordprocessingml.document` (`.docx`),
+  `application/vnd.ms-excel`,
+  `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` (`.xlsx`),
+  `text/plain`, `application/zip`
+  — **KHÔNG** có `image/svg+xml` (chặn có chủ đích để tránh stored-XSS qua endpoint serve file công khai cho 2 thành viên hội thoại)
+
+**Response (wrapped):** message vừa tạo, cùng shape với item trong `GET /conversations/{id}/messages`:
+```json
+{
+  "id": "m1...",
+  "conversation_id": "c1...",
+  "sender_id": "u1...",
+  "content": "Xin chào!",
+  "created_at": "2026-07-15T10:00:00Z",
+  "read": false,
+  "attachment": {
+    "content_type": "image/png",
+    "filename": "screenshot.png",
+    "size": 48213,
+    "url": "/conversations/c1.../messages/m1.../attachment"
+  },
+  "reactions": []
+}
+```
+- `attachment.url`: đường dẫn tương đối (chưa kèm `/api/v1`) để gọi `GET .../attachment` bên dưới; `size` là số byte sau khi decode
+
+**Error Responses:**
+- `400 Bad Request` (`INVALID_CONTENT`): `content` rỗng và không có `attachment`, hoặc `content` > 2000 ký tự
+- `400 Bad Request` (`INVALID_ATTACHMENT`): `data_base64` không decode được / decode ra rỗng hoặc > 10MB, hoặc `content_type` không nằm trong allowlist
+- `404 Not Found`: người gọi không phải thành viên hội thoại
+
+---
+
+### GET `/conversations/{conversationId}/messages/{messageId}/attachment`
+
+Lấy file/ảnh đính kèm của 1 message (binary) — chỉ 2 thành viên của hội thoại mới gọi được.
+
+**Authentication:** Required (Bearer JWT)
+
+**Response:** binary, headers:
+- `Content-Type`: content-type gốc đã validate lúc upload (vd. `image/png`)
+- `Content-Disposition`: `inline; filename="<filename đã sanitize>"`
+- `X-Content-Type-Options`: `nosniff`
+
+**Error Responses:**
+- `404 Not Found`: người gọi không phải thành viên hội thoại, `messageId` không tồn tại/không thuộc `conversationId`, hoặc message đó không có attachment
+
+---
+
+### POST `/conversations/{conversationId}/messages/{messageId}/reactions`
+
+Set (hoặc thay) reaction của user hiện tại trên 1 message — mỗi user chỉ có tối đa 1 reaction/message
+(gọi lại với emoji khác = thay reaction cũ, upsert theo `(message_id, user_id)`).
+
+**Authentication:** Required (Bearer JWT)
+
+**Request Body:**
+```json
+{ "emoji": "👍" }
+```
+
+**Fields:**
+- `emoji` (string, required) — chỉ nhận đúng 1 trong 6 giá trị (`SetMessageReactionUseCase.ALLOWED_EMOJI`,
+  không phải emoji picker tự do): 👍 ❤️ 😂 😮 😢 😡
+
+**Response (wrapped):** mảng reaction summary hiện tại của message (theo góc nhìn user gọi API):
+```json
+{
+  "success": true,
+  "data": [
+    { "emoji": "👍", "count": 2, "reacted_by_me": true }
+  ],
+  "message": "Reaction set",
+  "error_code": null,
+  "timestamp": 1719792000000
+}
+```
+
+**Side effect:** push `REACTIONS_CHANGED` cho người còn lại trong hội thoại qua SSE (`/conversations/stream`)
+— xem shape ở mục SSE bên dưới. Người vừa set reaction không nhận lại event này qua stream, chỉ có response HTTP này.
+
+**Error Responses:**
+- `400 Bad Request` (`INVALID_CONTENT`): "Unsupported reaction emoji" — `emoji` không nằm trong danh sách 6 giá trị trên
+- `404 Not Found`: người gọi không phải thành viên hội thoại, hoặc `messageId` không thuộc `conversationId`
+
+---
+
+### DELETE `/conversations/{conversationId}/messages/{messageId}/reactions`
+
+Xoá reaction của user hiện tại trên 1 message (không có request body).
+
+**Authentication:** Required (Bearer JWT)
+
+**Response (wrapped):** cùng shape với `POST .../reactions`, `message: "Reaction removed"`
+
+**Side effect:** cùng broadcast `REACTIONS_CHANGED` như `POST .../reactions`.
+
+**Error Responses:**
+- `404 Not Found`: người gọi không phải thành viên hội thoại, hoặc `messageId` không thuộc `conversationId`
 
 ---
 
@@ -3026,12 +3126,41 @@ người nhận.
 
 ### GET `/conversations/stream`
 
-SSE stream mọi tin nhắn mới của user hiện tại (mọi hội thoại), dùng để cập nhật badge/tin nhắn
-realtime toàn app.
+SSE stream mọi event messaging của user hiện tại (mọi hội thoại) — tin nhắn mới **và** thay đổi
+reaction, dùng để cập nhật badge/tin nhắn realtime toàn app.
 
 **Authentication:** Required (Bearer JWT, gửi qua header — KHÔNG dùng query param)
 
-**Response:** `text/event-stream`, mỗi `data:` line là 1 JSON `DirectMessage` (kèm `conversation_id`).
+**Response:** `text/event-stream`. Mỗi `data:` line là 1 JSON `MessageLiveEventResponse` — discriminated
+union theo field `type`, chỉ 1 trong 2 dạng sau (field không liên quan tới `type` hiện tại sẽ `null`):
+
+- `type: "NEW_MESSAGE"` — có tin nhắn mới (gửi bởi người kia trong 1 hội thoại của mình):
+  ```json
+  {
+    "type": "NEW_MESSAGE",
+    "message": {
+      "id": "m1...",
+      "conversation_id": "c1...",
+      "sender_id": "u1...",
+      "content": "Xin chào!",
+      "created_at": "2026-07-15T10:00:00Z",
+      "read": false,
+      "attachment": null,
+      "reactions": []
+    }
+  }
+  ```
+- `type: "REACTIONS_CHANGED"` — reaction trên 1 message vừa được set/xoá bởi người kia:
+  ```json
+  {
+    "type": "REACTIONS_CHANGED",
+    "conversation_id": "c1...",
+    "message_id": "m1...",
+    "reactions": [
+      { "emoji": "👍", "count": 1, "reacted_by_me": false }
+    ]
+  }
+  ```
 
 **Example:**
 ```bash
@@ -3544,6 +3673,8 @@ X-Internal-Auth: techradar-internal-secret
 | Error Code | Description |
 |------------|-------------|
 | `INVALID_CONVERSATION` | Cố gắng nhắn tin cho chính mình |
+| `INVALID_CONTENT` | `content` rỗng (và không có `attachment`), `content` > 2000 ký tự, hoặc `emoji` reaction không nằm trong 6 giá trị cho phép |
+| `INVALID_ATTACHMENT` | File đính kèm (`POST /conversations/{id}/messages`) rỗng/base64 không hợp lệ, > 10MB sau khi decode, hoặc `content_type` không nằm trong allowlist |
 
 ### Social Error Codes (NEW)
 

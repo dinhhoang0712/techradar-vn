@@ -224,7 +224,8 @@ apps/backend/src/main/java/com/techpulse/techradar/
 
 Flyway migrations sống ở `src/main/resources/db/migration/` (không phải
 `infrastructure/flyway/migrations/`), đánh số tuần tự thật `V1__init_schema.sql` … hiện tại tới
-`V27__graph_analytics_permission.sql` — không có version nhảy cóc kiểu `V900`/`V901`.
+`V35__cms_content_body.sql` — không có version nhảy cóc kiểu `V900`/`V901`. Danh sách này đổi
+thường xuyên hơn tài liệu; luôn `ls` trực tiếp thư mục để lấy version mới nhất thay vì tin số ở đây.
 
 ---
 
@@ -267,7 +268,14 @@ Flyway migrations sống ở `src/main/resources/db/migration/` (không phải
   growth, keyword search
 - `RadarExporter` (`features/radar/domain/`): PNG/CSV export
 - `RadarAnalyticsEtlService` (`features/radar/etl/`): rebuilds `tech_analytics` from Neo4j
-  (admin-triggered, `AnalyticsAdminController`)
+  (admin-triggered, `AnalyticsAdminController`). Two side effects fire after every successful
+  rebuild, both best-effort (failures swallowed, never fail the rebuild itself): `emitTrendAlerts()`
+  publishes a `trend.alerts` Kafka event for each technology whose current-month MoM growth clears
+  `app.notifications.trend-threshold` (default 30%) — consumed by `TrendAlertDispatcher`, §4.10;
+  and `writeKeywordDigest()` writes a `cms_content` row (`type="Keyword"`, `status="Analyzed"`,
+  title `"Từ khóa nổi bật: ..."`) listing the top `KEYWORD_DIGEST_TOP_N` (5) ranked technologies for
+  the current month — before this, the CMS "Keyword" entries were static seed data that nothing
+  ever refreshed; an admin still has to review/publish it.
 
 **Data Source:**
 - PostgreSQL `tech_analytics` table (populated by Gold ETL)
@@ -384,7 +392,10 @@ Flyway migrations sống ở `src/main/resources/db/migration/` (không phải
 **Database Tables:**
 - `settings`: Application settings + feature flags (also read by public `/status`)
 - `activity_log`: User activity logs (visits/searches, populated by `ActivityTrackingFilter`)
-- `cms_content`: AdminCMS content (Report/Job/Keyword)
+- `cms_content`: AdminCMS content (Report/Job/Keyword). `body TEXT` (V35, nullable) holds the full
+  generated content — currently only populated for "Report" rows written by
+  `MonthlyReportSchedulerService` (§4.16); crawler-seeded rows and the radar ETL's "Keyword" digest
+  (§4.2) have no body of their own
 - `content_report` (NEW, read/updated via `AdminSocialController`, owned by `features/social` — see §4.15)
 
 > Notifications are their **own** feature module (`features/notification`), not part of
@@ -505,16 +516,67 @@ package with no `domain/ports/adapters` split; restructured for DIP/SRP):**
 **Responsibilities:**
 - 1-1 conversations, message history, read receipts
 - Real-time delivery
+- Emoji reactions on individual messages (NEW)
+- File/image attachments on messages (NEW)
 
 **Key Components:**
-- `ConversationController` — `GET /conversations?page=&size=`, `POST /conversations/with/{userId}`, `GET /conversations/{id}/messages?page=&size=`, `POST /conversations/{id}/messages`, `POST /conversations/{id}/read`, `GET /conversations/stream` (SSE)
-- `SendMessageUseCase` — persists the message, pushes it live via `MessageBroadcaster.publish`, AND (best-effort, failure-swallowed) creates a `NEW_MESSAGE` notification for the recipient (§4.10)
+- `ConversationController` — `GET /conversations?page=&size=`, `POST /conversations/with/{userId}`,
+  `GET /conversations/{id}/messages?page=&size=`, `POST /conversations/{id}/messages` (body now
+  optionally carries a base64 `attachment` payload — see below), `GET
+  /conversations/{conversationId}/messages/{messageId}/attachment` (NEW — serves the raw
+  attachment bytes; only the conversation's two participants can fetch it), `POST`/`DELETE
+  /conversations/{conversationId}/messages/{messageId}/reactions` (NEW — set/replace vs. remove the
+  current user's reaction), `POST /conversations/{id}/read`, `GET /conversations/stream` (SSE)
+- `SendMessageUseCase` — persists the message (with an optional attachment, see below), pushes it
+  live via `MessageBroadcaster.publish`, AND (best-effort, failure-swallowed) creates a
+  `NEW_MESSAGE` notification for the recipient (§4.10)
 - `GetConversationsUseCase` (now paginated), `GetMessagesUseCase`, `GetOrCreateConversationUseCase`, `MarkReadUseCase`
-- `MessageBroadcaster` — **updated: cross-instance now**, backed by Redis Pub/Sub (channel `live:messages`, shared `ReactiveRedisMessageListenerContainer` bean). Each instance still holds a local per-user `Sinks.Many` for its own SSE subscribers, but `publish()` always goes over Redis first so any instance can deliver regardless of where the sender/recipient's SSE connection landed — this now DOES fan out correctly in a horizontally-scaled deployment (superseded the earlier in-memory-only design). Fire-and-forget by design either way: Postgres remains the source of truth.
+- **Reactions (NEW)** — `SetMessageReactionUseCase.execute(conversationId, messageId, userId, emoji)`:
+  validates `emoji` against a fixed palette, `SetMessageReactionUseCase.ALLOWED_EMOJI` (`👍 ❤️ 😂 😮
+  😢 😡` — a small Messenger-style set rather than arbitrary unicode, to keep aggregated counts
+  predictable), confirms the caller is a participant and the message belongs to the conversation,
+  then `MessageReactionRepository.upsert()`s the reaction (one row per `(message_id, user_id)`,
+  `ON CONFLICT` replaces the emoji — a user can only have one active reaction per message,
+  re-reacting swaps it rather than adding a second). `RemoveMessageReactionUseCase.execute(...)`
+  mirrors it for deletion. Both re-read all reactions for the message afterward, fold them through
+  the package-private `ReactionSummaries.summarize(rows, viewerId)` helper (groups by emoji into a
+  `List<MessageReactionSummary>` of `(emoji, count, reactedByMe)` from the caller's own
+  perspective), return that to the caller, AND broadcast a viewer-specific summary (`reactedByMe`
+  recomputed for the *other* participant) to them via `MessageBroadcaster` — the broadcast is
+  best-effort (`onErrorResume` + warn-log, never fails the request).
+- **Attachments (NEW)** — `SendMessageUseCase` decodes/validates an optional attachment via the
+  shared `shared/util/FileUploadValidator` (max 10 MB, content-type allowlist covering common
+  images/PDF/Office docs/`text/plain`/`zip` — deliberately excludes `image/svg+xml` because SVG can
+  carry embedded `<script>`, a stored-XSS risk on the public serve endpoint; sibling to
+  `ImageUploadValidator`, kept separate because messages allow a broader type set and a larger size
+  cap than avatars/post images) and stores the bytes as `direct_message.attachment_data` (BYTEA)
+  alongside content-type/filename/size columns. `GetMessageAttachmentUseCase.execute(...)` re-checks
+  conversation participancy before returning the bytes; the controller serves them with
+  `Content-Disposition: inline` and `X-Content-Type-Options: nosniff`. The attachment columns are
+  never selected by the conversation history list query — only the dedicated attachment endpoint
+  reads `attachment_data` — so paging through message history stays lightweight.
+- `MessageBroadcaster` — cross-instance, backed by Redis Pub/Sub (channel `live:messages`, shared
+  `ReactiveRedisMessageListenerContainer` bean). Each instance still holds a local per-user
+  `Sinks.Many` for its own SSE subscribers, but `publish()` always goes over Redis first so any
+  instance can deliver regardless of where the sender/recipient's SSE connection landed. The SSE
+  stream now multiplexes two event kinds through one discriminated payload,
+  `MessageLiveEvent(type, message, conversationId, messageId, reactions)` — `type` is
+  `NEW_MESSAGE` (carries the full `DirectMessage` in `message`) or `REACTIONS_CHANGED` (carries
+  `conversationId`/`messageId`/the recomputed `reactions` list; `message` is null) — mirroring
+  `features/social/realtime/FeedEvent`'s flat-record-with-enum-tag shape so Jackson needs no
+  polymorphic type annotations. Fire-and-forget by design either way: Postgres remains the source
+  of truth.
 - `PostgresConversationRepository` / `PostgresMessageRepository` — canonicalizes `user_a_id < user_b_id` to avoid duplicate conversations for the same pair
+- `MessageReactionRepository` (port, NEW) / `PostgresMessageReactionRepository` (adapter, NEW) —
+  `upsert`/`remove`/`findByMessageId`/`findByMessageIds` (the latter a batch fetch so a page of
+  message history can attach reactions in one query instead of N)
 
 **Database Tables:**
-- `conversation`, `direct_message` (see [`docs/DATABASE.md`](./DATABASE.md))
+- `conversation`, `direct_message` (see [`docs/DATABASE.md`](./DATABASE.md)) — `direct_message`
+  gained `attachment_content_type`/`attachment_filename`/`attachment_size`/`attachment_data`
+  columns (V31)
+- `message_reaction` (NEW, V32) — PK `(message_id, user_id)` so a user has at most one reaction per
+  message; `ON DELETE CASCADE` off both `direct_message` and `users`
 
 ### 4.15 Social Feature (NEW — Feed / Follow / Like / Comment / Report)
 
@@ -554,6 +616,18 @@ package with no `domain/ports/adapters` split; restructured for DIP/SRP):**
 - **Rate limiting (NEW)** — `AiProxyRateLimiterService` (Redis INCR+EXPIRE, same mechanism as `AuthRateLimiterService`/`ChatRateLimiterService`), gated inside `AiProxyRequestHandler` itself so every controller gets it for free. `forwardAsCurrentUser(...)` routes are keyed by user id (`ratelimit:aiproxy:user:<id>`); `forward(...)` routes have no user id so they're keyed by client IP (`ratelimit:aiproxy:ip:<ip>`, resolved by each public controller via `ClientIpUtils.resolveClientIp(httpRequest)` and passed in as an extra `forward(...)` parameter). Default 20 req/60s (`app.redis.aiproxy-rate-limit.*`). The gate sits OUTSIDE the upstream-error `onErrorResume`, so a throttled request surfaces as a real `429 RATE_LIMIT_EXCEEDED`, not the generic 503 — get this ordering wrong and the rate limit silently stops working (looks like a 503 instead).
 - `PythonAiProxyClient` (implements `AiProxyPort`) — one generic `WebClient.post()` per call, no per-endpoint typed request/response classes anymore.
 - Thin controllers, one per legacy path: `AgentController` (`POST /agent`), `CareerController` (`POST /career`), `ForecastController` (`GET /forecast`), `InterviewController` (`POST /interview`, NEW), `RecommendController` (`POST /recommend`), `ReportController` (`GET /report`), `SummarizeController` (`POST /chat/summarize`), `CompanyInsightController` (`POST /company-insight`, NEW).
+- **`MonthlyReportSchedulerService` (NEW, `features/aiproxy/application/`)** — a `@Scheduled` cron
+  job, disabled by default (`@ConditionalOnProperty(name = "app.report.monthly.enabled",
+  havingValue = "true")`, real LLM cost) and configurable via `app.report.monthly.cron` (default
+  `0 0 5 1 * *`, i.e. 05:00 on the 1st of each month). On each run it calls
+  `AiProxyPort.forward("/report", {period, top_n: 10, format: "markdown"}, ...)` for the *previous*
+  calendar month, then persists the returned markdown into `cms_content` (`type="Report"`,
+  `status="Pending"`, title `"Báo cáo xu hướng công nghệ tháng M/YYYY"`) via `CmsService.create(...,
+  body)` — populating `cms_content.body` (§4.7, V35). An empty/blank report body is logged and
+  discarded rather than saved; upstream failures are logged and swallowed (`onErrorResume`), never
+  propagated. Before this, every "Report" row in `cms_content` was static seed data with no real
+  generator behind it, and the public/ad-hoc `GET /report` (`ReportController`) was never persisted
+  anywhere.
 
 **Public vs. authenticated split (`SecurityConfig.PUBLIC_ROUTES`):** the dividing line is which
 `AiProxyRequestHandler` method a controller calls. `forward(...)` passes the body through

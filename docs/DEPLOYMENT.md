@@ -68,8 +68,8 @@ bundled), nên một `.env` kiểu cloud không thể làm hỏng kết nối. C
 | `APP_ENV` | `dev` | `dev` = bật seed + log chi tiết; `prod` = không seed |
 | `JWT_SECRET` | (đổi khi prod) | Khoá ký JWT (≥ 256-bit cho production) |
 | `INTERNAL_API_TOKEN` | `techradar-internal-secret` | Shared secret `X-Internal-Auth` giữa gateway và ai-rag-core — **inject vào cả hai** |
-| `LLM_PROVIDER` | `openai` | `openai` \| `gemini` \| `groq` |
-| `OPENAI_API_KEY` / `GEMINI_API_KEY` / `GROQ_API_KEY` | rỗng | Thiếu thì stack vẫn chạy nhưng chat trả lời lỗi |
+| `LLM_PROVIDER` | `openai` | `openai` \| `gemini` \| `groq` \| `claude` |
+| `OPENAI_API_KEY` / `GEMINI_API_KEY` / `GROQ_API_KEY` / `ANTHROPIC_API_KEY` | rỗng | Thiếu thì stack vẫn chạy nhưng chat trả lời lỗi. `ANTHROPIC_API_KEY` (Claude, qua `services/llm-gateway`) được truyền vào cả `ai-rag-core` và `data-platform`; `ml-clustering` không có nhánh Claude nên biến này không áp dụng cho service đó |
 | `CORS_ORIGINS` | `*` | CORS gateway |
 | `WEB_RESET_URL` | `http://localhost:5173/login` | Link trong email reset mật khẩu — **prod đổi thành domain frontend thật** |
 | `MAIL_HOST` / `MAIL_PORT` | `mailhog` / `1025` | SMTP server. Prod đổi sang SMTP thật (Gmail, SendGrid, SES...) |

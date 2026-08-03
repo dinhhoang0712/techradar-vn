@@ -257,7 +257,7 @@ Unified Rerank (BGE reranker, riêng từng loại nguồn: article/job/company/
 Build Prompt (article + job/company + analytics + subgraph theo hop + history)
     │
     ▼
-LLM Generate (OpenAI/Gemini/Groq)
+LLM Generate (OpenAI/Gemini/Groq/Claude qua llm-gateway fallback chain)
     │
     ▼
 Response + Sources + subgraph (JSON-LD) + strategy (explainability)
@@ -574,7 +574,8 @@ services/ai-rag-core/app/
 │   ├── context_ranker.py        # Unified rerank riêng từng loại nguồn (article/job/company/analytics)
 │   ├── graph_serializer.py      # Triple → JSON-LD tối giản cho response API
 │   ├── prompt_builder.py        # Prompt templates (gồm subgraph block nhóm theo hop)
-│   ├── generator.py             # LLM factory (OpenAI/Gemini/Groq)
+│   ├── generator.py             # get_gateway(): xây LLMGateway (services/llm-gateway) — provider chính
+│   │                             # LLM_PROVIDER + fallback OpenAI/Groq/Gemini/Claude còn API key
 │   └── generator_stream.py      # Streaming LLM generation
 ├── services/
 │   ├── chat_service.py
@@ -619,6 +620,20 @@ services/ai-rag-core/app/
 > (forward `Map<String,Object>` nguyên văn, không có typed request/response phía Java nữa).
 > Xem [`docs/BACKEND_GUIDE.md`](./BACKEND_GUIDE.md) §4 để biết chi tiết.
 
+> **Ghi chú kiến trúc (llm-gateway, phía Python):** cùng tinh thần "gateway dùng chung" như
+> `features/aiproxy` ở trên nhưng phía Python — `services/llm-gateway` là một **thư viện**
+> Python thuần (không phải service chạy network, không port, không HTTP/gRPC), cài editable
+> vào image của 3 consumer: `ai-rag-core` (`app/core/generator.py`), `ml-clustering`
+> (`src/labeling/llm_labeler.py`), và `data-platform` (`gold/tech_dedup.py`). Cả 3 Dockerfile
+> đều `COPY services/llm-gateway` nên build context của chúng trong `docker-compose.yml` đã
+> đổi sang repo root (`.`). `LLMGateway` nhận 1 danh sách provider có thứ tự (index 0 = chính,
+> còn lại = fallback), tự retry cùng provider theo `max_retries` trước khi rơi sang provider kế
+> tiếp, rate limit theo token/phút qua Redis (`RedisRateLimiter`, fixed-window), và tính cost
+> USD từ bảng giá tĩnh (`pricing.py`) rồi báo ra ngoài qua callback `on_usage` — gateway tự nó
+> KHÔNG viết gì vào Postgres/Prometheus, việc đó do caller (từng service) quyết định. 4 provider
+> hỗ trợ: OpenAI, Groq, Gemini, Claude — nhưng không phải consumer nào cũng dùng cả 4 (xem §7.1,
+> §7.2, §9.2).
+
 ### 7.2 ml-clustering (FastAPI)
 
 ```
@@ -640,7 +655,9 @@ services/ml-clustering/
 │   ├── clustering/               # trainer.py, tuner.py, evaluator.py
 │   ├── data/                     # neo4j_loader.py, snapshot.py
 │   ├── features/                 # feature_pipeline.py, graph_features.py, gds_features.py (disabled), ...
-│   ├── labeling/                 # llm_labeler.py
+│   ├── labeling/                 # llm_labeler.py — build_gateway(): LLMGateway (services/llm-gateway),
+│   │                             # provider chính params.provider + fallback gemini→openai→groq
+│   │                             # (KHÔNG có Claude trong chain này)
 │   └── tracking/                 # mlflow_logger.py
 ├── dvc.yaml                     # DVC pipeline definition
 ├── params.yaml                   # Hyperparameters
@@ -737,7 +754,9 @@ data-platform/
 │   ├── neo4j_article_sync.py    # Backfill Article/Technology (2:00 AM)
 │   ├── neo4j_job_sync.py        # Backfill Job/Company (2:30 AM)
 │   ├── neo4j_enricher.py        # Derived relationships
-│   └── tech_dedup.py            # Gộp Technology node trùng lặp (5:30 AM)
+│   └── tech_dedup.py            # Gộp Technology node trùng lặp (5:30 AM) — Stage B (LLM discovery
+│                                 # cho tên chưa có trong alias map) đi qua services/llm-gateway,
+│                                 # provider chính TECH_DEDUP_LLM_PROVIDER + fallback gemini/openai/groq
 ├── scheduler/
 │   ├── scheduler.py             # APScheduler
 │   └── jobs.py                  # Job functions

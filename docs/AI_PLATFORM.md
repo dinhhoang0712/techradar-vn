@@ -150,8 +150,10 @@ query + user_id + session_id
         │         system_prompt + history + rag_template, gồm 4 khối context (article/job/company+
         │         analytics/subgraph — khối subgraph nhóm triple theo hop, không phải danh sách phẳng)
         │
-        ├── [7] LLM generate (OpenAI gpt-4o-mini, Gemini, hoặc Groq)
-        │         retry tối đa 3 lần khi 429/503
+        ├── [7] LLM generate (OpenAI gpt-4o-mini, Gemini, Groq, hoặc Claude — qua services/llm-gateway)
+        │         LLMGateway: provider chính LLM_PROVIDER, retry cùng provider tối đa 3 lần khi
+        │         429/503 (_MAX_RETRIES), hết retry thì tự fallback sang provider kế tiếp còn API
+        │         key (thứ tự OpenAI→Groq→Gemini→Claude, trừ provider chính đứng đầu)
         │
         └── [8] Evaluation (fire-and-forget) — xem §2.6
 ```
@@ -358,6 +360,19 @@ Endpoint: `GET /metrics`
 
 **Stages**: `retrieval`, `rerank`, `llm`, `total`
 
+#### Cost tracking (`llm_usage_log`)
+
+Bảng Postgres `llm_usage_log` là nơi lưu billing/cost thật (provider, model, input/output
+tokens, `cost_usd` tính từ bảng giá tĩnh trong `services/llm-gateway/src/llm_gateway/pricing.py`,
+và `fallback_from` nếu request phải rơi từ provider chính sang provider dự phòng). Ghi vào bảng
+này là việc của **caller**, không phải của gateway — `services/llm-gateway` chỉ gọi callback
+`on_usage` sau mỗi lần gọi LLM thành công, còn ghi Postgres ở đâu là do từng service tự quyết.
+`ai-rag-core` wire callback này qua `app/core/llm_usage_sink.py::log_usage_to_postgres` (dùng ở
+`get_gateway()`, `app/core/generator.py`) nên mọi lần chat/agent/interview qua LLM đều có dòng
+trong `llm_usage_log`. **`ml-clustering` hiện KHÔNG wire `on_usage`** (`build_gateway()` ở
+`src/labeling/llm_labeler.py` không truyền tham số này) — nghĩa là các lần gọi LLM để sinh cluster
+label (Stage 4) chưa được track cost/usage ở bảng này, dù vẫn đi qua cùng `services/llm-gateway`.
+
 #### Evaluation (`scripts/evaluate_rag.py`)
 
 2 chế độ, chọn qua `EVAL_METRICS_MODE`:
@@ -383,7 +398,8 @@ thái duyệt hiện tại.
 | `OPENAI_API_KEY` | — | API key OpenAI |
 | `GEMINI_API_KEY` | — | API key Gemini |
 | `GROQ_API_KEY` | — | API key Groq |
-| `LLM_PROVIDER` | `openai` | `"openai"` \| `"gemini"` \| `"groq"` |
+| `ANTHROPIC_API_KEY` | — | API key Claude (services/llm-gateway) |
+| `LLM_PROVIDER` | `openai` | `"openai"` \| `"gemini"` \| `"groq"` \| `"claude"` |
 | `LLM_MODEL` | `gpt-4o-mini` | Model LLM |
 | `POSTGRES_HOST` | `localhost` | PostgreSQL host |
 | `INTERNAL_API_TOKEN` | `""` | Token kiểm tra từ Spring |
@@ -507,7 +523,10 @@ Stage 3 — TRAIN
      │
      ▼  (bỏ qua nếu KHÔNG promote — xem ghi chú champion gate)
 Stage 4 — LABEL
-  GPT-4o-mini sinh cluster labels
+  LLM sinh cluster labels qua services/llm-gateway (llm_labeler.py::build_gateway) — provider
+  chính = params.yaml labeling.provider (hiện tại: "groq"), fallback tự động sang provider kế
+  tiếp còn API key theo thứ tự gemini → openai → groq (Claude KHÔNG được hỗ trợ cho path này —
+  llm_labeler.py không có nhánh build provider Claude)
   - label (tiếng Việt)
   - domain
   - description
@@ -659,7 +678,9 @@ thích lý do, `status` vẫn `success` vì bản thân train không lỗi) — 
 |---------|---------|-------|
 | `NEO4J_URI` | — | URI Neo4j (self-hosted) |
 | `NEO4J_PASSWORD` | — | Mật khẩu Neo4j |
-| `OPENAI_API_KEY` | — | API key GPT-4o-mini (stage 4) |
+| `OPENAI_API_KEY` | — | API key OpenAI, dùng khi là provider chính hoặc fallback (stage 4) |
+| `GEMINI_API_KEY` | — | API key Gemini, dùng khi là provider chính hoặc fallback (stage 4) |
+| `GROQ_API_KEY` | — | API key Groq — provider chính mặc định của `labeling.provider` trong `params.yaml` (stage 4) |
 | `INTERNAL_API_TOKEN` | `""` | Token kiểm tra `/pipeline/trigger` |
 | `MLCLUSTER_MINIO_BUCKET` | `""` | MinIO bucket artifacts (local nếu trống) |
 | `MLCLUSTER_SNAPSHOT_TAG` | `latest` | Tag snapshot để load |

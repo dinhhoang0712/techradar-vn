@@ -64,6 +64,13 @@ class PostgresMessageRepositoryTest {
         return captor.getValue();
     }
 
+    @SuppressWarnings("unchecked")
+    private BiFunction<Row, RowMetadata, AttachmentRow> captureAttachmentRowMapper() {
+        ArgumentCaptor<BiFunction<Row, RowMetadata, AttachmentRow>> captor = ArgumentCaptor.forClass(BiFunction.class);
+        verify(executeSpec).map(captor.capture());
+        return captor.getValue();
+    }
+
     private void stubRow(UUID id, UUID conversationId, UUID senderId, String content,
                           LocalDateTime createdAt, LocalDateTime readAt) {
         stubRow(id, conversationId, senderId, content, createdAt, readAt, null, null, null);
@@ -253,13 +260,17 @@ class PostgresMessageRepositoryTest {
                 .thenReturn(executeSpec);
         when(executeSpec.bind(anyString(), any())).thenReturn(executeSpec);
         when(executeSpec.map(any(BiFunction.class))).thenReturn(attachmentRowsFetchSpec);
+        when(attachmentRowsFetchSpec.one()).thenReturn(Mono.empty());
+
+        repository.findAttachmentData(id).subscribe();
+
         when(row.get("attachment_content_type", String.class)).thenReturn("image/png");
         when(row.get("attachment_filename", String.class)).thenReturn("photo.png");
         when(row.get("attachment_data", byte[].class)).thenReturn(bytes);
-        AttachmentRow expected = new AttachmentRow("image/png", "photo.png", bytes);
-        when(attachmentRowsFetchSpec.one()).thenReturn(Mono.just(expected));
-
-        StepVerifier.create(repository.findAttachmentData(id)).expectNext(expected).verifyComplete();
+        AttachmentRow mapped = captureAttachmentRowMapper().apply(row, rowMetadata);
+        assertThat(mapped.contentType()).isEqualTo("image/png");
+        assertThat(mapped.filename()).isEqualTo("photo.png");
+        assertThat(mapped.data()).containsExactly(1, 2, 3);
 
         verify(executeSpec).bind("id", id);
     }

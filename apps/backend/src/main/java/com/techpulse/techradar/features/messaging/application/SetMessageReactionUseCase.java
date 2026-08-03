@@ -43,11 +43,11 @@ public class SetMessageReactionUseCase {
         UUID userUuid = UUID.fromString(userId);
 
         return conversationAccessGuard.requireParticipant(convId, userUuid)
-                .then(messageRepository.findById(msgId))
+                .then(Mono.defer(() -> messageRepository.findById(msgId)))
                 .filter(row -> row.conversationId().equals(convId))
                 .switchIfEmpty(Mono.error(new NotFoundException("Message not found: " + messageId)))
-                .then(messageReactionRepository.upsert(msgId, userUuid, emoji))
-                .then(messageReactionRepository.findByMessageId(msgId).collectList())
+                .then(Mono.defer(() -> messageReactionRepository.upsert(msgId, userUuid, emoji)))
+                .then(Mono.defer(() -> messageReactionRepository.findByMessageId(msgId).collectList()))
                 .flatMap(rows -> broadcastToOtherParticipant(convId, messageId, rows, userUuid)
                         .thenReturn(ReactionSummaries.summarize(rows, userUuid)));
     }

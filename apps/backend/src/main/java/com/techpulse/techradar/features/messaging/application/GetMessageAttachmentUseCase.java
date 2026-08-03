@@ -21,10 +21,10 @@ public class GetMessageAttachmentUseCase {
         UUID viewerUuid = UUID.fromString(viewerId);
 
         return conversationAccessGuard.requireParticipant(convId, viewerUuid)
-                .then(messageRepository.findById(msgId))
+                .then(Mono.defer(() -> messageRepository.findById(msgId)))
                 .filter(row -> row.conversationId().equals(convId))
                 .switchIfEmpty(Mono.error(new NotFoundException("Message not found: " + messageId)))
-                .then(messageRepository.findAttachmentData(msgId))
+                .then(Mono.defer(() -> messageRepository.findAttachmentData(msgId)))
                 .switchIfEmpty(Mono.error(new NotFoundException("No attachment on message: " + messageId)));
     }
 }

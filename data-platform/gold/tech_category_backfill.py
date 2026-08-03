@@ -18,8 +18,9 @@ from __future__ import annotations
 
 from common.db import get_neo4j_driver, get_pg_conn
 from config import Settings, get_settings
-from gold.tech_dedup import _call_llm, _fetch_technology_names, _parse_llm_categories, _save_categories
 from loguru import logger
+
+from gold.tech_dedup import _call_llm, _fetch_technology_names, _parse_llm_categories, _save_categories
 
 _BATCH_SIZE = 50
 
@@ -59,9 +60,7 @@ def run(settings: Settings) -> dict:
             category_by_name = {c["name"]: c["category"] for c in categories if c.get("name") and c.get("category")}
             _save_categories(pg_conn, category_by_name)
             total_categorized += len(category_by_name)
-            logger.info(
-                "Category Backfill: đã phân loại {} tên (batch {} tên)", total_categorized, len(batch)
-            )
+            logger.info("Category Backfill: đã phân loại {} tên (batch {} tên)", total_categorized, len(batch))
 
         logger.info("Category Backfill: done — {} tên đã phân loại", total_categorized)
         return {"categorized": total_categorized, "already_categorized": len(already_categorized)}

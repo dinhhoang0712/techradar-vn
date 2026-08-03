@@ -10,7 +10,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 import typer
 from botocore.exceptions import ClientError
-
 from pipelines.stage_06_publish import PublishError, main, publish_snapshot
 
 
@@ -114,7 +113,7 @@ def test_publish_includes_optional_near_clusters_when_present(tmp_path, fake_min
     manifest = publish_snapshot(tag, data_dir=tmp_path, minio_settings={"bucket": "b", "prefix": ""}, run_id="r1")
 
     assert len(manifest["uploaded_artifacts"]) == 4
-    assert "models/{}/near_clusters.json".format(tag) in manifest["uploaded_artifacts"]
+    assert f"models/{tag}/near_clusters.json" in manifest["uploaded_artifacts"]
 
 
 def test_publish_raises_and_does_not_touch_manifest_when_required_artifact_missing(tmp_path, fake_minio):
@@ -135,7 +134,7 @@ def test_publish_raises_when_upload_fails_partway(tmp_path, fake_minio):
     file trước đó đã upload thành công (artifact 'nửa vời' trên MinIO nhưng manifest chưa trỏ tới)."""
     tag = "2026-07-27-1000"
     _write_required_artifacts(tmp_path, tag)
-    failing_key = "labels/{}/cluster_labels.json".format(tag)
+    failing_key = f"labels/{tag}/cluster_labels.json"
     fake_minio["client_holder"]["client"] = _FakeMinioClient(fail_keys={failing_key})
 
     with pytest.raises(PublishError, match="thất bại"):
@@ -184,9 +183,10 @@ def test_main_exits_zero_without_publishing_when_minio_not_configured(monkeypatc
     # sẽ AttributeError vì tên đó không tồn tại ở module-level trong file này.
     monkeypatch.delenv("MLCLUSTER_MINIO_BUCKET", raising=False)
 
-    with patch("conf.config.load_params") as mock_load_params, patch(
-        "pipelines.stage_06_publish.publish_snapshot"
-    ) as mock_publish:
+    with (
+        patch("conf.config.load_params") as mock_load_params,
+        patch("pipelines.stage_06_publish.publish_snapshot") as mock_publish,
+    ):
         mock_load_params.return_value = MagicMock(snapshot=MagicMock(tag="2026-07-27-1000"))
         with pytest.raises(typer.Exit) as exc_info:
             main(params="params.yaml", run_id="run-1", force=False)
@@ -198,9 +198,11 @@ def test_main_exits_zero_without_publishing_when_minio_not_configured(monkeypatc
 def test_main_skips_publish_when_not_promoted_and_not_forced(monkeypatch):
     monkeypatch.setenv("MLCLUSTER_MINIO_BUCKET", "test-bucket")
 
-    with patch("conf.config.load_params") as mock_load_params, patch(
-        "src.tracking.mlflow_logger.is_run_promoted_to_champion", return_value=False
-    ) as mock_promoted, patch("pipelines.stage_06_publish.publish_snapshot") as mock_publish:
+    with (
+        patch("conf.config.load_params") as mock_load_params,
+        patch("src.tracking.mlflow_logger.is_run_promoted_to_champion", return_value=False) as mock_promoted,
+        patch("pipelines.stage_06_publish.publish_snapshot") as mock_publish,
+    ):
         mock_load_params.return_value = MagicMock(
             snapshot=MagicMock(tag="2026-07-27-1000"),
             mlflow=MagicMock(tracking_uri="http://mlflow"),
@@ -216,9 +218,11 @@ def test_main_skips_publish_when_not_promoted_and_not_forced(monkeypatch):
 def test_main_force_bypasses_champion_gate(monkeypatch):
     monkeypatch.setenv("MLCLUSTER_MINIO_BUCKET", "test-bucket")
 
-    with patch("conf.config.load_params") as mock_load_params, patch(
-        "src.tracking.mlflow_logger.is_run_promoted_to_champion"
-    ) as mock_promoted, patch("pipelines.stage_06_publish.publish_snapshot") as mock_publish:
+    with (
+        patch("conf.config.load_params") as mock_load_params,
+        patch("src.tracking.mlflow_logger.is_run_promoted_to_champion") as mock_promoted,
+        patch("pipelines.stage_06_publish.publish_snapshot") as mock_publish,
+    ):
         mock_load_params.return_value = MagicMock(
             snapshot=MagicMock(tag="2026-07-27-1000"),
             mlflow=MagicMock(tracking_uri="http://mlflow"),
@@ -238,9 +242,11 @@ def test_main_force_bypasses_champion_gate(monkeypatch):
 def test_main_exits_one_when_publish_fails(monkeypatch):
     monkeypatch.setenv("MLCLUSTER_MINIO_BUCKET", "test-bucket")
 
-    with patch("conf.config.load_params") as mock_load_params, patch(
-        "src.tracking.mlflow_logger.is_run_promoted_to_champion", return_value=True
-    ), patch("pipelines.stage_06_publish.publish_snapshot", side_effect=PublishError("boom")):
+    with (
+        patch("conf.config.load_params") as mock_load_params,
+        patch("src.tracking.mlflow_logger.is_run_promoted_to_champion", return_value=True),
+        patch("pipelines.stage_06_publish.publish_snapshot", side_effect=PublishError("boom")),
+    ):
         mock_load_params.return_value = MagicMock(
             snapshot=MagicMock(tag="2026-07-27-1000"),
             mlflow=MagicMock(tracking_uri="http://mlflow"),

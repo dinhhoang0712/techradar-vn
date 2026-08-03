@@ -433,7 +433,12 @@ def run(settings: Settings) -> dict:
     logger.info("Tech Dedup: starting...")
     pg_conn = get_pg_conn(settings)
     run_id = log_pipeline_run(pg_conn, "tech_dedup", "running")
-    results = {"merged_exact_duplicates": 0, "merged_known_alias": 0, "merged_llm_high_confidence": 0, "sent_to_review": 0}
+    results = {
+        "merged_exact_duplicates": 0,
+        "merged_known_alias": 0,
+        "merged_llm_high_confidence": 0,
+        "sent_to_review": 0,
+    }
 
     try:
         driver = get_neo4j_driver(settings)
@@ -497,7 +502,8 @@ def run(settings: Settings) -> dict:
                         if pair_key in reviewed_pairs:
                             logger.info(
                                 "Tech Dedup: bỏ qua '{}' <-> '{}' — đã có quyết định (pending/approved/rejected) từ trước",
-                                n, canonical,
+                                n,
+                                canonical,
                             )
                             continue
                         reviewed_pairs.add(pair_key)

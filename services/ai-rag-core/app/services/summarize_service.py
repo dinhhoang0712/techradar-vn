@@ -78,9 +78,7 @@ async def _fetch_articles(tech_name: str, start_date: str, end_date: str) -> lis
     start = date.fromisoformat(start_date)
     end = date.fromisoformat(end_date)
     in_range = [
-        (parsed, row)
-        for row in rows
-        if (parsed := parse_date(row.get("published_date"))) and start <= parsed <= end
+        (parsed, row) for row in rows if (parsed := parse_date(row.get("published_date"))) and start <= parsed <= end
     ]
     in_range.sort(key=lambda pair: pair[0], reverse=True)
     return [row for _, row in in_range[:20]]

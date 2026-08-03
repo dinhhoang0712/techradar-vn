@@ -144,9 +144,7 @@ def format_job_line(j: dict) -> str:
     if description:
         line += f"\n    Mô tả: {description[:200]}..." if len(description) > 200 else f"\n    Mô tả: {description}"
     if requirement:
-        line += (
-            f"\n    Yêu cầu: {requirement[:200]}..." if len(requirement) > 200 else f"\n    Yêu cầu: {requirement}"
-        )
+        line += f"\n    Yêu cầu: {requirement[:200]}..." if len(requirement) > 200 else f"\n    Yêu cầu: {requirement}"
     if benefit:
         line += f"\n    Phúc lợi: {benefit[:150]}..." if len(benefit) > 150 else f"\n    Phúc lợi: {benefit}"
     return line

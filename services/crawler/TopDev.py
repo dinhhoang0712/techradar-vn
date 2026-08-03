@@ -244,9 +244,7 @@ def main():
                 location = _location_from_ld(job_posting) or _safe(
                     driver, "div.job-location, span.location, div.address"
                 )
-                salary = _salary_from_ld(job_posting) or _safe(
-                    driver, "div.job-salary, span.salary, div.salary-box"
-                )
+                salary = _salary_from_ld(job_posting) or _safe(driver, "div.job-salary, span.salary, div.salary-box")
                 posted_date = job_posting.get("datePosted") or ""
 
                 description = job_posting.get("description") or _extract_section(

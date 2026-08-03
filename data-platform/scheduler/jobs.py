@@ -167,9 +167,7 @@ def job_retrain_clustering(settings: Settings) -> None:
         # champion hiện tại, xem app/routes_pipeline.py:_run_pipeline) — status vẫn "success" vì
         # train không lỗi, nhưng nếu không lưu note này thì dp_pipeline_runs không phân biệt được
         # với 1 lần retrain deploy bình thường, admin không biết model mới đã bị âm thầm bỏ qua.
-        log_pipeline_run(
-            pg_conn, "retrain_clustering", "success", error_msg=final_state.get("note"), run_id=run_id
-        )
+        log_pipeline_run(pg_conn, "retrain_clustering", "success", error_msg=final_state.get("note"), run_id=run_id)
     else:
         error_msg = (final_state.get("error") or "unknown")[:500]
         logger.error("retrain_clustering: pipeline báo failed — {}", error_msg)

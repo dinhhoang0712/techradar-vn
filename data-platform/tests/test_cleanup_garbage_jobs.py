@@ -87,7 +87,9 @@ def _patch(monkeypatch, driver, conn):
 
 
 def test_run_deletes_neo4j_nodes_and_marks_postgres_invalid(monkeypatch):
-    driver = FakeDriver([{"id": "abc123", "title": "Sorry, you have been blocked"}, {"id": "def456", "title": "www.topcv.vn"}])
+    driver = FakeDriver(
+        [{"id": "abc123", "title": "Sorry, you have been blocked"}, {"id": "def456", "title": "www.topcv.vn"}]
+    )
     conn = FakeConn(rowcount=2)
     _patch(monkeypatch, driver, conn)
 

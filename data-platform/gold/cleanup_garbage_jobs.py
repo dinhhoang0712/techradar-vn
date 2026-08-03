@@ -22,8 +22,9 @@ from __future__ import annotations
 
 from common.db import get_neo4j_driver, get_pg_conn
 from config import Settings, get_settings
-from gold.kg_health_audit import _check_garbage_jobs
 from loguru import logger
+
+from gold.kg_health_audit import _check_garbage_jobs
 
 _DELETE_JOBS_QUERY = "MATCH (j:Job) WHERE j.id IN $ids DETACH DELETE j"
 _MARK_INVALID_QUERY = "UPDATE dp_processed_jobs SET status = 'invalid' WHERE id = ANY(%s)"
@@ -67,4 +68,3 @@ if __name__ == "__main__":
 
     configure_logging()
     result = run(get_settings())
-    print(result)

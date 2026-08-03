@@ -220,7 +220,13 @@ def grid_search(
         sil_str = f"{result.silhouette:.3f}" if result.silhouette is not None else "N/A"
         logger.info(
             "[%s] Trial %d/%d params=%s n_clusters=%d silhouette=%s (%.1fs)",
-            status, i, len(param_grid), trial_params, result.n_clusters, sil_str, wall,
+            status,
+            i,
+            len(param_grid),
+            trial_params,
+            result.n_clusters,
+            sil_str,
+            wall,
         )
 
     # require_min_clusters (params.yaml, tuned cho quy mô production ~250 tech) áp dụng bổ sung ở

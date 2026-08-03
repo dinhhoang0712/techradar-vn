@@ -68,12 +68,17 @@ def log_pipeline_run(
     # fail the job whose result it's merely reporting.
     if status in ("success", "failed"):
         try:
-            _redis_client.publish(JOB_COMPLETED_CHANNEL, json.dumps({
-                "job_name": job_name,
-                "status": status,
-                "rows_affected": rows_affected,
-                "error_msg": error_msg,
-            }))
+            _redis_client.publish(
+                JOB_COMPLETED_CHANNEL,
+                json.dumps(
+                    {
+                        "job_name": job_name,
+                        "status": status,
+                        "rows_affected": rows_affected,
+                        "error_msg": error_msg,
+                    }
+                ),
+            )
         except redis.exceptions.RedisError as e:
             logger.warning("Could not publish job completion to Redis: {}", e)
     return run_id

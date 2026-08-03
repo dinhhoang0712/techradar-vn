@@ -62,4 +62,6 @@ def test_job_title_keyword_filters_coalesce_title_and_name():
     # both properties too, or real (name-only) jobs never match the keyword search at all.
     for name in ["JOBS_BY_TECH_AND_TITLE", "JOBS_BY_TITLE", "JOBS_BY_TITLE_AND_COMPANY"]:
         cypher = getattr(graph_queries, name)
-        assert "toLower(coalesce(j.title, j.name)) CONTAINS kw" in cypher, f"{name} must filter on coalesce(j.title, j.name)"
+        assert "toLower(coalesce(j.title, j.name)) CONTAINS kw" in cypher, (
+            f"{name} must filter on coalesce(j.title, j.name)"
+        )

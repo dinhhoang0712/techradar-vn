@@ -142,10 +142,15 @@ def main() -> None:
         # Fire-and-forget: an admin notification is a nice-to-have, must never block/fail the
         # crawl loop itself.
         try:
-            redis_client.publish(COMPLETED_CHANNEL, json.dumps({
-                "success_count": success,
-                "total": len(CRAWLERS),
-            }))
+            redis_client.publish(
+                COMPLETED_CHANNEL,
+                json.dumps(
+                    {
+                        "success_count": success,
+                        "total": len(CRAWLERS),
+                    }
+                ),
+            )
         except redis.exceptions.RedisError as e:
             logger.warning("Could not publish crawl completion to Redis: %s", e)
         logger.info("Crawl run complete: %d/%d crawlers succeeded.", success, len(CRAWLERS))

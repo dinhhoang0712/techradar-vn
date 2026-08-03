@@ -14,7 +14,6 @@ Cách chạy (từ thư mục data-platform/):
 
 from __future__ import annotations
 
-import json
 import re
 
 from common.db import get_neo4j_driver
@@ -267,8 +266,7 @@ def run(settings: Settings) -> dict:
             )
         if garbage_jobs:
             logger.warning(
-                "KG Health Audit: {} Job node là dữ liệu rác từ crawl bị chặn/lỗi (không phải tin "
-                "tuyển dụng thật): {}",
+                "KG Health Audit: {} Job node là dữ liệu rác từ crawl bị chặn/lỗi (không phải tin tuyển dụng thật): {}",
                 len(garbage_jobs),
                 [j["title"] for j in garbage_jobs][:5],
             )
@@ -290,4 +288,3 @@ def run(settings: Settings) -> dict:
 if __name__ == "__main__":
     configure_logging()
     result = run(get_settings())
-    print(json.dumps(result, indent=2, ensure_ascii=False))

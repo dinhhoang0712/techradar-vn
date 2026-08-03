@@ -34,7 +34,7 @@ _MAX_PARAM_LEN = 500
 
 
 def _serialize_param_value(value: Any) -> str:
-    if isinstance(value, (dict, list)):
+    if isinstance(value, dict | list):
         text = json.dumps(value, ensure_ascii=False)
     else:
         text = str(value)
@@ -291,7 +291,7 @@ def write_metrics_file(
     clean = {
         k: v
         for k, v in metrics.items()
-        if isinstance(v, (int, float, str, bool)) and not (isinstance(v, float) and np.isnan(v))
+        if isinstance(v, int | float | str | bool) and not (isinstance(v, float) and np.isnan(v))
     }
     out.write_text(json.dumps(clean, indent=2), encoding="utf-8")
     logger.info("Metrics file: %s", out)

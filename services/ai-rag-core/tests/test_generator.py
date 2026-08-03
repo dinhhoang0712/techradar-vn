@@ -1,12 +1,12 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from llm_gateway.exceptions import AllProvidersFailedError
+from llm_gateway.types import LLMResponse, TokenUsage
 
 from app.config import get_settings
 from app.core.generator import _build_provider, generate, get_gateway
 from app.core.generator_stream import generate_stream
-from llm_gateway.exceptions import AllProvidersFailedError
-from llm_gateway.types import LLMResponse, TokenUsage
 
 
 @pytest.fixture(autouse=True)

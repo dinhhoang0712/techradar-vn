@@ -4,7 +4,6 @@
 """
 
 import pytest
-
 from llm_gateway.ratelimit import RedisRateLimiter
 
 

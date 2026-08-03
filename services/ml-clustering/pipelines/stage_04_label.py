@@ -157,7 +157,6 @@ def main(
 
 
 def _print_summary(cluster_labels: dict) -> None:
-
     header = f"{'ID':>4}  {'Label':<28}  {'Domain':<18}  {'Size':>5}  {'Conf':>5}  Top-3 Members"
     sep = "-" * len(header)
     print("\n" + sep)

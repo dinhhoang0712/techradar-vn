@@ -366,7 +366,9 @@ def call_gemini(
                 )
                 continue
 
-    raise RuntimeError(f"LLM trả response không parse được sau {_PARSE_RETRY_ATTEMPTS} lần thử: {last_exc}") from last_exc
+    raise RuntimeError(
+        f"LLM trả response không parse được sau {_PARSE_RETRY_ATTEMPTS} lần thử: {last_exc}"
+    ) from last_exc
 
 
 def label_all_clusters(

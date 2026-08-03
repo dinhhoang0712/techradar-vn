@@ -26,6 +26,7 @@ def _wait_for_page_ready(driver, css="h1", timeout=20):
     except TimeoutException:
         pass
 
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)

@@ -66,7 +66,7 @@ TEST_QUERIES: list[dict] = [
         "question": "Lương kỹ sư phần mềm ở Việt Nam hiện tại ra sao?",
         "ground_truth": (
             "Mức lương kỹ sư phần mềm tại Việt Nam rất đa dạng, phần lớn tin tuyển dụng ghi "
-            "\"Thương lượng\" hoặc mức phổ biến khoảng 10-30 triệu VND/tháng; một số vị trí "
+            '"Thương lượng" hoặc mức phổ biến khoảng 10-30 triệu VND/tháng; một số vị trí '
             "senior/dự án nước ngoài trả theo USD, khoảng 800-2500 USD/tháng."
         ),
     },
@@ -75,7 +75,7 @@ TEST_QUERIES: list[dict] = [
         "ground_truth": (
             "Hệ thống hiện có 144 tin tuyển dụng yêu cầu Python. Mức lương dao động rộng: vị trí "
             "fresher/junior khoảng 10-20 triệu VND/tháng, vị trí senior/cloud engineer khoảng "
-            "1000-2500 USD/tháng; nhiều tin không công khai mức lương cụ thể (\"Thương lượng\" hoặc để trống)."
+            '1000-2500 USD/tháng; nhiều tin không công khai mức lương cụ thể ("Thương lượng" hoặc để trống).'
         ),
     },
     {
@@ -83,8 +83,8 @@ TEST_QUERIES: list[dict] = [
         "ground_truth": (
             "Có 6 tin tuyển dụng Data Engineer yêu cầu đồng thời cả Kafka và Spark (trong tổng số "
             "15 tin Data Engineer, 10 tin yêu cầu ít nhất một trong hai công nghệ này), ví dụ: "
-            "\"Data Engineer\", \"CV Phát triển Tích hợp Dữ liệu (Junior Data Engineer)\", "
-            "\"CVCC tích hợp dữ liệu (Senior Data Engineer)\"."
+            '"Data Engineer", "CV Phát triển Tích hợp Dữ liệu (Junior Data Engineer)", '
+            '"CVCC tích hợp dữ liệu (Senior Data Engineer)".'
         ),
     },
     {
@@ -108,7 +108,7 @@ TEST_QUERIES: list[dict] = [
         "question": "Shopee đang tuyển vị trí gì?",
         "ground_truth": (
             "Hệ thống hiện KHÔNG có dữ liệu tin tuyển dụng nào từ Shopee (không tồn tại Company node nào "
-            "khớp tên \"Shopee\" trong Neo4j) — câu trả lời đúng phải nêu rõ không có thông tin, không được "
+            'khớp tên "Shopee" trong Neo4j) — câu trả lời đúng phải nêu rõ không có thông tin, không được '
             "bịa ra vị trí tuyển dụng."
         ),
     },
@@ -123,8 +123,8 @@ TEST_QUERIES: list[dict] = [
     {
         "question": "Lương DevOps engineer ở Hà Nội bao nhiêu?",
         "ground_truth": (
-            "Phần lớn tin DevOps tại Hà Nội ghi \"Thương lượng\" hoặc không công khai mức lương; một ví dụ "
-            "cụ thể có mức lương rõ: \"Nhân Viên Middle Azure Devops\" 30-35 triệu VND/tháng."
+            'Phần lớn tin DevOps tại Hà Nội ghi "Thương lượng" hoặc không công khai mức lương; một ví dụ '
+            'cụ thể có mức lương rõ: "Nhân Viên Middle Azure Devops" 30-35 triệu VND/tháng.'
         ),
     },
     # --- Bổ sung: phủ các nhánh mới (strategy selector / expansion / bug đã fix) ---
@@ -142,7 +142,7 @@ TEST_QUERIES: list[dict] = [
     {
         "question": "Kotlin dùng để làm gì?",
         "ground_truth": (
-            "Kotlin được phân loại là ngôn ngữ lập trình (category \"language\"), thường liên quan tới phát "
+            'Kotlin được phân loại là ngôn ngữ lập trình (category "language"), thường liên quan tới phát '
             "triển Android/di động — các công nghệ liên quan gần nhất trong đồ thị gồm Android, Java, "
             "Spring, Spring Boot, iOS, Swift, Flutter. Có 16 tin tuyển dụng yêu cầu Kotlin trong hệ thống."
         ),
@@ -151,7 +151,7 @@ TEST_QUERIES: list[dict] = [
     {
         "question": "So sánh Java và Python, nên học cái nào trước?",
         "ground_truth": (
-            "Cả Java và Python đều được phân loại là ngôn ngữ lập trình (category \"language\"). Theo số "
+            'Cả Java và Python đều được phân loại là ngôn ngữ lập trình (category "language"). Theo số '
             "liệu tuyển dụng hiện tại trong hệ thống, Python có 144 tin yêu cầu, Java có 92 tin — nhu cầu "
             "tuyển dụng Python hiện cao hơn Java trong dữ liệu hệ thống."
         ),
@@ -160,7 +160,7 @@ TEST_QUERIES: list[dict] = [
     {
         "question": "Tiki đang tuyển những vị trí nào?",
         "ground_truth": (
-            "Hệ thống ghi nhận 1 tin tuyển dụng từ Tiki: \"DevOps Engineer (Middle/Senior)\", yêu cầu các "
+            'Hệ thống ghi nhận 1 tin tuyển dụng từ Tiki: "DevOps Engineer (Middle/Senior)", yêu cầu các '
             "công nghệ Cloud, Prometheus, Ansible."
         ),
     },
@@ -315,9 +315,11 @@ def _compute_local_metrics(rows: list[dict]) -> list[dict]:
 
 
 async def _run_local_eval(rows: list[dict], valid_rows: list[dict], variant: str, settings) -> None:
-    print("\n⚠ Chế độ LOCAL — faithfulness/answer_relevancy là proxy KHÔNG dùng LLM (word-overlap "
-          "+ cosine similarity embedding local), YẾU HƠN RAGAS thật. Dùng số liệu này để lặp lại "
-          "đánh giá nhanh, không dùng làm kết quả cuối cùng của luận án.")
+    print(
+        "\n⚠ Chế độ LOCAL — faithfulness/answer_relevancy là proxy KHÔNG dùng LLM (word-overlap "
+        "+ cosine similarity embedding local), YẾU HƠN RAGAS thật. Dùng số liệu này để lặp lại "
+        "đánh giá nhanh, không dùng làm kết quả cuối cùng của luận án."
+    )
 
     enriched = _compute_local_metrics(valid_rows)
     n = len(enriched) or 1
@@ -345,7 +347,9 @@ async def _run_local_eval(rows: list[dict], valid_rows: list[dict], variant: str
     print("\nLog kết quả vào MLflow...")
     mlflow.set_experiment("rag_evaluation")
     with mlflow.start_run(run_name=f"local_eval_{variant}"):
-        _log_common_mlflow_params(settings, variant, judge_model="none (local proxy, no LLM)", num_evaluated=len(valid_rows))
+        _log_common_mlflow_params(
+            settings, variant, judge_model="none (local proxy, no LLM)", num_evaluated=len(valid_rows)
+        )
         mlflow.log_param("has_ground_truth", False)
         mlflow.log_param("metrics_mode", "local")
 

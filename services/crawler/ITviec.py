@@ -108,7 +108,7 @@ def _format_salary(job_posting: dict) -> str:
     currency = base_salary.get("currency", "")
     if min_v and max_v:
         return f"{min_v} - {max_v} {currency}".strip()
-    if isinstance(single_v, (int, float)):
+    if isinstance(single_v, int | float):
         return f"{single_v} {currency}".strip()
     return ""  # placeholder kiểu "You'll love it" (lương ẩn) -> coi như không có
 

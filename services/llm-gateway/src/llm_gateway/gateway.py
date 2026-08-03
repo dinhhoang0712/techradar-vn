@@ -85,9 +85,7 @@ class LLMGateway:
 
         raise AllProvidersFailedError(errors)
 
-    async def chat_stream(
-        self, messages: list[Message], config: GenerationConfig | None = None
-    ) -> AsyncIterator[str]:
+    async def chat_stream(self, messages: list[Message], config: GenerationConfig | None = None) -> AsyncIterator[str]:
         errors: list[LLMProviderError] = []
 
         for provider in self.providers:

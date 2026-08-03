@@ -34,6 +34,7 @@ def get_llm():
 
         return ChatGoogleGenerativeAI(model=settings.llm_model, google_api_key=settings.gemini_api_key, temperature=0.2)
 
+
 # Thứ tự thử khi provider chính (llm_provider) lỗi/hết rate limit — có key trong .env
 # mới được đưa vào danh sách; không có key thì tự bỏ qua, không lỗi.
 _PROVIDER_ORDER = ("openai", "groq", "gemini", "claude")

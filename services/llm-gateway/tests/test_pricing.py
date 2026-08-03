@@ -1,5 +1,4 @@
 import pytest
-
 from llm_gateway.pricing import calc_cost
 from llm_gateway.types import TokenUsage
 

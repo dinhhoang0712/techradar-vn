@@ -150,12 +150,8 @@ def test_check_tech_property_coverage_zero_when_no_technology_nodes():
 
 
 def test_check_duplicate_case_names_returns_groups():
-    driver = FakeDriver(
-        {"WHERE size(names) > 1": [{"normalized": "react", "names": ["React", "react"]}]}
-    )
-    assert kg_health_audit._check_duplicate_case_names(driver) == [
-        {"normalized": "react", "names": ["React", "react"]}
-    ]
+    driver = FakeDriver({"WHERE size(names) > 1": [{"normalized": "react", "names": ["React", "react"]}]})
+    assert kg_health_audit._check_duplicate_case_names(driver) == [{"normalized": "react", "names": ["React", "react"]}]
 
 
 # ---------------------------------------------------------------------------

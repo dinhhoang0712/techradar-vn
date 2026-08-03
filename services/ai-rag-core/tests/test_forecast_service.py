@@ -1,7 +1,8 @@
+from datetime import UTC, datetime, timedelta
+
 import pytest
 
 import app.services.forecast_service as forecast_service  # type: ignore # noqa
-from datetime import UTC, datetime, timedelta
 
 
 def _recent_iso(days_ago: int) -> str:

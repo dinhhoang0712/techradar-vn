@@ -80,10 +80,7 @@ def test_call_gemini_strips_markdown_fence(monkeypatch):
 
 def test_call_gemini_retries_on_unparseable_response_then_succeeds():
     fake_gateway = MagicMock()
-    good = (
-        '{"label": "x", "label_en": "x", "description": "d", "domain": "Other",'
-        ' "confidence": 0.5, "outliers": []}'
-    )
+    good = '{"label": "x", "label_en": "x", "description": "d", "domain": "Other", "confidence": 0.5, "outliers": []}'
     fake_gateway.chat = AsyncMock(
         side_effect=[
             LLMResponse(text="không phải JSON", usage=TokenUsage(1, 1), provider="gemini", model="m"),
@@ -118,8 +115,7 @@ def test_call_gemini_raises_runtime_error_when_all_providers_fail():
 def test_call_gemini_uses_disk_cache(tmp_path):
     fake_gateway = MagicMock()
     good = (
-        '{"label": "cached", "label_en": "x", "description": "d", "domain": "Other",'
-        ' "confidence": 0.5, "outliers": []}'
+        '{"label": "cached", "label_en": "x", "description": "d", "domain": "Other", "confidence": 0.5, "outliers": []}'
     )
     fake_gateway.chat = AsyncMock(
         return_value=LLMResponse(text=good, usage=TokenUsage(1, 1), provider="gemini", model="m")
@@ -128,12 +124,16 @@ def test_call_gemini_uses_disk_cache(tmp_path):
     data1 = call_gemini("prompt giống nhau", _params(), cache_dir=str(tmp_path), gateway=fake_gateway)
     data2 = call_gemini("prompt giống nhau", _params(), cache_dir=str(tmp_path), gateway=fake_gateway)
 
-    assert data1 == data2 == {
-        "label": "cached",
-        "label_en": "x",
-        "description": "d",
-        "domain": "Other",
-        "confidence": 0.5,
-        "outliers": [],
-    }
+    assert (
+        data1
+        == data2
+        == {
+            "label": "cached",
+            "label_en": "x",
+            "description": "d",
+            "domain": "Other",
+            "confidence": 0.5,
+            "outliers": [],
+        }
+    )
     fake_gateway.chat.assert_awaited_once()  # lần 2 phải đọc cache, không gọi lại gateway

@@ -1,5 +1,4 @@
 import pytest
-
 from llm_gateway.gateway import LLMGateway
 from llm_gateway.types import GenerationConfig, LLMResponse, Message, TokenUsage
 

@@ -41,8 +41,7 @@ def ensure_constraints(driver) -> None:
         for constraint_name, label, prop in _CONSTRAINTS:
             try:
                 session.run(
-                    f"CREATE CONSTRAINT {constraint_name} IF NOT EXISTS "
-                    f"FOR (n:{label}) REQUIRE n.{prop} IS UNIQUE"
+                    f"CREATE CONSTRAINT {constraint_name} IF NOT EXISTS FOR (n:{label}) REQUIRE n.{prop} IS UNIQUE"
                 )
                 logger.info("Neo4j constraint '{}' ({}.{}) OK", constraint_name, label, prop)
             except Exception as exc:

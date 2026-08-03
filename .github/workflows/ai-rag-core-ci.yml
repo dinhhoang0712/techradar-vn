@@ -17,6 +17,13 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # requirements.txt has `-e ../llm-gateway[all]` — pip resolves that relative path against the
+    # CWD of the pip invocation, NOT against requirements.txt's own directory. Every `run:` step
+    # below must execute with services/ai-rag-core as CWD or that line resolves to a nonexistent
+    # path one level above the repo root and fails with "not a valid editable requirement".
+    defaults:
+      run:
+        working-directory: services/ai-rag-core
     steps:
       - uses: actions/checkout@v4
 
@@ -34,7 +41,7 @@ jobs:
         run: pip install --timeout 600 torch==2.4.1 --index-url https://download.pytorch.org/whl/cpu
 
       - name: Install dependencies
-        run: pip install -r services/ai-rag-core/requirements.txt
+        run: pip install -r requirements.txt
 
       - name: Run tests
-        run: pytest services/ai-rag-core/tests
+        run: pytest tests

@@ -1,0 +1,46 @@
+name: Web CI
+
+# apps/web (React + Vite + TypeScript) had no CI at all before this — lint/type errors and test
+# regressions only ever surfaced when someone happened to run them locally. node:20-alpine matches
+# apps/web/Dockerfile's build stage; npm ci (not npm install) matches the Dockerfile too and keeps
+# CI honest about the committed package-lock.json.
+on:
+  push:
+    branches: [master]
+    paths:
+      - "apps/web/**"
+      - ".github/workflows/web-ci.yml"
+  pull_request:
+    paths:
+      - "apps/web/**"
+      - ".github/workflows/web-ci.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build

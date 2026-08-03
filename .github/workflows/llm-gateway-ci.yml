@@ -1,0 +1,39 @@
+name: LLM Gateway CI
+
+# services/llm-gateway is a plain importable Python library (no FastAPI/port of its own) shared
+# by ai-rag-core, ml-clustering and data-platform's tech_dedup job. It had its own tests/ but no
+# workflow ever ran them — a change here wasn't even caught by the 3 consumer CIs, since their
+# path filters only watch their own service directory. tests/ mocks Redis (fake in-memory client,
+# see test_ratelimit.py) and never calls a real provider API, so no service containers/secrets
+# are needed here.
+on:
+  push:
+    branches: [master]
+    paths:
+      - "services/llm-gateway/**"
+      - ".github/workflows/llm-gateway-ci.yml"
+  pull_request:
+    paths:
+      - "services/llm-gateway/**"
+      - ".github/workflows/llm-gateway-ci.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/llm-gateway
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: services/llm-gateway/pyproject.toml
+
+      - name: Install package (all providers + test extras)
+        run: pip install -e ".[all,test]"
+
+      - name: Run tests
+        run: pytest tests

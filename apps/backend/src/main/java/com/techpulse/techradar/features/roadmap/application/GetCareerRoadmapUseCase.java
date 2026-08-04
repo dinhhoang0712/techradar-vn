@@ -73,7 +73,7 @@ public class GetCareerRoadmapUseCase {
                     log.warn("Roadmap: /career call failed for user {}", userId, e);
                     return Mono.just(Map.of());
                 });
-        Mono<List<JobMatch>> jobMatchesMono = getJobMatchesUseCase.execute(userId, null, null, JOB_MATCH_LIMIT)
+        Mono<List<JobMatch>> jobMatchesMono = getJobMatchesUseCase.execute(userId, null, null, null, JOB_MATCH_LIMIT)
                 .collectList();
 
         return Mono.zip(recommendMono, careerMono, jobMatchesMono)

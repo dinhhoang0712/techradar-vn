@@ -114,6 +114,19 @@ def _location_from_ld(job_posting: dict) -> str:
     return ", ".join(regions)
 
 
+def _experience_from_ld(job_posting: dict) -> str:
+    """schema.org JobPosting.experienceRequirements — Text hoặc object
+    (OccupationalExperienceRequirements/EducationalOccupationalCredential) tuỳ trang implement.
+    Trả raw text thô (chưa chuẩn hoá) — normalize_level() ở silver layer xử lý tiếp, giống cách
+    VietnamWorks.py gửi jobLevelVI thô."""
+    exp = job_posting.get("experienceRequirements")
+    if isinstance(exp, str):
+        return exp
+    if isinstance(exp, dict):
+        return exp.get("name") or exp.get("description") or ""
+    return ""
+
+
 def _requirement_from_description(description: str) -> str:
     """description gộp chung 3 phần theo header tiếng Việt — responsibilities/jobBenefits
     đã có field riêng sạch, chỉ "Yêu cầu công việc" (nằm giữa) cần tách thủ công."""
@@ -137,7 +150,7 @@ def parse_job_detail(driver, job_url: str) -> dict:
         "company": company,
         "location": _location_from_ld(job_posting),
         "salary": _salary_from_ld(job_posting),
-        "level": "",
+        "level": _experience_from_ld(job_posting),
         "description": job_posting.get("responsibilities") or description,
         "requirement": _requirement_from_description(description),
         "benefit": job_posting.get("jobBenefits") or "",
@@ -240,7 +253,7 @@ def main():
                     company_name=job_data["company"],
                     location=job_data["location"],
                     salary=job_data["salary"],
-                    level="",
+                    level=job_data["level"],
                     description=job_data["description"],
                     requirement=job_data["requirement"],
                     benefit=job_data["benefit"],

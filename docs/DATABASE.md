@@ -265,6 +265,9 @@ erDiagram
 | V34 | Bugfix: nới CHECK `chk_activity_type` để cho phép `activity_log.type = 'ai_request'` — thiếu giá trị này từ lúc AI-proxy consolidation khiến mọi insert của `AiProxyRequestHandler.recordAiRequest()` bị CHECK chặn và nuốt lỗi âm thầm (`.onErrorResume`), tile admin "Request AI hôm nay" luôn đọc 0 cho tới khi có V34 — xem gotcha ở §6 |
 | V35 | `cms_content.body TEXT` (nullable) — nội dung đầy đủ cho row do `MonthlyReportSchedulerService` (report tháng) và `RadarAnalyticsEtlService` (keyword digest) sinh; NULL với cms row khác |
 | V36 | **Transactional outbox**: bảng mới `outbox_event(id, topic, payload, status, attempts, last_error, created_at, published_at)` — `RadarAnalyticsEtlService` ghi row `PENDING` cho mỗi `trend.alerts` trong CÙNG transaction R2DBC với `tech_analytics` upsert (`TransactionalOperator`, xem [ADR-0002](./adr/0002-webflux-reactive-stack.md)); `OutboxRelayScheduler` (poll định kỳ) publish qua Kafka rồi đánh dấu `PUBLISHED`, hoặc `FAILED` + tăng `attempts` khi lỗi. Xem [ADR-0005](./adr/0005-transactional-outbox-trend-alerts.md) cho lý do và phạm vi (chỉ áp dụng cho luồng nguồn Postgres, không áp dụng cho `job.match.alerts`/`roadmap.alerts` vốn nguồn từ Neo4j). |
+| V37 | Không có bảng mới — thêm CHECK còn thiếu cho vocabulary cố định đã dùng thực tế nhưng chưa từng bị ràng buộc: `users.status`/`users.subscription_tier` (backfill UPPERCASE trước khi thêm CHECK, vì code cũ từng ghi lowercase), `cms_content.status`/`cms_content.type` (không cần backfill, đã Title-Case nhất quán từ trước) |
+| V38 | `dp_processed_jobs.level` — backfill giá trị hiện có không khớp enum về NULL, rồi thêm CHECK `level IN ('Intern','Fresher','Junior','Middle','Senior','Lead')` (cho phép NULL). Cột đã tồn tại từ V7 (TEXT tự do, không CHECK) nhưng chưa nơi nào ghi giá trị vào — `silver/processor.py::normalize_level()` (data-platform) là nơi chuẩn hoá free-text (crawler scrape trực tiếp, hoặc `experienceRequirements` trong JSON-LD `JobPosting`) về enum này trước khi INSERT; `gold/neo4j_job_sync.py` đồng bộ tiếp lên `Job.level` (Neo4j, xem §4.1) |
+| V39 | `user_profile.current_level` — cùng enum 6 mức với V38 (CHECK tương tự), cho user tự khai cấp độ kinh nghiệm bản thân; đọc/ghi qua `GET/PUT /user/profile` (backend) và tự tra bởi `career_service.py` (ai-rag-core) khi request `/career` không gửi `current_level` — dùng để cá nhân hoá skill-gap/estimated_months theo đúng cấp bậc, xem [`docs/API_DOCs_v1.md`](./API_DOCs_v1.md) §17 |
 | V900–V905 (dev only) | Seed: admin/demo user, sample data, jobs/articles, activity_log, tech_analytics mở rộng, thêm users + cms cho môi trường dev |
 
 DDL đầy đủ từng cột/index: [`apps/backend/.../db/README.md`](../apps/backend/src/main/resources/db/README.md) §3.
@@ -290,8 +293,11 @@ DDL đầy đủ từng cột/index: [`apps/backend/.../db/README.md`](../apps/b
   này, tương tự `HIRES_FOR`.
 - `Job`: **name** + **url** (không phải `title`/`source_url` — đó là tên cột legacy từ pipeline cũ;
   `Neo4jJobRepository` phải `coalesce(j.name, j.title)`/`coalesce(j.url, j.source_url)` để tương
-  thích ngược), description, requirement, benefit, salary. `due_date` chỉ được đọc qua `coalesce`,
-  không có writer hiện tại nào ghi property này.
+  thích ngược), description, requirement, benefit, salary, **level** (enum
+  `Intern`/`Fresher`/`Junior`/`Middle`/`Senior`/`Lead`, có thể `null` — chuẩn hoá từ free-text bởi
+  `normalize_level()`, cùng cơ chế ở cả 2 đường ghi: `Neo4jExtractionWriter.java` (real-time) và
+  `gold/neo4j_job_sync.py` (batch); nguồn CHECK constraint tương ứng ở Postgres là V38, §3.2).
+  `due_date` chỉ được đọc qua `coalesce`, không có writer hiện tại nào ghi property này.
   > **`services/ai-rag-core` từng thiếu cùng 1 fix này:** `app/db/graph_queries.py` (6 câu Cypher
   > tra Job) chỉ đọc/lọc `j.title` — vì writer thật (`neo4j_job_sync.py`, batch, ~901/907 Job node
   > thật) ghi `name` chứ không phải `title` (chỉ 6 node cũ/test dùng `title`), tiêu đề job trong

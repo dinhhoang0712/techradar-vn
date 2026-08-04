@@ -5,6 +5,7 @@ import type { JobMatch } from '../types/career';
 interface GetJobMatchesFilters {
     location?: string;
     minSalary?: number;
+    level?: string;
     limit?: number;
 }
 
@@ -13,10 +14,11 @@ interface GetJobMatchesFilters {
  * Endpoint: GET /jobs/matches
  * Yêu cầu: Bearer token hợp lệ trong header Authorization.
  */
-export const getJobMatches = async ({ location, minSalary, limit }: GetJobMatchesFilters = {}): Promise<ApiResponse<JobMatch[]> | JobMatch[]> => {
+export const getJobMatches = async ({ location, minSalary, level, limit }: GetJobMatchesFilters = {}): Promise<ApiResponse<JobMatch[]> | JobMatch[]> => {
     const params = new URLSearchParams();
     if (location) params.set('location', location);
     if (minSalary != null) params.set('min_salary', String(minSalary));
+    if (level) params.set('level', level);
     if (limit != null) params.set('limit', String(limit));
     const query = params.toString();
     return await apiClient(`/jobs/matches${query ? `?${query}` : ''}`, {

@@ -96,6 +96,7 @@ public class ProfileService {
         return UserProfile.builder()
                 .userId(UUID.fromString(userId))
                 .jobRole(request.getJobRole() != null ? request.getJobRole() : existing.getJobRole())
+                .currentLevel(request.getCurrentLevel() != null ? request.getCurrentLevel() : existing.getCurrentLevel())
                 .location(request.getLocation() != null ? request.getLocation() : existing.getLocation())
                 .bio(request.getBio() != null ? request.getBio() : existing.getBio())
                 .avatarUrl(request.getAvatarUrl() != null ? request.getAvatarUrl() : existing.getAvatarUrl())

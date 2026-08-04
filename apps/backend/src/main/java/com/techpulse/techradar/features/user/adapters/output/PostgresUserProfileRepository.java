@@ -36,7 +36,7 @@ public class PostgresUserProfileRepository implements UserProfileRepository {
             return Mono.empty();
         }
         return dbClient.sql(
-                "SELECT user_id, job_role, technologies, location, bio, avatar_url, notify_inapp, notify_email " +
+                "SELECT user_id, job_role, current_level, technologies, location, bio, avatar_url, notify_inapp, notify_email " +
                 "FROM user_profile WHERE user_id = :user_id"
         )
                 .bind("user_id", UUID.fromString(userId))
@@ -51,10 +51,10 @@ public class PostgresUserProfileRepository implements UserProfileRepository {
                 : profile.getTechnologies().toArray(new String[0]);
 
         DatabaseClient.GenericExecuteSpec spec = dbClient.sql(
-                "INSERT INTO user_profile (user_id, job_role, technologies, location, bio, avatar_url, notify_inapp, notify_email, updated_at) " +
-                "VALUES (:user_id, :job_role, :technologies, :location, :bio, :avatar_url, :notify_inapp, :notify_email, :updated_at) " +
+                "INSERT INTO user_profile (user_id, job_role, current_level, technologies, location, bio, avatar_url, notify_inapp, notify_email, updated_at) " +
+                "VALUES (:user_id, :job_role, :current_level, :technologies, :location, :bio, :avatar_url, :notify_inapp, :notify_email, :updated_at) " +
                 "ON CONFLICT (user_id) DO UPDATE SET " +
-                "job_role = EXCLUDED.job_role, technologies = EXCLUDED.technologies, location = EXCLUDED.location, " +
+                "job_role = EXCLUDED.job_role, current_level = EXCLUDED.current_level, technologies = EXCLUDED.technologies, location = EXCLUDED.location, " +
                 "bio = EXCLUDED.bio, avatar_url = EXCLUDED.avatar_url, " +
                 "notify_inapp = EXCLUDED.notify_inapp, notify_email = EXCLUDED.notify_email, updated_at = EXCLUDED.updated_at"
         )
@@ -64,6 +64,7 @@ public class PostgresUserProfileRepository implements UserProfileRepository {
                 .bind("notify_email", profile.getNotifyEmail() != null ? profile.getNotifyEmail() : Boolean.TRUE)
                 .bind("updated_at", LocalDateTime.now());
         spec = R2dbcBinders.bindNullable(spec, "job_role", profile.getJobRole());
+        spec = R2dbcBinders.bindNullable(spec, "current_level", profile.getCurrentLevel());
         spec = R2dbcBinders.bindNullable(spec, "location", profile.getLocation());
         spec = R2dbcBinders.bindNullable(spec, "bio", profile.getBio());
         spec = R2dbcBinders.bindNullable(spec, "avatar_url", profile.getAvatarUrl());
@@ -127,6 +128,13 @@ public class PostgresUserProfileRepository implements UserProfileRepository {
                 .fetch().rowsUpdated();
     }
 
+    @Override
+    public Mono<Long> countWithCurrentLevel() {
+        return dbClient.sql("SELECT COUNT(*) AS c FROM user_profile WHERE current_level IS NOT NULL")
+                .map((row, meta) -> row.get("c", Long.class))
+                .one();
+    }
+
     private NotificationRecipient mapRecipientRow(Row row) {
         return new NotificationRecipient(
                 row.get("user_id", UUID.class),
@@ -150,6 +158,7 @@ public class PostgresUserProfileRepository implements UserProfileRepository {
         return UserProfile.builder()
                 .userId(row.get("user_id", UUID.class))
                 .jobRole(row.get("job_role", String.class))
+                .currentLevel(row.get("current_level", String.class))
                 .technologies(technologies)
                 .location(row.get("location", String.class))
                 .bio(row.get("bio", String.class))

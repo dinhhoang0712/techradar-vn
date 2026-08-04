@@ -17,12 +17,12 @@ import type { NextSkill } from '../types/career';
 import './UserProfile.css';
 
 const EMPTY_PROFILE: ProfileViewData & { email?: string; avatar_url?: string } = {
-    full_name: '', email: '', avatar_url: '', bio: '', job_role: '', location: '',
+    full_name: '', email: '', avatar_url: '', bio: '', job_role: '', current_level: '', location: '',
     technologies: [], notify_inapp: true, notify_email: true,
 };
 
 const EMPTY_FORM: ProfileFormState = {
-    full_name: '', email: '', avatar_url: '', bio: '', job_role: '', location: '',
+    full_name: '', email: '', avatar_url: '', bio: '', job_role: '', current_level: '', location: '',
     password: '', technologies: '', notify_inapp: true, notify_email: true,
 };
 
@@ -80,6 +80,7 @@ export default function UserProfile() {
                 full_name: data.user?.full_name || data.full_name || '',
                 email: data.user?.email || data.email || '',
                 job_role: data.profile?.job_role || data.job_role || '',
+                current_level: data.profile?.current_level || data.current_level || '',
                 bio: data.profile?.bio || data.bio || '',
                 location: data.profile?.location || data.location || '',
                 technologies: data.profile?.technologies || data.technologies || [],
@@ -114,6 +115,7 @@ export default function UserProfile() {
                 full_name: form.full_name,
                 bio: form.bio,
                 job_role: form.job_role,
+                current_level: form.current_level,
                 location: form.location,
                 technologies: form.technologies ? form.technologies.split(',').map(t => t.trim()).filter(Boolean) : [],
                 notify_inapp: form.notify_inapp,

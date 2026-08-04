@@ -1,4 +1,5 @@
 import type { JobMatch } from '../../types/career';
+import { EXPERIENCE_LEVELS } from '../../constants/experienceLevels';
 
 interface JobMatchesCardProps {
     jobMatches: JobMatch[] | null;
@@ -8,6 +9,8 @@ interface JobMatchesCardProps {
     onJobLocationChange: (value: string) => void;
     jobMinSalary: string;
     onJobMinSalaryChange: (value: string) => void;
+    jobLevel: string;
+    onJobLevelChange: (value: string) => void;
     onSearch: () => void;
 }
 
@@ -17,6 +20,7 @@ export default function JobMatchesCard({
     jobMatches, jobsLoading, jobsError,
     jobLocation, onJobLocationChange,
     jobMinSalary, onJobMinSalaryChange,
+    jobLevel, onJobLevelChange,
     onSearch,
 }: JobMatchesCardProps) {
     return (
@@ -56,6 +60,16 @@ export default function JobMatchesCard({
                     placeholder="Lương tối thiểu (triệu VND)"
                     min="0"
                 />
+                <select
+                    className="form-input"
+                    value={jobLevel}
+                    onChange={e => onJobLevelChange(e.target.value)}
+                >
+                    <option value="">Tất cả cấp độ</option>
+                    {EXPERIENCE_LEVELS.map(l => (
+                        <option key={l} value={l}>{l}</option>
+                    ))}
+                </select>
             </div>
 
             {jobsError && <div className="career-error">{jobsError}</div>}
@@ -75,6 +89,7 @@ export default function JobMatchesCard({
                             <div className="job-match-info">
                                 <div className="job-match-title-row">
                                     <span className="job-match-title">{job.title}</span>
+                                    {job.level && <span className="job-match-level">{job.level}</span>}
                                     {job.source_url && (
                                         <a
                                             href={job.source_url}

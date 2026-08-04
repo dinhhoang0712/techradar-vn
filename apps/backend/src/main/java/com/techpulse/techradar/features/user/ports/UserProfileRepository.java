@@ -55,4 +55,10 @@ public interface UserProfileRepository {
      * can match new job postings against them too.
      */
     Mono<Long> updateTargetSkills(String userId, List<String> skills);
+
+    /**
+     * Users who have set {@code current_level} — for the admin dashboard's "cấp độ" adoption
+     * metric (paired with {@code UserStatsRepository.countAll()} as the denominator).
+     */
+    Mono<Long> countWithCurrentLevel();
 }

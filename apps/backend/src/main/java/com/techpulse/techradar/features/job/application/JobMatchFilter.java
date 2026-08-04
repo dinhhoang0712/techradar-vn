@@ -33,4 +33,14 @@ public interface JobMatchFilter {
     static JobMatchFilter byMinSalary(double minSalaryMVnd) {
         return job -> job.salaryMaxVnd() != null && job.salaryMaxVnd() >= minSalaryMVnd;
     }
+
+    /**
+     * Case-insensitive exact match against the job's level. Unlike {@link #byLocation}, this is
+     * an exact match rather than a substring one: level is a controlled enum
+     * (Intern/Fresher/Junior/Middle/Senior/Lead), not free text. Jobs with no level never pass.
+     */
+    static JobMatchFilter byLevel(String level) {
+        String needle = level.toLowerCase(Locale.ROOT);
+        return job -> job.level() != null && job.level().toLowerCase(Locale.ROOT).equals(needle);
+    }
 }

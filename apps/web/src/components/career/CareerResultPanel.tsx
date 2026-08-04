@@ -12,6 +12,11 @@ export default function CareerResultPanel({ result }: { result: CareerAdvice }) 
                     <div>
                         <h2 className="section-title">Kết quả phân tích</h2>
                         <p className="career-target-role">Mục tiêu: <strong>{result.target_role}</strong></p>
+                        {(result.current_level || result.target_level) && (
+                            <p className="career-level-progress">
+                                {result.current_level || '?'} → {result.target_level || '?'}
+                            </p>
+                        )}
                     </div>
                     {result.estimated_months && (
                         <div className="career-estimate-badge">

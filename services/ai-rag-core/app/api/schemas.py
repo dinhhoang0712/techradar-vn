@@ -132,6 +132,11 @@ class CareerRequest(BaseModel):
     user_id: uuid.UUID | None = None
     target_role: str | None = None  # VD: "Senior Backend Developer"
     current_skills: list[str] = []
+    # current_level: nếu không gửi, handle() tự tra user_profile.current_level theo user_id.
+    current_level: str | None = None
+    # target_level: input riêng theo mỗi lần tìm trên CareerPage — không suy luận từ chữ
+    # trong target_role, để tránh mâu thuẫn giữa text tự do và lựa chọn dropdown của user.
+    target_level: str | None = None
 
 
 class CareerStep(BaseModel):
@@ -144,6 +149,8 @@ class CareerStep(BaseModel):
 class CareerResponse(BaseModel):
     target_role: str
     current_skills: list[str]
+    current_level: str | None = None
+    target_level: str | None = None
     skill_gap: list[CareerStep]
     roadmap: str  # LLM-generated markdown roadmap
     estimated_months: int | None = None

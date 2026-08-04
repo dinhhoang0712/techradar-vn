@@ -22,25 +22,41 @@ logger = logging.getLogger("ai-rag-core.career")
 
 _PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
+# Cùng enum 6 mức đã dùng cho dp_processed_jobs.level / user_profile.current_level
+# (V38__job_level_enum.sql, V39__user_profile_current_level.sql) — thứ tự dùng để tính
+# level_distance cho estimated_months.
+_LEVEL_ORDER = ["Intern", "Fresher", "Junior", "Middle", "Senior", "Lead"]
+# Dưới ngưỡng này, kết quả lọc theo level được coi là quá thưa để tin — phần lớn job hiện
+# vẫn có level IS NULL (chỉ VietnamWorks crawl được level thật), nên fallback về danh sách
+# không lọc thay vì trả skill_gap gần rỗng.
+_MIN_LEVELED_SKILLS = 5
+
 
 def _load_template(filename: str) -> str:
     return (_PROMPTS_DIR / filename).read_text(encoding="utf-8").strip()
 
 
-async def _get_user_skills(user_id: uuid.UUID, db: AsyncSession) -> list[str]:
+async def _get_user_profile_defaults(user_id: uuid.UUID, db: AsyncSession) -> tuple[list[str], str | None, str | None]:
+    """current_skills (từ preferences_json.interested_techs) + current_level + job_role, trong 1
+    query — user_profile là bảng share với Java, nên current_level/job_role ghi qua
+    PUT /user/profile đọc được thẳng ở đây."""
     try:
         result = await db.execute(
-            text("SELECT preferences_json FROM user_profile WHERE user_id = :uid"),
+            text("SELECT preferences_json, current_level, job_role FROM user_profile WHERE user_id = :uid"),
             {"uid": str(user_id)},
         )
         row = result.mappings().first()
-        if row and row["preferences_json"]:
+        if not row:
+            return [], None, None
+        skills: list[str] = []
+        if row["preferences_json"]:
             prefs = row["preferences_json"]
             if isinstance(prefs, dict):
-                return prefs.get("interested_techs", [])
+                skills = prefs.get("interested_techs", [])
+        return skills, row["current_level"], row["job_role"]
     except Exception as e:
-        logger.warning("get_user_skills failed: %s", e)
-    return []
+        logger.warning("get_user_profile_defaults failed: %s", e)
+        return [], None, None
 
 
 async def _neo4j_skill_path(current_skills: list[str], target_role: str) -> list[dict]:
@@ -69,9 +85,31 @@ async def _neo4j_skill_path(current_skills: list[str], target_role: str) -> list
         return []
 
 
-async def _neo4j_role_required_skills(target_role: str) -> list[str]:
-    """Lấy skills mà target role yêu cầu nhiều nhất (từ Job data)."""
+async def _neo4j_role_required_skills(target_role: str, target_level: str | None = None) -> list[str]:
+    """Lấy skills mà target role yêu cầu nhiều nhất (từ Job data).
+
+    Khi có target_level, thử lọc theo j.level trước để skill_gap sát với đúng cấp bậc hơn —
+    nhưng phần lớn job hiện vẫn có level IS NULL, nên nếu kết quả lọc quá thưa
+    (< _MIN_LEVELED_SKILLS), fallback về danh sách không lọc thay vì trả gần như rỗng.
+    """
     try:
+        if target_level:
+            leveled_rows = await run_query(
+                """
+                MATCH (j:Job)-[:REQUIRES]->(t)
+                WHERE toLower(j.title) CONTAINS toLower($role)
+                  AND j.level = $level
+                  AND (t:Technology OR t:Skill)
+                RETURN t.name AS skill, count(*) AS demand
+                ORDER BY demand DESC
+                LIMIT 15
+                """,
+                {"role": target_role, "level": target_level},
+            )
+            leveled_skills = [r["skill"] for r in leveled_rows if r.get("skill")]
+            if len(leveled_skills) >= _MIN_LEVELED_SKILLS:
+                return leveled_skills
+
         rows = await run_query(
             """
             MATCH (j:Job)-[:REQUIRES]->(t)
@@ -90,15 +128,29 @@ async def _neo4j_role_required_skills(target_role: str) -> list[str]:
 
 
 async def handle(req: CareerRequest, db: AsyncSession) -> CareerResponse:
-    # 1. Lấy current skills
+    # 1. Lấy current skills + current level + job_role hiện tại (fallback: tra user_profile
+    # theo user_id) — job_role dùng để default target_role khi auto-load roadmap không gửi
+    # target_role (Java GetCareerRoadmapUseCase chỉ forward user_id).
     current_skills = list(req.current_skills)
-    if req.user_id and not current_skills:
-        current_skills = await _get_user_skills(req.user_id, db)
+    current_level = req.current_level
+    profile_job_role = None
+    if req.user_id and (not current_skills or not current_level or not req.target_role):
+        profile_skills, profile_level, profile_job_role = await _get_user_profile_defaults(req.user_id, db)
+        if not current_skills:
+            current_skills = profile_skills
+        if not current_level:
+            current_level = profile_level
 
-    target_role = req.target_role or "Senior Software Engineer"
+    # auto_loaded: caller không gửi target_role rõ ràng (auto-load roadmap, không phải tìm kiếm
+    # thủ công trên CareerPage) — default target_role về job_role hiện tại của user (không còn
+    # cứng "Senior Software Engineer" cho mọi người), và target_level về chính current_level (gap
+    # trong cùng cấp/role, thay vì giả định ai cũng nhắm lên Senior).
+    auto_loaded = not req.target_role
+    target_role = req.target_role or profile_job_role or "Software Engineer"
+    target_level = req.target_level or (current_level if auto_loaded else None)
 
-    # 2. Neo4j: tìm required skills cho target role
-    required_skills = await _neo4j_role_required_skills(target_role)
+    # 2. Neo4j: tìm required skills cho target role (ưu tiên đúng target_level nếu đủ dữ liệu)
+    required_skills = await _neo4j_role_required_skills(target_role, target_level)
 
     # 3. Tính skill gap
     current_lower = {s.lower() for s in current_skills}
@@ -142,10 +194,18 @@ async def handle(req: CareerRequest, db: AsyncSession) -> CareerResponse:
         for i, skill in enumerate(gap_skills[:5])
     ]
 
+    # level_distance: khoảng cách vị trí giữa current_level/target_level trong _LEVEL_ORDER —
+    # cá nhân hoá estimated_months hơn số lượng skill_gap thuần, khi biết đủ cả 2 mức.
+    level_distance = None
+    if current_level in _LEVEL_ORDER and target_level in _LEVEL_ORDER:
+        level_distance = abs(_LEVEL_ORDER.index(target_level) - _LEVEL_ORDER.index(current_level))
+
     return CareerResponse(
         target_role=target_role,
         current_skills=current_skills,
+        current_level=current_level,
+        target_level=target_level,
         skill_gap=skill_gap,
         roadmap=roadmap,
-        estimated_months=len(gap_skills) * 2,
+        estimated_months=len(gap_skills) * 2 + (level_distance * 3 if level_distance is not None else 0),
     )

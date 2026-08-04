@@ -10,6 +10,7 @@ export interface UserProfileData {
     };
     profile?: {
         job_role?: string;
+        current_level?: string;
         bio?: string;
         location?: string;
         technologies?: string[];
@@ -21,6 +22,7 @@ export interface UserProfileData {
     email?: string;
     role?: string;
     job_role?: string;
+    current_level?: string;
     bio?: string;
     location?: string;
     technologies?: string[];
@@ -33,6 +35,7 @@ export interface UpdateProfilePayload {
     full_name?: string;
     bio?: string;
     job_role?: string;
+    current_level?: string;
     location?: string;
     password?: string;
     technologies?: string[];

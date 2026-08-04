@@ -62,7 +62,7 @@ class SimulateCareerMoveUseCaseTest {
     }
 
     private static JobMatch match(String title) {
-        return new JobMatch(title, "Acme", "Hanoi", null, null, null, null, null, List.of(), List.of(), 1.0);
+        return new JobMatch(title, "Acme", "Hanoi", null, null, null, null, null, null, List.of(), List.of(), 1.0);
     }
 
     @Test

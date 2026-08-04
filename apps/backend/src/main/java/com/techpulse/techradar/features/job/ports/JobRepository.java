@@ -20,7 +20,18 @@ public interface JobRepository {
     /** Most in-demand technologies/skills across all indexed jobs, most-requested first. */
     Flux<TechDemandRaw> topTechnologies(int limit);
 
+    /**
+     * Job count grouped by {@code level} (Intern/Fresher/Junior/Middle/Senior/Lead), for the
+     * admin dashboard. Jobs with no classified level are excluded — see
+     * {@code V38__job_level_enum.sql} and the crawler/silver pipeline normalizing free-text level
+     * into this enum.
+     */
+    Flux<LevelDemandRaw> jobsByLevel();
+
     record TechDemandRaw(String name, long jobCount) {
+    }
+
+    record LevelDemandRaw(String level, long jobCount) {
     }
 
     record JobMatchRaw(
@@ -28,6 +39,7 @@ public interface JobRepository {
             String company,
             String location,
             String salary,
+            String level,
             String sourceUrl,
             String dueDate,
             List<String> required,

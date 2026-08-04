@@ -75,6 +75,7 @@ class Neo4jJobRepositoryTest {
         Value companyValue = stringValue("Acme");
         Value locationValue = stringValue("Hà Nội");
         Value salaryValue = nullValue();
+        Value levelValue = stringValue("Senior");
         Value sourceUrlValue = nullValue();
         Value dueDateValue = nullValue();
         Value requiredValue = org.mockito.Mockito.mock(Value.class);
@@ -90,6 +91,7 @@ class Neo4jJobRepositoryTest {
         when(record.get("company")).thenReturn(companyValue);
         when(record.get("location")).thenReturn(locationValue);
         when(record.get("salary")).thenReturn(salaryValue);
+        when(record.get("level")).thenReturn(levelValue);
         when(record.get("sourceUrl")).thenReturn(sourceUrlValue);
         when(record.get("dueDate")).thenReturn(dueDateValue);
         when(record.get("required")).thenReturn(requiredValue);
@@ -101,6 +103,7 @@ class Neo4jJobRepositoryTest {
                     assertThat(raw.title()).isEqualTo("Backend Dev");
                     assertThat(raw.company()).isEqualTo("Acme");
                     assertThat(raw.salary()).isNull();
+                    assertThat(raw.level()).isEqualTo("Senior");
                     assertThat(raw.sourceUrl()).isNull();
                     assertThat(raw.dueDate()).isNull();
                     assertThat(raw.required()).containsExactly("Java", "Spring");

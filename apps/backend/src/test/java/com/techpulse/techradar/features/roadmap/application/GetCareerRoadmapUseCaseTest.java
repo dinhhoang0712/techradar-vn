@@ -77,7 +77,7 @@ class GetCareerRoadmapUseCaseTest {
                 .verifyComplete();
 
         verify(aiProxyPort, never()).forward(anyString(), any(), any());
-        verify(getJobMatchesUseCase, never()).execute(anyString(), any(), any(), anyInt());
+        verify(getJobMatchesUseCase, never()).execute(anyString(), any(), any(), any(), anyInt());
         verify(roadAnalysisUseCase, never()).execute(anyString(), anyString());
     }
 
@@ -101,9 +101,9 @@ class GetCareerRoadmapUseCaseTest {
         when(aiProxyPort.forward(eq("/recommend"), any(), any())).thenReturn(Mono.just(recommendResponse));
         when(aiProxyPort.forward(eq("/career"), any(), any())).thenReturn(Mono.just(careerResponse));
 
-        JobMatch jobMatch = new JobMatch("Backend Dev", "Acme", "Hanoi", null, null, null, null, null,
+        JobMatch jobMatch = new JobMatch("Backend Dev", "Acme", "Hanoi", null, null, null, null, null, null,
                 List.of("Docker"), List.of("Kubernetes"), 0.5);
-        when(getJobMatchesUseCase.execute(eq("user-1"), isNull(), isNull(), anyInt()))
+        when(getJobMatchesUseCase.execute(eq("user-1"), isNull(), isNull(), isNull(), anyInt()))
                 .thenReturn(Flux.just(jobMatch));
         when(userProfileRepository.updateTargetSkills(eq("user-1"), any())).thenReturn(Mono.just(1L));
 
@@ -147,7 +147,7 @@ class GetCareerRoadmapUseCaseTest {
         when(aiProxyPort.forward(eq("/recommend"), any(), any())).thenReturn(Mono.just(Map.of(
                 "recommendations", List.of(Map.<String, Object>of("tech_name", "Docker", "growth_rate", 10.0)))));
         when(aiProxyPort.forward(eq("/career"), any(), any())).thenReturn(Mono.just(Map.of()));
-        when(getJobMatchesUseCase.execute(anyString(), any(), any(), anyInt())).thenReturn(Flux.empty());
+        when(getJobMatchesUseCase.execute(anyString(), any(), any(), any(), anyInt())).thenReturn(Flux.empty());
         when(userProfileRepository.updateTargetSkills(eq("user-1"), any())).thenReturn(Mono.just(1L));
 
         StepVerifier.create(useCase.execute("user-1"))
@@ -164,7 +164,7 @@ class GetCareerRoadmapUseCaseTest {
         when(aiProxyPort.forward(eq("/recommend"), any(), any())).thenReturn(Mono.just(Map.of(
                 "recommendations", List.of(Map.<String, Object>of("tech_name", "Kubernetes", "growth_rate", 10.0)))));
         when(aiProxyPort.forward(eq("/career"), any(), any())).thenReturn(Mono.just(Map.of()));
-        when(getJobMatchesUseCase.execute(anyString(), any(), any(), anyInt())).thenReturn(Flux.empty());
+        when(getJobMatchesUseCase.execute(anyString(), any(), any(), any(), anyInt())).thenReturn(Flux.empty());
         when(roadAnalysisUseCase.execute("Docker", "Kubernetes"))
                 .thenReturn(Mono.error(new RuntimeException("neo4j unavailable")));
         when(userProfileRepository.updateTargetSkills(eq("user-1"), any())).thenReturn(Mono.just(1L));
@@ -186,7 +186,7 @@ class GetCareerRoadmapUseCaseTest {
                         Map.<String, Object>of("tech_name", "Kubernetes", "growth_rate", 10.0),
                         Map.<String, Object>of("tech_name", "Helm", "growth_rate", 5.0)))));
         when(aiProxyPort.forward(eq("/career"), any(), any())).thenReturn(Mono.just(Map.of()));
-        when(getJobMatchesUseCase.execute(anyString(), any(), any(), anyInt())).thenReturn(Flux.empty());
+        when(getJobMatchesUseCase.execute(anyString(), any(), any(), any(), anyInt())).thenReturn(Flux.empty());
         when(roadAnalysisUseCase.execute(anyString(), anyString())).thenReturn(Mono.just(GraphData.builder()
                 .nodes(List.of()).edges(List.of()).found(false).build()));
         when(userProfileRepository.updateTargetSkills(eq("user-1"), eq(List.of("Kubernetes", "Helm"))))
@@ -206,7 +206,7 @@ class GetCareerRoadmapUseCaseTest {
         when(aiProxyPort.forward(eq("/recommend"), any(), any())).thenReturn(Mono.just(Map.of(
                 "recommendations", List.of(Map.<String, Object>of("tech_name", "Kubernetes", "growth_rate", 10.0)))));
         when(aiProxyPort.forward(eq("/career"), any(), any())).thenReturn(Mono.just(Map.of()));
-        when(getJobMatchesUseCase.execute(anyString(), any(), any(), anyInt())).thenReturn(Flux.empty());
+        when(getJobMatchesUseCase.execute(anyString(), any(), any(), any(), anyInt())).thenReturn(Flux.empty());
         when(roadAnalysisUseCase.execute(anyString(), anyString())).thenReturn(Mono.just(GraphData.builder()
                 .nodes(List.of()).edges(List.of()).found(false).build()));
         when(userProfileRepository.updateTargetSkills(eq("user-1"), any()))
@@ -222,7 +222,7 @@ class GetCareerRoadmapUseCaseTest {
         when(userProfileRepository.findByUserId("user-1"))
                 .thenReturn(Mono.just(UserProfile.builder().technologies(List.of("Docker")).build()));
         when(aiProxyPort.forward(anyString(), any(), any())).thenReturn(Mono.just(Map.of()));
-        when(getJobMatchesUseCase.execute(anyString(), any(), any(), anyInt())).thenReturn(Flux.empty());
+        when(getJobMatchesUseCase.execute(anyString(), any(), any(), any(), anyInt())).thenReturn(Flux.empty());
 
         useCase.execute("user-1").block();
 
@@ -236,7 +236,7 @@ class GetCareerRoadmapUseCaseTest {
         when(aiProxyPort.forward(eq("/recommend"), any(), any()))
                 .thenReturn(Mono.error(new RuntimeException("ai-rag-core unavailable")));
         when(aiProxyPort.forward(eq("/career"), any(), any())).thenReturn(Mono.just(Map.of("target_role", "X")));
-        when(getJobMatchesUseCase.execute(anyString(), any(), any(), anyInt())).thenReturn(Flux.empty());
+        when(getJobMatchesUseCase.execute(anyString(), any(), any(), any(), anyInt())).thenReturn(Flux.empty());
 
         StepVerifier.create(useCase.execute("user-1"))
                 .assertNext(result -> {

@@ -180,6 +180,7 @@ def test_process_job_extracts_company_from_nested_object():
         company_name,
         company_location,
         salary,
+        level,
         desc,
         req,
         benefit,
@@ -195,6 +196,7 @@ def test_process_job_extracts_company_from_nested_object():
     assert company_location == "Hanoi"
     assert skills == ["Python"]
     assert techs == ["Python"]
+    assert level is None
 
 
 def test_process_job_prefers_flat_fields_over_nested_company():
@@ -211,6 +213,34 @@ def test_process_job_prefers_flat_fields_over_nested_company():
     _, params = conn.cursors[-1].executed[-1]
     assert params[3] == "Data Analyst"
     assert params[4] == "OpenAI"
+
+
+def test_process_job_normalizes_level_before_insert():
+    conn = FakeConn(fetchone_result=None)
+    msg = {
+        "job_title": "Backend Engineer",
+        "source_url": "https://example.com/job-level-1",
+        "level": "Senior Team Lead",
+    }
+
+    processor._process_job(conn, msg)
+
+    _, params = conn.cursors[-1].executed[-1]
+    assert params[7] == "Lead"
+
+
+def test_process_job_level_none_when_unmapped_or_missing():
+    conn = FakeConn(fetchone_result=None)
+    msg = {
+        "job_title": "Backend Engineer",
+        "source_url": "https://example.com/job-level-2",
+        "level": "",
+    }
+
+    processor._process_job(conn, msg)
+
+    _, params = conn.cursors[-1].executed[-1]
+    assert params[7] is None
 
 
 def test_process_job_skips_when_source_url_missing():
@@ -301,5 +331,5 @@ def test_process_job_canonicalizes_technologies_via_alias_cache():
 
     processor._process_job(conn, msg)
 
-    techs = conn.cursors[-1].executed[-1][1][11]
+    techs = conn.cursors[-1].executed[-1][1][12]
     assert techs == ["Machine Learning", "Python"]

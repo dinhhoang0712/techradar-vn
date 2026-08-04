@@ -8,6 +8,7 @@ import com.techpulse.techradar.features.kafka.event.CompanyInfo;
 import com.techpulse.techradar.features.kafka.event.Entities;
 import com.techpulse.techradar.features.kafka.event.ExtractedJob;
 import com.techpulse.techradar.features.kafka.event.ExtractedJobData;
+import com.techpulse.techradar.features.kafka.domain.LevelNormalizer;
 import com.techpulse.techradar.features.kafka.event.JobData;
 import com.techpulse.techradar.features.kafka.event.JobInfo;
 import com.techpulse.techradar.features.kafka.event.RawJob;
@@ -62,6 +63,7 @@ public class JobExtractorService {
                 jobData.getRequirement(),
                 jobData.getBenefit(),
                 jobData.getSalary(),
+                LevelNormalizer.normalize(jobData.getLevel()),
                 "",
                 jobData.getSourceUrl()
         );

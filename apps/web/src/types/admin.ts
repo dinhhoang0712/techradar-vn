@@ -29,10 +29,18 @@ export interface TopTechnology {
     job_count: number;
 }
 
+export interface LevelDemand {
+    level: string;
+    job_count: number;
+}
+
 export interface JobMarketDashboard {
     total_jobs_indexed: number;
     job_match_alerts_sent: number;
     top_technologies?: TopTechnology[];
+    jobs_by_level?: LevelDemand[];
+    users_with_current_level: number;
+    total_users: number;
 }
 
 export type PipelineDashboard = PipelineStats;

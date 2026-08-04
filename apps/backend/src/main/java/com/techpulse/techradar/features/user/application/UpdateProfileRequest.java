@@ -25,6 +25,7 @@ public class UpdateProfileRequest {
     private String password;
     private String subscriptionTier;
     private String jobRole;
+    private String currentLevel;
     private String bio;
     private String location;
     private String avatarUrl;

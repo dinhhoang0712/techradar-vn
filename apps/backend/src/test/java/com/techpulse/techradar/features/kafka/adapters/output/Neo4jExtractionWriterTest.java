@@ -232,4 +232,47 @@ class Neo4jExtractionWriterTest {
 
         verify(tx, never()).run(contains("MERGE (c:Company"), any(Value.class));
     }
+
+    @Test
+    void writeJob_setsLevelOnTheJobNodeAndPassesItAsACypherParameter() throws Exception {
+        stubIsNew(false);
+        String json = """
+                {
+                  "message_type": "extracted_job",
+                  "source_platform": "TopCV",
+                  "crawled_at": "2026-01-01T00:00:00Z",
+                  "extracted_at": "2026-01-01T00:00:00Z",
+                  "data": {
+                    "job": {
+                      "title": "Backend Developer",
+                      "description": "desc",
+                      "requirement": "req",
+                      "benefit": "benefit",
+                      "salary": "20-30 triệu",
+                      "level": "Senior",
+                      "due_date": "",
+                      "source_url": "https://example.com/job-1"
+                    },
+                    "company": null,
+                    "skills": [],
+                    "technologies": []
+                  }
+                }
+                """;
+        ExtractedJob extracted = objectMapper.readValue(json, ExtractedJob.class);
+
+        writer.writeJob(extracted);
+
+        ArgumentCaptor<String> cypherCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Value> paramsCaptor = ArgumentCaptor.forClass(Value.class);
+        verify(tx, atLeastOnce()).run(cypherCaptor.capture(), paramsCaptor.capture());
+        int jobMergeIndex = cypherCaptor.getAllValues().indexOf(
+                cypherCaptor.getAllValues().stream()
+                        .filter(c -> c.contains("MERGE (j:Job"))
+                        .findFirst()
+                        .orElseThrow(() -> new AssertionError("No Job MERGE Cypher was run")));
+
+        assertThat(cypherCaptor.getAllValues().get(jobMergeIndex)).contains("j.level = $level");
+        assertThat(paramsCaptor.getAllValues().get(jobMergeIndex).get("level").asString()).isEqualTo("Senior");
+    }
 }

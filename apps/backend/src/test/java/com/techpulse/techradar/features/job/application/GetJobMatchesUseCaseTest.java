@@ -54,7 +54,12 @@ class GetJobMatchesUseCaseTest {
 
     private static JobRepository.JobMatchRaw raw(String title, String location, List<String> required,
                                                   List<String> matched, double score) {
-        return new JobRepository.JobMatchRaw(title, "Some Co", location, null, null, null, required, matched, score);
+        return raw(title, location, null, required, matched, score);
+    }
+
+    private static JobRepository.JobMatchRaw raw(String title, String location, String level, List<String> required,
+                                                  List<String> matched, double score) {
+        return new JobRepository.JobMatchRaw(title, "Some Co", location, null, level, null, null, required, matched, score);
     }
 
     private void profileWith(List<String> technologies) {
@@ -69,11 +74,11 @@ class GetJobMatchesUseCaseTest {
 
         when(userProfileRepository.findByUserId("user-1"))
                 .thenReturn(Mono.just(UserProfile.builder().technologies(List.of("Java", "java", "React")).build()));
-        useCase.execute("user-1", null, null, 10).blockLast();
+        useCase.execute("user-1", null, null, null, 10).blockLast();
 
         when(userProfileRepository.findByUserId("user-1"))
                 .thenReturn(Mono.just(UserProfile.builder().technologies(List.of("react", "JAVA")).build()));
-        useCase.execute("user-1", null, null, 10).blockLast();
+        useCase.execute("user-1", null, null, null, 10).blockLast();
 
         ArgumentCaptor<String> keyCaptor = ArgumentCaptor.forClass(String.class);
         verify(redisCache, times(2)).getOrLoad(keyCaptor.capture(), any(Duration.class), any(Flux.class), any());
@@ -86,7 +91,7 @@ class GetJobMatchesUseCaseTest {
     void rawFetch_isFixedAtMaxLimitTimesMultiplier_regardlessOfRequestedLimit() {
         profileWith(List.of("Java"));
 
-        useCase.execute("user-1", null, null, 5).blockLast();
+        useCase.execute("user-1", null, null, null, 5).blockLast();
 
         verify(jobRepository).findMatchingJobs(eq(List.of("java")), eq(300));
     }
@@ -101,8 +106,23 @@ class GetJobMatchesUseCaseTest {
                 raw("Fullstack Dev", "Hà Nội", List.of("Java", "React"), List.of("java", "REACT"), 7.0)
         ));
 
-        StepVerifier.create(useCase.execute("user-1", "hà nội", null, 10).map(JobMatch::title))
+        StepVerifier.create(useCase.execute("user-1", "hà nội", null, null, 10).map(JobMatch::title))
                 .expectNext("Fullstack Dev", "Backend Dev")
+                .verifyComplete();
+    }
+
+    @Test
+    void execute_filtersByLevelExactMatchCaseInsensitively() {
+        when(userProfileRepository.findByUserId("user-1"))
+                .thenReturn(Mono.just(UserProfile.builder().technologies(List.of("Java")).build()));
+        when(jobRepository.findMatchingJobs(anyList(), anyInt())).thenReturn(Flux.just(
+                raw("Junior Dev", "Hà Nội", "Junior", List.of("Java"), List.of("Java"), 5.0),
+                raw("Senior Dev", "Hà Nội", "Senior", List.of("Java"), List.of("Java"), 5.0),
+                raw("Unclassified Dev", "Hà Nội", null, List.of("Java"), List.of("Java"), 5.0)
+        ));
+
+        StepVerifier.create(useCase.execute("user-1", null, null, "senior", 10).map(JobMatch::title))
+                .expectNext("Senior Dev")
                 .verifyComplete();
     }
 
@@ -114,7 +134,7 @@ class GetJobMatchesUseCaseTest {
                 raw("Backend Dev", "Hà Nội", List.of("Java", "Spring"), List.of("java"), 5.0)
         ));
 
-        StepVerifier.create(useCase.execute("user-1", null, null, 10))
+        StepVerifier.create(useCase.execute("user-1", null, null, null, 10))
                 .assertNext(match -> {
                     assertThat(match.matchedSkills()).containsExactly("java");
                     assertThat(match.missingSkills()).containsExactly("Spring");
@@ -127,7 +147,7 @@ class GetJobMatchesUseCaseTest {
         when(userProfileRepository.findByUserId("user-1"))
                 .thenReturn(Mono.just(UserProfile.builder().technologies(List.of()).build()));
 
-        StepVerifier.create(useCase.execute("user-1", null, null, 10))
+        StepVerifier.create(useCase.execute("user-1", null, null, null, 10))
                 .verifyComplete();
     }
 
@@ -143,5 +163,17 @@ class GetJobMatchesUseCaseTest {
 
         verify(userProfileRepository, never()).findByUserId(anyString());
         verify(jobRepository).findMatchingJobs(eq(List.of("java")), anyInt());
+    }
+
+    @Test
+    void executeForSkills_withLevel_filtersByLevelExactMatch() {
+        when(jobRepository.findMatchingJobs(anyList(), anyInt())).thenReturn(Flux.just(
+                raw("Junior Dev", "Hà Nội", "Junior", List.of("Java"), List.of("Java"), 5.0),
+                raw("Senior Dev", "Hà Nội", "Senior", List.of("Java"), List.of("Java"), 5.0)
+        ));
+
+        StepVerifier.create(useCase.executeForSkills(List.of("Java"), "Senior", 10).map(JobMatch::title))
+                .expectNext("Senior Dev")
+                .verifyComplete();
     }
 }

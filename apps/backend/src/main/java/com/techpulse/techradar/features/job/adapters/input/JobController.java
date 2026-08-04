@@ -36,10 +36,11 @@ public class JobController {
     public Mono<ResponseEntity<ApiResponse<List<JobDtos.JobMatchResponse>>>> matches(
             @RequestParam(required = false) String location,
             @RequestParam(name = "min_salary", required = false) Double minSalary,
+            @RequestParam(required = false) String level,
             @RequestParam(defaultValue = "20") int limit
     ) {
         return SecurityUtils.currentUserId()
-                .flatMapMany(userId -> getJobMatchesUseCase.execute(userId, location, minSalary, limit))
+                .flatMapMany(userId -> getJobMatchesUseCase.execute(userId, location, minSalary, level, limit))
                 .map(JobDtos.JobMatchResponse::from)
                 .collectList()
                 .map(list -> ResponseEntity.ok(ApiResponse.success(list, "Job matches")));

@@ -79,7 +79,7 @@ class PostgresUserProfileRepositoryTest {
     @SuppressWarnings("unchecked")
     void findByUserId_withValidId_bindsUserIdAndMapsRow() {
         when(dbClient.sql(
-                "SELECT user_id, job_role, technologies, location, bio, avatar_url, notify_inapp, notify_email " +
+                "SELECT user_id, job_role, current_level, technologies, location, bio, avatar_url, notify_inapp, notify_email " +
                         "FROM user_profile WHERE user_id = :user_id"))
                 .thenReturn(executeSpec);
         when(executeSpec.bind("user_id", UUID.fromString(USER_ID))).thenReturn(executeSpec);
@@ -104,6 +104,7 @@ class PostgresUserProfileRepositoryTest {
         UUID userId = UUID.fromString(USER_ID);
         when(row.get("user_id", UUID.class)).thenReturn(userId);
         when(row.get("job_role", String.class)).thenReturn("Engineer");
+        when(row.get("current_level", String.class)).thenReturn("Middle");
         when(row.get("technologies", String[].class)).thenReturn(new String[] { "Java", "Kotlin" });
         when(row.get("location", String.class)).thenReturn("Hanoi");
         when(row.get("bio", String.class)).thenReturn("bio text");
@@ -117,6 +118,7 @@ class PostgresUserProfileRepositoryTest {
 
         assertThat(mapped.getUserId()).isEqualTo(userId);
         assertThat(mapped.getJobRole()).isEqualTo("Engineer");
+        assertThat(mapped.getCurrentLevel()).isEqualTo("Middle");
         assertThat(mapped.getTechnologies()).containsExactly("Java", "Kotlin");
         assertThat(mapped.getLocation()).isEqualTo("Hanoi");
         assertThat(mapped.getBio()).isEqualTo("bio text");
@@ -144,14 +146,14 @@ class PostgresUserProfileRepositoryTest {
     @Test
     void upsert_withAllFieldsPresent_bindsEveryColumn() {
         UserProfile profile = UserProfile.builder().userId(UUID.fromString(USER_ID))
-                .jobRole("Engineer").technologies(List.of("Java", "Go")).location("Hanoi")
+                .jobRole("Engineer").currentLevel("Senior").technologies(List.of("Java", "Go")).location("Hanoi")
                 .bio("bio text").avatarUrl("http://a/b.png").notifyInapp(false).notifyEmail(true).build();
 
         when(dbClient.sql(
-                "INSERT INTO user_profile (user_id, job_role, technologies, location, bio, avatar_url, notify_inapp, notify_email, updated_at) " +
-                        "VALUES (:user_id, :job_role, :technologies, :location, :bio, :avatar_url, :notify_inapp, :notify_email, :updated_at) " +
+                "INSERT INTO user_profile (user_id, job_role, current_level, technologies, location, bio, avatar_url, notify_inapp, notify_email, updated_at) " +
+                        "VALUES (:user_id, :job_role, :current_level, :technologies, :location, :bio, :avatar_url, :notify_inapp, :notify_email, :updated_at) " +
                         "ON CONFLICT (user_id) DO UPDATE SET " +
-                        "job_role = EXCLUDED.job_role, technologies = EXCLUDED.technologies, location = EXCLUDED.location, " +
+                        "job_role = EXCLUDED.job_role, current_level = EXCLUDED.current_level, technologies = EXCLUDED.technologies, location = EXCLUDED.location, " +
                         "bio = EXCLUDED.bio, avatar_url = EXCLUDED.avatar_url, " +
                         "notify_inapp = EXCLUDED.notify_inapp, notify_email = EXCLUDED.notify_email, updated_at = EXCLUDED.updated_at"))
                 .thenReturn(executeSpec);
@@ -168,6 +170,7 @@ class PostgresUserProfileRepositoryTest {
         verify(executeSpec).bind("notify_inapp", false);
         verify(executeSpec).bind("notify_email", true);
         verify(executeSpec).bind("job_role", "Engineer");
+        verify(executeSpec).bind("current_level", "Senior");
         verify(executeSpec).bind("location", "Hanoi");
         verify(executeSpec).bind("bio", "bio text");
         verify(executeSpec).bind("avatar_url", "http://a/b.png");
@@ -208,13 +211,14 @@ class PostgresUserProfileRepositoryTest {
     @Test
     void upsert_withAllNullableStringFields_usesBindNull_notBind() {
         UserProfile profile = UserProfile.builder().userId(UUID.fromString(USER_ID))
-                .jobRole(null).location(null).bio(null).avatarUrl(null).build();
+                .jobRole(null).currentLevel(null).location(null).bio(null).avatarUrl(null).build();
 
         when(dbClient.sql(anyString())).thenReturn(executeSpec);
         when(executeSpec.bind(anyString(), any())).thenReturn(executeSpec);
         // Real R2DBC throws on .bind(name, null) — this simulates that contract so a regression
         // to bind() instead of bindNull() for any of these nullable columns fails the test.
         lenient().when(executeSpec.bind(eq("job_role"), isNull())).thenThrow(new IllegalArgumentException("job_role"));
+        lenient().when(executeSpec.bind(eq("current_level"), isNull())).thenThrow(new IllegalArgumentException("current_level"));
         lenient().when(executeSpec.bind(eq("location"), isNull())).thenThrow(new IllegalArgumentException("location"));
         lenient().when(executeSpec.bind(eq("bio"), isNull())).thenThrow(new IllegalArgumentException("bio"));
         lenient().when(executeSpec.bind(eq("avatar_url"), isNull())).thenThrow(new IllegalArgumentException("avatar_url"));
@@ -225,6 +229,7 @@ class PostgresUserProfileRepositoryTest {
         StepVerifier.create(repository.upsert(profile)).expectNextCount(1).verifyComplete();
 
         verify(executeSpec).bindNull("job_role", String.class);
+        verify(executeSpec).bindNull("current_level", String.class);
         verify(executeSpec).bindNull("location", String.class);
         verify(executeSpec).bindNull("bio", String.class);
         verify(executeSpec).bindNull("avatar_url", String.class);

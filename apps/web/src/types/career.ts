@@ -10,6 +10,8 @@ export interface CareerAdvice {
     target_role: string;
     estimated_months?: number;
     current_skills?: string[];
+    current_level?: string;
+    target_level?: string;
     skill_gap?: SkillGapStep[];
     roadmap?: string;
 }
@@ -35,6 +37,7 @@ export interface JobMatch {
     salary_min_mvnd?: number;
     salary_max_mvnd?: number;
     salary_raw?: string;
+    level?: string;
     matched_skills?: string[];
     missing_skills?: string[];
 }
@@ -65,4 +68,12 @@ export interface CareerSimulationResult {
     simulated_job_matches: number;
     salary?: CareerSimulationSalary | null;
     forecast?: CareerSimulationForecast | null;
+}
+
+export interface LevelMoveSimulationResult {
+    current_level: string | null;
+    target_level: string;
+    current_job_matches: number;
+    simulated_job_matches: number;
+    salary?: CareerSimulationSalary | null;
 }

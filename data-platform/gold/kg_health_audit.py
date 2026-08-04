@@ -56,6 +56,14 @@ RETURN count(t) AS total,
        count(CASE WHEN t.pagerank_score IS NOT NULL AND isNaN(t.pagerank_score) THEN 1 END) AS with_nan_pagerank
 """
 
+_LEVEL_COVERAGE_QUERY = """
+MATCH (j:Job)
+RETURN coalesce(j.source_platform, 'unknown') AS source_platform,
+       count(j) AS total,
+       count(j.level) AS with_level
+ORDER BY total DESC
+"""
+
 _DUPLICATE_CASE_NAMES_QUERY = """
 MATCH (t:Technology)
 WITH toLower(t.name) AS normalized, collect(t.name) AS names
@@ -162,6 +170,28 @@ def _check_tech_property_coverage(driver) -> dict:
     }
 
 
+def _check_level_coverage(driver) -> list[dict]:
+    """
+    Tỷ lệ Job đã được phân loại j.level (Intern/Fresher/Junior/Middle/Senior/Lead), theo từng
+    source_platform — chỉ VietnamWorks scrape được level thật ở thời điểm viết check này (các
+    crawler khác gửi free-text qua schema.org experienceRequirements nếu trang có, hoặc rỗng nếu
+    không), nên coverage thấp ở phần lớn platform là kỳ vọng, không phải lỗi. Theo dõi số này
+    theo thời gian để biết khi nào cần mở rộng keyword dictionary của normalize_level() hoặc thêm
+    scrape thật cho platform nào đó.
+    """
+    with driver.session() as session:
+        rows = session.run(_LEVEL_COVERAGE_QUERY).data()
+    return [
+        {
+            "source_platform": r["source_platform"],
+            "total": r["total"],
+            "with_level": r["with_level"],
+            "coverage_pct": round(r["with_level"] / r["total"] * 100, 1) if r["total"] else 0.0,
+        }
+        for r in rows
+    ]
+
+
 def _check_duplicate_case_names(driver) -> list[dict]:
     with driver.session() as session:
         return session.run(_DUPLICATE_CASE_NAMES_QUERY).data()
@@ -228,6 +258,7 @@ def run(settings: Settings) -> dict:
         unknown_rel_types = _check_unknown_relationship_types(driver)
         orphan_nodes = _check_orphan_nodes(driver)
         property_coverage = _check_tech_property_coverage(driver)
+        level_coverage = _check_level_coverage(driver)
         duplicate_names = _check_duplicate_case_names(driver)
         garbage_jobs = _check_garbage_jobs(driver)
         company_near_duplicates = _check_company_near_duplicates(driver)
@@ -236,6 +267,7 @@ def run(settings: Settings) -> dict:
             "unknown_relationship_types": unknown_rel_types,
             "orphan_nodes": orphan_nodes,
             "tech_property_coverage": property_coverage,
+            "level_coverage": level_coverage,
             "duplicate_case_names": duplicate_names,
             "garbage_jobs": garbage_jobs,
             "company_near_duplicates": company_near_duplicates,
@@ -257,6 +289,13 @@ def run(settings: Settings) -> dict:
             property_coverage["pagerank_coverage_pct"],
             property_coverage["usable_pagerank_pct"],
             property_coverage["total"],
+        )
+        logger.info(
+            "KG Health Audit: job.level coverage theo source_platform: {}",
+            [
+                (r["source_platform"], "{}/{} ({}%)".format(r["with_level"], r["total"], r["coverage_pct"]))
+                for r in level_coverage
+            ],
         )
         if duplicate_names:
             logger.warning(

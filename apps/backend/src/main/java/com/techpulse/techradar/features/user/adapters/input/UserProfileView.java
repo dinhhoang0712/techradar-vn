@@ -11,7 +11,7 @@ import java.util.List;
 
 /**
  * Full user profile returned by {@code GET/PUT /user/profile}.
- * Serialized snake_case: full_name, subscription_tier, avatar_url, job_role, technologies.
+ * Serialized snake_case: full_name, subscription_tier, avatar_url, job_role, current_level, technologies.
  */
 @Data
 @Builder
@@ -27,6 +27,7 @@ public class UserProfileView {
     private String avatarUrl;
     private String bio;
     private String jobRole;
+    private String currentLevel;
     private String location;
     private List<String> technologies;
     private Boolean notifyInapp;
@@ -44,6 +45,7 @@ public class UserProfileView {
             b.avatarUrl(profile.getAvatarUrl())
                     .bio(profile.getBio())
                     .jobRole(profile.getJobRole())
+                    .currentLevel(profile.getCurrentLevel())
                     .location(profile.getLocation())
                     .technologies(profile.getTechnologies())
                     .notifyInapp(profile.getNotifyInapp() == null || profile.getNotifyInapp())

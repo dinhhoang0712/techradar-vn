@@ -39,16 +39,16 @@ class JobControllerTest {
     }
 
     private static JobMatch match(String title, double score) {
-        return new JobMatch(title, "Acme", "Hà Nội", null, null, null, null, null,
+        return new JobMatch(title, "Acme", "Hà Nội", null, null, null, null, null, null,
                 List.of("Java"), List.of("Spring"), score);
     }
 
     @Test
     void matches_delegatesWithCurrentUserIdAndFilters_andMapsToResponseDtos() {
-        when(getJobMatchesUseCase.execute("user-1", "hà nội", 20.0, 5))
+        when(getJobMatchesUseCase.execute("user-1", "hà nội", 20.0, null, 5))
                 .thenReturn(Flux.just(match("Backend Dev", 0.8)));
 
-        StepVerifier.create(controller.matches("hà nội", 20.0, 5).contextWrite(authenticatedAs("user-1")))
+        StepVerifier.create(controller.matches("hà nội", 20.0, null, 5).contextWrite(authenticatedAs("user-1")))
                 .assertNext(response -> {
                     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
                     List<JobDtos.JobMatchResponse> body = response.getBody().getData();
@@ -58,16 +58,26 @@ class JobControllerTest {
                 })
                 .verifyComplete();
 
-        verify(getJobMatchesUseCase).execute("user-1", "hà nội", 20.0, 5);
+        verify(getJobMatchesUseCase).execute("user-1", "hà nội", 20.0, null, 5);
     }
 
     @Test
     void matches_returnsEmptyList_whenUseCaseYieldsNoMatches() {
-        when(getJobMatchesUseCase.execute(eq("user-1"), eq((String) null), eq((Double) null), eq(20)))
+        when(getJobMatchesUseCase.execute(eq("user-1"), eq((String) null), eq((Double) null), eq((String) null), eq(20)))
                 .thenReturn(Flux.empty());
 
-        StepVerifier.create(controller.matches(null, null, 20).contextWrite(authenticatedAs("user-1")))
+        StepVerifier.create(controller.matches(null, null, null, 20).contextWrite(authenticatedAs("user-1")))
                 .assertNext(response -> assertThat(response.getBody().getData()).isEmpty())
+                .verifyComplete();
+    }
+
+    @Test
+    void matches_passesLevelParamThrough() {
+        when(getJobMatchesUseCase.execute("user-1", null, null, "Senior", 10))
+                .thenReturn(Flux.just(match("Backend Dev", 0.8)));
+
+        StepVerifier.create(controller.matches(null, null, "Senior", 10).contextWrite(authenticatedAs("user-1")))
+                .assertNext(response -> assertThat(response.getBody().getData()).hasSize(1))
                 .verifyComplete();
     }
 }

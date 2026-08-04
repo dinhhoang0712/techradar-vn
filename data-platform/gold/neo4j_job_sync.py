@@ -27,7 +27,7 @@ from loguru import logger
 
 _SELECT_JOBS = """
 SELECT id, source_url, source_platform, job_title, company_name,
-       company_location, salary, description, requirement, benefit,
+       company_location, salary, level, description, requirement, benefit,
        skills, technologies, company_industry, company_size
 FROM dp_processed_jobs
 WHERE is_duplicate = false AND status = 'processed'
@@ -41,6 +41,7 @@ SET j.name = row.job_title,
     j.requirement = row.requirement,
     j.benefit = row.benefit,
     j.salary = row.salary,
+    j.level = row.level,
     j.url = row.source_url,
     j.source_platform = row.source_platform
 """
@@ -116,6 +117,7 @@ def run(settings: Settings) -> int:
                 "requirement": job["requirement"],
                 "benefit": job["benefit"],
                 "salary": job["salary"],
+                "level": job["level"],
                 "source_url": job["source_url"],
                 "technologies": sorted(techs),
                 "skills": job["skills"] or [],

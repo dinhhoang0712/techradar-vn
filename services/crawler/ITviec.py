@@ -113,6 +113,18 @@ def _format_salary(job_posting: dict) -> str:
     return ""  # placeholder kiểu "You'll love it" (lương ẩn) -> coi như không có
 
 
+def _format_experience(job_posting: dict) -> str:
+    """schema.org JobPosting.experienceRequirements — Text hoặc object tuỳ trang implement. Trả
+    raw text thô (chưa chuẩn hoá) — normalize_level() ở silver layer xử lý tiếp, giống cách
+    VietnamWorks.py gửi jobLevelVI thô."""
+    exp = job_posting.get("experienceRequirements")
+    if isinstance(exp, str):
+        return exp
+    if isinstance(exp, dict):
+        return exp.get("name") or exp.get("description") or ""
+    return ""
+
+
 def _format_location(job_posting: dict) -> str:
     places = job_posting.get("jobLocation") or []
     regions = []
@@ -198,13 +210,14 @@ def main():
             location = _format_location(job_posting) or data_layer.get("job_by_city", "")
             salary = _format_salary(job_posting)
             posted_date = job_posting.get("datePosted", "")
+            level = _format_experience(job_posting)
 
             job_data = {
                 "title": title,
                 "company": company,
                 "location": location,
                 "salary": salary,
-                "level": "",
+                "level": level,
                 "description": sections["description"],
                 "requirement": sections["requirement"],
                 "benefit": sections["benefit"],
@@ -222,7 +235,7 @@ def main():
                     company_name=company,
                     location=location,
                     salary=salary,
-                    level="",
+                    level=level,
                     description=sections["description"],
                     requirement=sections["requirement"],
                     benefit=sections["benefit"],

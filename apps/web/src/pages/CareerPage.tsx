@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
 import type { FormEvent } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { getCareerAdvice, getCareerRoadmap, simulateCareerMove } from '../api/careerService';
+import { Link, useSearchParams } from 'react-router-dom';
+import { getCareerAdvice, getCareerRoadmap, simulateCareerMove, simulateLevelMove } from '../api/careerService';
 import { getJobMatches } from '../api/jobService';
 import TechRecommendationCards from '../components/TechRecommendationCards';
 import CareerSimulator from '../components/CareerSimulator';
+import LevelSimulator from '../components/LevelSimulator';
 import CareerResultPanel from '../components/career/CareerResultPanel';
 import JobMatchesCard from '../components/career/JobMatchesCard';
 import type { CareerAdvice, NextSkill, JobMatch } from '../types/career';
+import { EXPERIENCE_LEVELS } from '../constants/experienceLevels';
 import './CareerPage.css';
 
 const COMMON_ROLES = [
@@ -31,6 +33,8 @@ export default function CareerPage() {
     const highlightSkills = (searchParams.get('highlight') || '').split(',').map(s => s.trim()).filter(Boolean);
 
     const [targetRole, setTargetRole] = useState('');
+    const [targetLevel, setTargetLevel] = useState('');
+    const [currentLevel, setCurrentLevel] = useState('');
     const [currentSkills, setCurrentSkills] = useState('');
     const [result, setResult] = useState<CareerAdvice | null>(null);
     const [loading, setLoading] = useState(false);
@@ -43,6 +47,7 @@ export default function CareerPage() {
     const [jobsError, setJobsError] = useState('');
     const [jobLocation, setJobLocation] = useState('');
     const [jobMinSalary, setJobMinSalary] = useState('');
+    const [jobLevel, setJobLevel] = useState('');
 
     const [nextSkills, setNextSkills] = useState<NextSkill[]>([]);
     const [roadmapLoading, setRoadmapLoading] = useState(false);
@@ -76,6 +81,9 @@ export default function CareerPage() {
                     setTargetRole(data.career_path.target_role);
                     setResult(data.career_path);
                 }
+                if (data.career_path?.current_level) {
+                    setCurrentLevel(data.career_path.current_level);
+                }
                 setJobMatches(data.job_matches || []);
             }
         } catch (err) {
@@ -92,6 +100,7 @@ export default function CareerPage() {
             const res = await getJobMatches({
                 location: jobLocation.trim() || undefined,
                 minSalary: jobMinSalary ? Number(jobMinSalary) : undefined,
+                level: jobLevel || undefined,
             });
             setJobMatches(('data' in res ? res.data : res) ?? []);
         } catch (err) {
@@ -109,8 +118,11 @@ export default function CareerPage() {
         setResult(null);
         try {
             const skills = currentSkills.split(',').map(s => s.trim()).filter(Boolean);
-            const res = await getCareerAdvice(targetRole.trim(), skills);
+            const res = await getCareerAdvice(targetRole.trim(), skills, targetLevel || undefined);
             setResult(res.data);
+            if (res.data?.current_level) {
+                setCurrentLevel(res.data.current_level);
+            }
         } catch (err) {
             setError((err as Error).message || 'Không thể tải dữ liệu. Vui lòng thử lại.');
         } finally {
@@ -120,6 +132,11 @@ export default function CareerPage() {
 
     const handleSimulate = async (technology: string) => {
         const res = await simulateCareerMove(technology);
+        return res.data;
+    };
+
+    const handleSimulateLevel = async (level: string) => {
+        const res = await simulateLevelMove(level);
         return res.data;
     };
 
@@ -154,11 +171,24 @@ export default function CareerPage() {
                 />
             )}
 
+            {hasToken && <LevelSimulator onSimulate={handleSimulateLevel} />}
+
             <div className="career-layout">
                 {/* Form */}
                 <div className="career-form-card card">
                     <h2 className="section-title">Thông tin của bạn</h2>
                     <form onSubmit={handleSubmit} className="career-form">
+                        <div className="form-group">
+                            <label className="form-label">
+                                Cấp độ hiện tại
+                            </label>
+                            <p className="form-value">
+                                {currentLevel || <span className="form-empty">Chưa xác định</span>}
+                                {' · '}
+                                <Link to="/profile" className="career-level-edit-link">Cập nhật trong Hồ sơ</Link>
+                            </p>
+                        </div>
+
                         <div className="form-group">
                             <label className="form-label">Vai trò mục tiêu</label>
                             <div className="role-quick-picks">
@@ -181,6 +211,20 @@ export default function CareerPage() {
                                 placeholder="VD: Senior Backend Developer"
                                 required
                             />
+                        </div>
+
+                        <div className="form-group">
+                            <label className="form-label">Cấp độ mục tiêu</label>
+                            <select
+                                className="form-input"
+                                value={targetLevel}
+                                onChange={e => setTargetLevel(e.target.value)}
+                            >
+                                <option value="">Chưa xác định</option>
+                                {EXPERIENCE_LEVELS.map(l => (
+                                    <option key={l} value={l}>{l}</option>
+                                ))}
+                            </select>
                         </div>
 
                         <div className="form-group">
@@ -225,6 +269,8 @@ export default function CareerPage() {
                     onJobLocationChange={setJobLocation}
                     jobMinSalary={jobMinSalary}
                     onJobMinSalaryChange={setJobMinSalary}
+                    jobLevel={jobLevel}
+                    onJobLevelChange={setJobLevel}
                     onSearch={loadJobMatches}
                 />
             )}

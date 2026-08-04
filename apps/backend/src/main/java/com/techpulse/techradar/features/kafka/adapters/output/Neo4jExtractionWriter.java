@@ -131,7 +131,7 @@ public class Neo4jExtractionWriter implements ExtractionWriter {
                         "MERGE (j:Job {id: $id}) " +
                                 "ON CREATE SET j.createdAt = timestamp(), j.creationToken = $creation_token " +
                                 "SET j.name = $title, j.description = $description, j.requirement = $requirement, " +
-                                "j.benefit = $benefit, j.salary = $salary, j.url = $source_url, j.source_platform = $source_platform " +
+                                "j.benefit = $benefit, j.salary = $salary, j.level = $level, j.url = $source_url, j.source_platform = $source_platform " +
                                 "WITH j, coalesce(j.creationToken = $creation_token, false) AS isNew " +
                                 "REMOVE j.creationToken " +
                                 "RETURN isNew",
@@ -143,6 +143,7 @@ public class Neo4jExtractionWriter implements ExtractionWriter {
                                 "requirement", job.getData().getJob().getRequirement(),
                                 "benefit", job.getData().getJob().getBenefit(),
                                 "salary", job.getData().getJob().getSalary(),
+                                "level", job.getData().getJob().getLevel(),
                                 "source_url", job.getData().getJob().getSourceUrl(),
                                 "source_platform", job.getSourcePlatform()
                         )

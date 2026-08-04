@@ -18,6 +18,7 @@ import java.util.UUID;
 public class UserProfile {
     private UUID userId;
     private String jobRole;
+    private String currentLevel;
     private List<String> technologies;
     private String location;
     private String bio;

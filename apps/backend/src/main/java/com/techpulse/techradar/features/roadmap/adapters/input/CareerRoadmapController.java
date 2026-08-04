@@ -2,6 +2,7 @@ package com.techpulse.techradar.features.roadmap.adapters.input;
 
 import com.techpulse.techradar.features.roadmap.application.GetCareerRoadmapUseCase;
 import com.techpulse.techradar.features.roadmap.application.SimulateCareerMoveUseCase;
+import com.techpulse.techradar.features.roadmap.application.SimulateLevelMoveUseCase;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import com.techpulse.techradar.shared.security.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
@@ -22,6 +23,7 @@ public class CareerRoadmapController {
 
     private final GetCareerRoadmapUseCase getCareerRoadmapUseCase;
     private final SimulateCareerMoveUseCase simulateCareerMoveUseCase;
+    private final SimulateLevelMoveUseCase simulateLevelMoveUseCase;
 
     @Operation(
             summary = "Personalized career roadmap for the current user",
@@ -51,5 +53,20 @@ public class CareerRoadmapController {
                 .flatMap(userId -> simulateCareerMoveUseCase.execute(userId, technology))
                 .map(SimulationDtos.SimulationResponse::from)
                 .map(response -> ResponseEntity.ok(ApiResponse.success(response, "Simulation computed")));
+    }
+
+    @Operation(
+            summary = "What-if: simulate moving to a hypothetical experience level",
+            description = "Previews the effect of a hypothetical level (Intern/Fresher/Junior/Middle/Senior/Lead) " +
+                          "on job-match count and market salary at that level, same skills — combining " +
+                          "/jobs/matches scoring at the current vs target level."
+    )
+    @GetMapping("/simulate-level")
+    public Mono<ResponseEntity<ApiResponse<SimulationDtos.LevelMoveResponse>>> simulateLevel(
+            @RequestParam("target_level") String targetLevel) {
+        return SecurityUtils.currentUserId()
+                .flatMap(userId -> simulateLevelMoveUseCase.execute(userId, targetLevel))
+                .map(SimulationDtos.LevelMoveResponse::from)
+                .map(response -> ResponseEntity.ok(ApiResponse.success(response, "Level simulation computed")));
     }
 }

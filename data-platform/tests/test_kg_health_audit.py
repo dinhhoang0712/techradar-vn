@@ -145,6 +145,34 @@ def test_check_tech_property_coverage_zero_when_no_technology_nodes():
 
 
 # ---------------------------------------------------------------------------
+# _check_level_coverage
+# ---------------------------------------------------------------------------
+
+
+def test_check_level_coverage_computes_percentage_per_source_platform():
+    driver = FakeDriver(
+        {
+            "MATCH (j:Job)\nRETURN coalesce(j.source_platform": [
+                {"source_platform": "VietnamWorks", "total": 100, "with_level": 80},
+                {"source_platform": "ITviec", "total": 50, "with_level": 0},
+            ]
+        }
+    )
+
+    coverage = kg_health_audit._check_level_coverage(driver)
+
+    assert coverage == [
+        {"source_platform": "VietnamWorks", "total": 100, "with_level": 80, "coverage_pct": 80.0},
+        {"source_platform": "ITviec", "total": 50, "with_level": 0, "coverage_pct": 0.0},
+    ]
+
+
+def test_check_level_coverage_returns_empty_list_when_no_jobs():
+    driver = FakeDriver({"MATCH (j:Job)\nRETURN coalesce(j.source_platform": []})
+    assert kg_health_audit._check_level_coverage(driver) == []
+
+
+# ---------------------------------------------------------------------------
 # _check_duplicate_case_names
 # ---------------------------------------------------------------------------
 
@@ -177,6 +205,7 @@ def test_run_closes_driver_and_returns_full_report(monkeypatch):
     assert report["unknown_relationship_types"] == [{"rel_type": "HIRES_FOR", "cnt": 1}]
     assert report["orphan_nodes"] == []
     assert report["tech_property_coverage"]["category_coverage_pct"] == 100.0
+    assert report["level_coverage"] == []
     assert report["duplicate_case_names"] == []
     assert driver.closed is True
 

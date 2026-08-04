@@ -18,6 +18,7 @@ public class JobDtos {
         String salaryRaw;
         Double salaryMinMVnd;
         Double salaryMaxMVnd;
+        String level;
         String sourceUrl;
         LocalDate dueDate;
         List<String> matchedSkills;
@@ -32,6 +33,7 @@ public class JobDtos {
                     .salaryRaw(m.salaryRaw())
                     .salaryMinMVnd(m.salaryMinVnd())
                     .salaryMaxMVnd(m.salaryMaxVnd())
+                    .level(m.level())
                     .sourceUrl(m.sourceUrl())
                     .dueDate(m.dueDate())
                     .matchedSkills(m.matchedSkills())

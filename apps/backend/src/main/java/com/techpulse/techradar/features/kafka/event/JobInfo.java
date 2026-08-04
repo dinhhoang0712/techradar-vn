@@ -16,6 +16,7 @@ public class JobInfo {
     private String requirement;
     private String benefit;
     private String salary;
+    private String level;
     private String dueDate;
     private String sourceUrl;
 }

@@ -1,5 +1,6 @@
 package com.techpulse.techradar.features.roadmap.adapters.input;
 
+import com.techpulse.techradar.features.roadmap.domain.LevelMoveResult;
 import com.techpulse.techradar.features.roadmap.domain.SimulationResult;
 import com.techpulse.techradar.features.salary.adapters.input.SalaryDtos;
 
@@ -21,6 +22,23 @@ public class SimulationDtos {
                     r.simulatedJobMatches(),
                     r.salary() == null ? null : SalaryDtos.SalaryInsightResponse.from(r.salary()),
                     r.forecast());
+        }
+    }
+
+    public record LevelMoveResponse(
+            String currentLevel,
+            String targetLevel,
+            long currentJobMatches,
+            long simulatedJobMatches,
+            SalaryDtos.SalaryInsightResponse salary
+    ) {
+        public static LevelMoveResponse from(LevelMoveResult r) {
+            return new LevelMoveResponse(
+                    r.currentLevel(),
+                    r.targetLevel(),
+                    r.currentJobMatches(),
+                    r.simulatedJobMatches(),
+                    r.salary() == null ? null : SalaryDtos.SalaryInsightResponse.from(r.salary()));
         }
     }
 }

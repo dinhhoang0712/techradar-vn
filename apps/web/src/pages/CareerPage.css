@@ -146,6 +146,18 @@
     margin: 4px 0 0;
 }
 
+.career-level-progress {
+    display: inline-block;
+    margin: 8px 0 0;
+    padding: 3px 12px;
+    border-radius: 12px;
+    background: var(--primary-glow);
+    border: 1px solid var(--primary);
+    color: var(--primary-light);
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
 .career-estimate-badge {
     background: var(--primary-glow);
     border: 1px solid var(--primary);
@@ -422,6 +434,39 @@
     font-weight: 600;
     color: var(--text);
     font-size: 0.95rem;
+}
+
+.form-value {
+    font-size: 0.9rem;
+    color: var(--text);
+    margin: 0;
+    padding: 0.75rem 0;
+}
+
+.form-empty {
+    color: var(--text-3);
+    font-style: italic;
+}
+
+.career-level-edit-link {
+    color: var(--primary);
+    text-decoration: none;
+    font-size: 0.85rem;
+}
+
+.career-level-edit-link:hover {
+    text-decoration: underline;
+}
+
+.job-match-level {
+    background: var(--surface-2, rgba(128, 128, 128, 0.12));
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--text-3);
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    white-space: nowrap;
 }
 
 .job-match-link {

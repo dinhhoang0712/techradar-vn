@@ -38,3 +38,8 @@ def test_chunks_splits_into_fixed_size_batches():
 
 def test_chunks_returns_nothing_for_empty_input():
     assert list(article_sync._chunks([], 3)) == []
+
+
+def test_select_jobs_and_merge_jobs_carry_level_through_to_neo4j():
+    assert "level" in job_sync._SELECT_JOBS
+    assert "j.level = row.level" in job_sync._MERGE_JOBS

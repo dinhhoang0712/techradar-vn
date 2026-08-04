@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 
 from common import tech_alias_cache
 from common.db import get_pg_conn
+from common.level_normalizer import normalize_level
 from config import Settings
 from kafka import KafkaConsumer
 from kafka.errors import NoBrokersAvailable
@@ -162,6 +163,8 @@ def _process_job(conn, msg: dict) -> None:
     techs_raw = job.get("technologies") or data.get("technologies") or data.get("entity_techs") or []
     # Chuẩn hoá tên tech — xem comment tương ứng trong _process_article().
     techs = tech_alias_cache.canonicalize_techs(techs_raw)
+    # Chuẩn hoá cấp kinh nghiệm free-text (VD: jobLevelVI từ VietnamWorks) về enum cố định.
+    level = normalize_level(job.get("level"))
 
     if _is_blocked_page_job(title, desc, company_name):
         logger.warning("Silver: skip job {} — trang lỗi/bị chặn khi crawl (title={!r})", job_id[:8], title)
@@ -175,10 +178,10 @@ def _process_job(conn, msg: dict) -> None:
         cur.execute(
             """INSERT INTO dp_processed_jobs
                (id, source_url, source_platform, job_title, company_name,
-                company_location, salary, description, requirement, benefit,
+                company_location, salary, level, description, requirement, benefit,
                 skills, technologies, content_hash, is_duplicate, quality_score, status,
                 company_industry, company_size)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'processed',%s,%s)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'processed',%s,%s)
                ON CONFLICT (source_url) DO NOTHING""",
             (
                 job_id,
@@ -188,6 +191,7 @@ def _process_job(conn, msg: dict) -> None:
                 company_name[:300] if company_name else None,
                 company_location[:200] if company_location else None,
                 job.get("salary", "")[:200] if job.get("salary") else None,
+                level,
                 desc,
                 req,
                 job.get("benefit") or "",

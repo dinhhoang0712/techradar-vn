@@ -1,6 +1,7 @@
 export interface ProfileViewData {
     full_name?: string;
     job_role?: string;
+    current_level?: string;
     bio?: string;
     location?: string;
     technologies?: string[];
@@ -25,6 +26,11 @@ export default function ProfileViewDetails({ profile, onEdit }: ProfileViewDetai
             <div className="form-group">
                 <label className="form-label">Vai trò / Chức vụ</label>
                 <p className="form-value">{profile.job_role || <span className="form-empty">Chưa cập nhật</span>}</p>
+            </div>
+
+            <div className="form-group">
+                <label className="form-label">Cấp độ hiện tại</label>
+                <p className="form-value">{profile.current_level || <span className="form-empty">Chưa xác định</span>}</p>
             </div>
 
             <div className="form-group">

@@ -1,5 +1,6 @@
 import type { Dispatch, SetStateAction, FormEvent } from 'react';
 import PasswordInput from '../common/PasswordInput';
+import { EXPERIENCE_LEVELS } from '../../constants/experienceLevels';
 
 export interface ProfileFormState {
     full_name: string;
@@ -7,6 +8,7 @@ export interface ProfileFormState {
     avatar_url: string;
     bio: string;
     job_role: string;
+    current_level: string;
     location: string;
     password: string;
     technologies: string;
@@ -49,6 +51,21 @@ export default function ProfileEditForm({ form, setForm, saving, onSubmit, onCan
                     onChange={(e) => setForm(prev => ({ ...prev, job_role: e.target.value }))}
                     placeholder="VD: Software Engineer"
                 />
+            </div>
+
+            <div className="form-group">
+                <label htmlFor="current_level" className="form-label">Cấp độ hiện tại</label>
+                <select
+                    id="current_level"
+                    className="form-input"
+                    value={form.current_level || ''}
+                    onChange={(e) => setForm(prev => ({ ...prev, current_level: e.target.value }))}
+                >
+                    <option value="">Chưa xác định</option>
+                    {EXPERIENCE_LEVELS.map(l => (
+                        <option key={l} value={l}>{l}</option>
+                    ))}
+                </select>
             </div>
 
             <div className="form-group">

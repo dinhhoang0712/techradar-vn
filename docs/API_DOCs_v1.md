@@ -24,7 +24,7 @@ Tài liệu này phản ánh **API thực tế** do Spring Boot gateway (`apps/b
 16. [Social / Feed — `/api/v1/feed`, `/api/v1/posts`, `/api/v1/users`](#15-social--feed---apiv1feed-apiv1posts-apiv1users)
 17. [AI Interview — `/api/v1/interview`](#16-ai-interview---apiv1interview)
 18. [AiProxy — career/recommend/forecast/report/agent/summarize/company-insight](#17-aiproxy---forward-nguyên-văn-sang-ai-rag-core-module-aiproxy)
-19. [Career Roadmap — `/api/v1/career/roadmap`, `/api/v1/career/simulate`](#18-career-roadmap---apiv1careerroadmap-apiv1careersimulate-feature-roadmap-native---không-proxy)
+19. [Career Roadmap — `/api/v1/career/roadmap`, `/api/v1/career/simulate`, `/api/v1/career/simulate-level`](#18-career-roadmap---apiv1careerroadmap-apiv1careersimulate-feature-roadmap-native---không-proxy)
 20. [Phân quyền](#phân-quyền)
 21. [Proxy sang Python](#proxy-sang-python)
 22. [Error Codes](#error-codes)
@@ -376,6 +376,7 @@ Lấy thông tin profile đầy đủ của user hiện tại.
     "avatar_url": "http://localhost:8080/api/v1/user/avatar/550e8400-e29b-41d4-a716-446655440000",
     "bio": "Full-stack developer interested in AI and ML",
     "job_role": "Senior Developer",
+    "current_level": "Senior",
     "location": "Ho Chi Minh City",
     "technologies": ["React", "Node.js", "Python", "Docker"],
     "notify_inapp": true,
@@ -397,6 +398,7 @@ Lấy thông tin profile đầy đủ của user hiện tại.
 - `avatar_url`: URL avatar (null nếu chưa có)
 - `bio`: Bio ngắn (tùy chọn)
 - `job_role`: Vị trí công việc hiện tại
+- `current_level`: Cấp độ kinh nghiệm hiện tại (`Intern`/`Fresher`/`Junior`/`Middle`/`Senior`/`Lead`, tùy chọn — null nếu chưa khai) — dùng để cá nhân hoá `/career` (skill gap theo đúng cấp) và làm baseline cho `/career/simulate-level`
 - `location`: Địa điểm
 - `technologies`: Danh sách công nghệ quan tâm
 - `notify_inapp`: Bật thông báo in-app
@@ -422,6 +424,7 @@ Cập nhật thông tin profile.
   "full_name": "Nguyễn Văn B",
   "bio": "Updated bio",
   "job_role": "Tech Lead",
+  "current_level": "Senior",
   "location": "Hanoi",
   "technologies": ["React", "TypeScript", "Go", "Kubernetes"],
   "notify_inapp": true,
@@ -443,6 +446,7 @@ Cập nhật thông tin profile.
     "avatar_url": "http://localhost:8080/api/v1/user/avatar/550e8400-e29b-41d4-a716-446655440000",
     "bio": "Updated bio",
     "job_role": "Tech Lead",
+    "current_level": "Senior",
     "location": "Hanoi",
     "technologies": ["React", "TypeScript", "Go", "Kubernetes"],
     "notify_inapp": true,
@@ -2154,13 +2158,22 @@ Thống kê thị trường việc làm/công nghệ.
     "top_technologies": [
       { "name": "React", "job_count": 320 }
     ],
-    "job_match_alerts_sent": 87
+    "job_match_alerts_sent": 87,
+    "jobs_by_level": [
+      { "level": "Senior", "job_count": 620 },
+      { "level": "Middle", "job_count": 340 },
+      { "level": "Junior", "job_count": 210 }
+    ],
+    "users_with_current_level": 120,
+    "total_users": 450
   }
 }
 ```
 
 **Fields:**
 - `job_match_alerts_sent`: tổng số notification loại `JOB_MATCH` đã từng tạo (không phải theo ngày — luỹ kế từ đầu).
+- `jobs_by_level`: số job theo từng cấp độ kinh nghiệm (`Intern`/`Fresher`/`Junior`/`Middle`/`Senior`/`Lead`), chỉ tính job đã được phân loại (`level IS NOT NULL`) — phần lớn job hiện vẫn chưa có `level` (chỉ 1 nguồn crawl scrape được trực tiếp, các nguồn khác dựa vào `experienceRequirements` trong JSON-LD nếu trang có), nên tổng `jobs_by_level` thường nhỏ hơn `total_jobs_indexed`.
+- `users_with_current_level`/`total_users`: dùng để tính % user đã khai cấp độ hiện tại ở FE (`users_with_current_level / total_users`) — không tính % sẵn ở tầng API.
 
 ---
 
@@ -2857,6 +2870,7 @@ năng khớp / số kỹ năng job yêu cầu`. Location/min-salary được l�
 **Query params:**
 - `location` (string, optional)
 - `min_salary` (number, optional, đơn vị triệu VND)
+- `level` (string, optional) — lọc chính xác theo cấp độ kinh nghiệm (`Intern`/`Fresher`/`Junior`/`Middle`/`Senior`/`Lead`, case-insensitive). Job chưa được phân loại (`level` null) không bao giờ khớp filter này — khác với `location` (substring match), `level` so khớp **chính xác** vì đây là enum kiểm soát, không phải free text.
 - `limit` (int, optional, default `20`)
 
 **Response (wrapped):**
@@ -2871,6 +2885,7 @@ năng khớp / số kỹ năng job yêu cầu`. Location/min-salary được l�
       "salary_raw": "25-35 triệu",
       "salary_min_mvnd": 25.0,
       "salary_max_mvnd": 35.0,
+      "level": "Senior",
       "source_url": "https://itviec.com/...",
       "due_date": "2026-08-01",
       "matched_skills": ["Java", "Spring Boot"],
@@ -2883,6 +2898,7 @@ năng khớp / số kỹ năng job yêu cầu`. Location/min-salary được l�
 
 **Fields:**
 - `salary_min_mvnd`/`salary_max_mvnd`: lưu ý tên field — Jackson snake_case biến `salaryMinMVnd` (Java) thành `salary_min_mvnd` (KHÔNG phải `salary_min_m_vnd`).
+- `level`: cấp độ kinh nghiệm job yêu cầu, `null` nếu chưa được phân loại (xem [`docs/DATABASE.md`](./DATABASE.md) §3.2 migration V38 và [`docs/DATA_PLATFORM.md`](./DATA_PLATFORM.md) mục 5 cho cách chuẩn hoá).
 - `matched_skills`/`missing_skills`: so khớp giữa kỹ năng hồ sơ và kỹ năng job yêu cầu.
 
 **Lưu ý cache:** kết quả Neo4j (trước khi lọc `location`/`min_salary`) được cache theo tập kỹ năng
@@ -3443,7 +3459,7 @@ Python bọc verbatim vào `ApiResponse.data`. Bất kỳ lỗi nào từ `ai-ra
 
 | Method | Path | Auth | Mô tả |
 |---|---|---|---|
-| POST | `/career` | JWT (`forwardAsCurrentUser`) | Tư vấn career path bằng AI (khác `GET /career/roadmap` ở §18 — đây là proxy LLM, không phải tính native) |
+| POST | `/career` | JWT (`forwardAsCurrentUser`) | Tư vấn career path bằng AI (khác `GET /career/roadmap` ở §18 — đây là proxy LLM, không phải tính native). Body: `target_role` (string), `current_skills` (array, optional), `target_level` (string, optional — `Intern`/`Fresher`/`Junior`/`Middle`/`Senior`/`Lead`). Không cần gửi `current_level` — backend tự tra `user_profile.current_level` theo `user_id` khi thiếu. Response thêm `current_level`/`target_level` (echo lại giá trị đã dùng) và `estimated_months` cộng thêm khoảng cách cấp độ nếu biết cả 2 mức. |
 | POST | `/recommend` | JWT (`forwardAsCurrentUser`) | Gợi ý công nghệ nên học tiếp |
 | POST | `/interview` | JWT (`forwardAsCurrentUser`) | Xem §16 |
 | POST | `/agent` | JWT (`forwardAsCurrentUser`) | AI Agent multi-tool (LangChain) |
@@ -3486,6 +3502,52 @@ hợp `/jobs/matches` scoring, `/salary/tech` và `/forecast`. Cache riêng
 **Authentication:** Required (Bearer JWT)
 
 **Query params:** `technology` (string, required)
+
+#### GET `/career/simulate-level`
+
+"What-if": mô phỏng tác động của việc chuyển lên 1 cấp độ kinh nghiệm giả định (cùng bộ kỹ năng
+hiện có, không lưu vào hồ sơ) — số job phù hợp ở cấp hiện tại (`user_profile.current_level`, hoặc
+không lọc cấp nếu chưa khai) so với cấp mục tiêu, và thống kê lương thị trường ở cấp mục tiêu
+(tính trực tiếp từ các job match đó, không query riêng). Không có phần dự báo xu hướng — khác
+`GET /career/simulate`, không có khái niệm "trend" cho 1 cấp độ. Cache riêng
+`cache:simulate:level:<userId>:<targetLevel>`.
+
+**Authentication:** Required (Bearer JWT)
+
+**Query params:** `target_level` (string, required — `Intern`/`Fresher`/`Junior`/`Middle`/`Senior`/`Lead`)
+
+**Response (wrapped):**
+```json
+{
+  "success": true,
+  "data": {
+    "current_level": "Middle",
+    "target_level": "Senior",
+    "current_job_matches": 5,
+    "simulated_job_matches": 12,
+    "salary": {
+      "tech_name": "Senior",
+      "total_jobs": 12,
+      "jobs_with_salary": 9,
+      "median_salary_mvnd": 32.0,
+      "avg_salary_mvnd": 33.5,
+      "min_salary_mvnd": 25.0,
+      "max_salary_mvnd": 45.0,
+      "p25_salary_mvnd": 28.0,
+      "p75_salary_mvnd": 38.0,
+      "salary_range": "28 - 38 triệu VND",
+      "top_co_techs": []
+    }
+  }
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: `target_level` rỗng hoặc không thuộc 6 giá trị hợp lệ
+
+**Note:** `current_level` trong response có thể `null` nếu user chưa khai trong hồ sơ — khi đó
+`current_job_matches` là số job phù hợp KHÔNG lọc theo cấp độ (mọi cấp), làm baseline trung thực
+thay vì báo sai "0 job phù hợp ở cấp hiện tại".
 
 ---
 

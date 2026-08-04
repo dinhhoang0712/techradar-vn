@@ -99,4 +99,40 @@ class JobExtractorServiceTest {
         assertThat(company.getSize()).isEmpty();
         assertThat(company.getField()).isEmpty();
     }
+
+    @Test
+    void consumeRawJob_normalizesLevelFromCrawlerFreeText() {
+        // rawJobJson() sends "level": "Senior" — already an exact enum keyword match.
+        ExtractedJob extracted = consumeAndCapturePublishedJob(rawJobJson(""));
+
+        assertThat(extracted.getData().getJob().getLevel()).isEqualTo("Senior");
+    }
+
+    @Test
+    void consumeRawJob_normalizesLevelToNullWhenCrawlerLevelDoesNotMatchAnyBucket() {
+        String json = ("""
+                {
+                  "message_type": "job",
+                  "source_platform": "TopCV",
+                  "crawled_at": "2026-01-01T00:00:00Z",
+                  "data": {
+                    "job_title": "Backend Developer",
+                    "company_name": "Acme Corp",
+                    "location": "Hà Nội",
+                    "salary": "20-30 triệu",
+                    "level": "",
+                    "description": "desc",
+                    "requirement": "req",
+                    "benefit": "benefit",
+                    "skills": [],
+                    "source_url": "https://example.com/job-1",
+                    "posted_date": ""
+                  }
+                }
+                """);
+
+        ExtractedJob extracted = consumeAndCapturePublishedJob(json);
+
+        assertThat(extracted.getData().getJob().getLevel()).isNull();
+    }
 }

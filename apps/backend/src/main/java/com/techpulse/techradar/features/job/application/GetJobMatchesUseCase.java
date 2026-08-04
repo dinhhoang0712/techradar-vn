@@ -45,13 +45,13 @@ public class GetJobMatchesUseCase {
     @Value("${app.redis.job-cache-ttl:1800}")
     private long cacheTtlSeconds;
 
-    public Flux<JobMatch> execute(String userId, String location, Double minSalaryMVnd, int limit) {
+    public Flux<JobMatch> execute(String userId, String location, Double minSalaryMVnd, String level, int limit) {
         int effectiveLimit = limit <= 0 ? 20 : Math.min(limit, MAX_LIMIT);
 
         return userProfileRepository.findByUserId(userId)
                 .map(UserProfiles::technologiesOrEmpty)
                 .defaultIfEmpty(List.of())
-                .flatMapMany(skills -> matchJobs(skills, location, minSalaryMVnd, effectiveLimit));
+                .flatMapMany(skills -> matchJobs(skills, location, minSalaryMVnd, level, effectiveLimit));
     }
 
     /**
@@ -60,11 +60,20 @@ public class GetJobMatchesUseCase {
      * persisting it to the user's profile.
      */
     public Flux<JobMatch> executeForSkills(List<String> skills, int limit) {
-        int effectiveLimit = limit <= 0 ? 20 : Math.min(limit, MAX_LIMIT);
-        return matchJobs(skills == null ? List.of() : skills, null, null, effectiveLimit);
+        return executeForSkills(skills, null, limit);
     }
 
-    private Flux<JobMatch> matchJobs(List<String> skills, String location, Double minSalaryMVnd, int limit) {
+    /**
+     * Same as {@link #executeForSkills(List, int)}, additionally filtered by job level — used by
+     * {@code SimulateLevelMoveUseCase} to preview job-match count at a hypothetical experience
+     * level. {@code level} null/blank means unfiltered (matches original behavior).
+     */
+    public Flux<JobMatch> executeForSkills(List<String> skills, String level, int limit) {
+        int effectiveLimit = limit <= 0 ? 20 : Math.min(limit, MAX_LIMIT);
+        return matchJobs(skills == null ? List.of() : skills, null, null, level, effectiveLimit);
+    }
+
+    private Flux<JobMatch> matchJobs(List<String> skills, String location, Double minSalaryMVnd, String level, int limit) {
         List<String> skillsLower = skills.stream()
                 .filter(s -> s != null && !s.isBlank())
                 .map(s -> s.toLowerCase(Locale.ROOT))
@@ -75,7 +84,7 @@ public class GetJobMatchesUseCase {
             return Flux.empty();
         }
 
-        List<JobMatchFilter> filters = buildFilters(location, minSalaryMVnd);
+        List<JobMatchFilter> filters = buildFilters(location, minSalaryMVnd, level);
         return rawMatches(skillsLower)
                 .filter(match -> filters.stream().allMatch(f -> f.matches(match)))
                 .take(limit);
@@ -86,13 +95,16 @@ public class GetJobMatchesUseCase {
      * dimensions with a non-null/non-blank argument are included, so a job with zero active
      * filters passes unconditionally (matches original behavior).
      */
-    private List<JobMatchFilter> buildFilters(String location, Double minSalaryMVnd) {
+    private List<JobMatchFilter> buildFilters(String location, Double minSalaryMVnd, String level) {
         List<JobMatchFilter> filters = new ArrayList<>();
         if (location != null && !location.isBlank()) {
             filters.add(JobMatchFilter.byLocation(location));
         }
         if (minSalaryMVnd != null) {
             filters.add(JobMatchFilter.byMinSalary(minSalaryMVnd));
+        }
+        if (level != null && !level.isBlank()) {
+            filters.add(JobMatchFilter.byLevel(level));
         }
         return filters;
     }
@@ -136,6 +148,7 @@ public class GetJobMatchesUseCase {
                 raw.salary(),
                 range != null ? range.minVnd() : null,
                 range != null ? range.maxVnd() : null,
+                raw.level(),
                 raw.sourceUrl(),
                 parseDate(raw.dueDate()),
                 matched,

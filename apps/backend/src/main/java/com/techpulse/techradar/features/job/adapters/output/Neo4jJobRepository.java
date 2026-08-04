@@ -51,7 +51,7 @@ public class Neo4jJobRepository implements JobRepository {
             // pipeline (KafkaNeo4jWriterService) writes the same data as Job.name/Job.url instead
             // — coalesce so matching works regardless of which pipeline wrote the node.
             "RETURN coalesce(j.name, j.title) AS title, c.name AS company, c.location AS location, " +
-            "       j.salary AS salary, coalesce(j.url, j.source_url) AS sourceUrl, toString(j.due_date) AS dueDate, " +
+            "       j.salary AS salary, j.level AS level, coalesce(j.url, j.source_url) AS sourceUrl, toString(j.due_date) AS dueDate, " +
             "       requiredNames AS required, matchedNames AS matched, score " +
             "ORDER BY score DESC " +
             "LIMIT $limit";
@@ -75,6 +75,7 @@ public class Neo4jJobRepository implements JobRepository {
                             nullableString(r, "company"),
                             nullableString(r, "location"),
                             nullableString(r, "salary"),
+                            nullableString(r, "level"),
                             nullableString(r, "sourceUrl"),
                             nullableString(r, "dueDate"),
                             r.get("required").asList(v -> v.asString()),
@@ -97,6 +98,11 @@ public class Neo4jJobRepository implements JobRepository {
             "RETURN t.name AS name, count(DISTINCT j) AS jobCount " +
             "ORDER BY jobCount DESC LIMIT $limit";
 
+    private static final String JOBS_BY_LEVEL_QUERY =
+            "MATCH (j:Job) WHERE j.level IS NOT NULL " +
+            "RETURN j.level AS level, count(j) AS jobCount " +
+            "ORDER BY jobCount DESC";
+
     @Override
     public Mono<Long> countJobs() {
         return Mono.fromCallable(() -> {
@@ -114,6 +120,22 @@ public class Neo4jJobRepository implements JobRepository {
                 var queryResult = session.run(TOP_TECHNOLOGIES_QUERY, Map.of("limit", limit));
                 for (Record r : queryResult.list()) {
                     result.add(new TechDemandRaw(r.get("name").asString(), r.get("jobCount").asLong()));
+                }
+            }
+            return result;
+        })
+        .subscribeOn(Schedulers.boundedElastic())
+        .flatMapIterable(list -> list);
+    }
+
+    @Override
+    public Flux<LevelDemandRaw> jobsByLevel() {
+        return Mono.fromCallable(() -> {
+            List<LevelDemandRaw> result = new ArrayList<>();
+            try (Session session = driver.session()) {
+                var queryResult = session.run(JOBS_BY_LEVEL_QUERY);
+                for (Record r : queryResult.list()) {
+                    result.add(new LevelDemandRaw(r.get("level").asString(), r.get("jobCount").asLong()));
                 }
             }
             return result;

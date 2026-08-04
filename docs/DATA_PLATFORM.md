@@ -103,9 +103,22 @@ Data Platform là hệ thống pipeline thu thập và xử lý dữ liệu côn
 | DanTri.py | Tin tức | dantri.com.vn/cong-nghe | 150 bài | Selenium |
 | ICTNews.py | Tin tức | ictnews.vietnamnet.vn | 150 bài | Selenium |
 | TopCV.py | Việc làm | topcv.vn (IT category) | 150 jobs | Selenium + uc |
-| ITviec.py | Việc làm | itviec.com | 150 jobs | Selenium + uc |
+| ITviec.py | Việc làm | itviec.com | 150 jobs | requests + BeautifulSoup (đổi từ Selenium+uc sau khi trang redesign 2026-07) |
+| VietnamWorks.py | Việc làm | vietnamworks.com | 150 jobs | requests (trang không chặn bot như topdev.vn) — đọc JSON nhúng trong Next.js RSC "flight" stream (`self.__next_f.push(...)`), không parse DOM |
+| JobsGO.py | Việc làm | jobsgo.vn | 150 jobs | Selenium + uc, parse JSON-LD `JobPosting` schema.org |
+| TopDev.py | Việc làm | topdev.vn | 150 jobs | Selenium + uc — **viết xong nhưng CHƯA đăng ký trong `run_all.py`**: topdev.vn (không www) chặn/treo kết nối, www.topdev.vn redirect `/viec-lam-it` sang login-wall. Selector DOM trong file này chưa từng verify với HTML thật |
 | Viblo.py | Forum/Blog | viblo.asia (REST API) | 150 bài | requests |
 | GitHub.py | OSS | GitHub API (VN orgs) | 200 repos | requests |
+
+**Trường `level` (cấp độ kinh nghiệm job)** — chỉ **VietnamWorks.py** scrape được trực tiếp
+(field JSON `jobLevelVI`, đã có sẵn trong response SSR, không cần suy luận). **JobsGO.py**,
+**ITviec.py**, **TopDev.py** đọc field chuẩn schema.org `experienceRequirements` trong JSON-LD
+`JobPosting` (nếu trang nguồn có điền) — cùng cơ chế parse JSON-LD các crawler này đã dùng cho
+title/company/salary, nên gần như miễn phí để thêm, nhưng **chưa xác nhận được các trang này có
+thực sự điền field đó không** (cần chạy crawler thật để biết). TopCV.py chưa lấy field này (biết
+có thể suy ra từ title nhưng chưa làm — xem comment trong file). Giá trị `level` gửi lên Kafka
+luôn là **free-text thô, chưa chuẩn hoá** — xem "Entity Canonicalization" ở mục 5 cho nơi chuẩn
+hoá về enum cố định.
 
 ### Kafka Message Format
 
@@ -271,6 +284,22 @@ company_location = job.get("location") or company_obj.get("location")
   - normalize = lowercase + collapse whitespace
   - Nếu hash đã tồn tại → `is_duplicate=True`, `duplicate_of={id gốc}`
 
+### Level Normalization (cấp độ kinh nghiệm job)
+
+Trước khi INSERT, `silver/processor.py::_process_job()` gọi `common/level_normalizer.py::normalize_level()`
+để chuẩn hoá free-text `level` (crawler gửi, xem mục 3) về 1 trong 6 giá trị cố định
+(`Intern`/`Fresher`/`Junior`/`Middle`/`Senior`/`Lead`) bằng keyword matching (case-insensitive
+substring, tiếng Việt + tiếng Anh, ưu tiên cấp cao nhất khớp trước — "Senior Team Lead" → `Lead`).
+Không khớp bucket nào (phần lớn job hiện tại, vì hầu hết crawler gửi rỗng) → `None`/NULL, không
+gán "Unknown" giả. Bản Java tương đương (`LevelNormalizer.java`, dùng ở đường ghi realtime) giữ
+cùng bảng keyword, phải sửa đồng thời cả 2 bên khi mở rộng — cùng nguyên tắc "duplicate có chủ
+đích" như `tech_alias_cache.py`/`TechAliasCache.java`, khác ở chỗ level là 1 tập bucket cố định
+nhỏ nên không cần bảng DB alias riêng như tech name.
+
+`dp_processed_jobs.level` có CHECK constraint (V38, Postgres) ràng buộc đúng 6 giá trị này (cho
+phép NULL) — xem [`docs/DATABASE.md`](./DATABASE.md) §3.2. `gold/neo4j_job_sync.py` đồng bộ tiếp
+giá trị đã chuẩn hoá này lên `Job.level` (Neo4j).
+
 ### Entity Canonicalization (tech name)
 
 Trước khi lưu `entity_techs`/`technologies`, Silver tra `common/tech_alias_cache.py`
@@ -400,6 +429,7 @@ từng match nhầm gây mất dữ liệu âm thầm), tự động hoá đúng
 | Quan hệ "lạ"/chết | Loại quan hệ tồn tại trong graph nhưng không thuộc danh sách writer đang hoạt động (`_KNOWN_ACTIVE_REL_TYPES`) — dấu hiệu writer cũ đã bị gỡ, giống hệt `HIRES_FOR` |
 | Node mồ côi | Technology/Company không có quan hệ nào |
 | Độ phủ property | % Technology có `category` (V29), % có `pagerank_score`, và riêng % **dùng được** (loại `NaN` — `count()` của Cypher đếm cả NaN vì nó khác `NULL`) |
+| Độ phủ `Job.level` theo `source_platform` | % Job đã phân loại cấp độ kinh nghiệm, tách theo nguồn crawl — coverage thấp ở phần lớn platform là kỳ vọng (chỉ VietnamWorks scrape được `level` thật), theo dõi số này để biết khi nào cần mở rộng keyword dictionary của `normalize_level()` hoặc thêm scrape thật cho platform khác |
 | Tên trùng chỉ khác hoa/thường | Technology chưa được `tech_dedup`/alias map gộp |
 
 **Hạn chế đã biết:** chỉ bắt trùng tên ở `Technology`, **chưa** bắt trùng tên `Company`/`Job` (vd
@@ -538,7 +568,7 @@ CREATE TABLE dp_processed_jobs (
     company_name     TEXT,
     company_location TEXT,
     salary           TEXT,
-    level            TEXT,
+    level            TEXT,          -- CHECK (V38): NULL hoặc 1 trong Intern/Fresher/Junior/Middle/Senior/Lead
     description      TEXT,
     requirement      TEXT,
     benefit          TEXT,
@@ -887,6 +917,7 @@ data-platform/
 └── common/
     ├── db.py                # get_pg_conn, get_neo4j_driver, get_minio_client
     ├── tech_alias_cache.py  # Cache RAM dp_tech_alias_map — dùng chung Silver + Tech Dedup
+    ├── level_normalizer.py  # normalize_level() — free-text job level → enum 6 mức, dùng bởi Silver
     └── logger.py            # Loguru setup
 
 services/crawler/

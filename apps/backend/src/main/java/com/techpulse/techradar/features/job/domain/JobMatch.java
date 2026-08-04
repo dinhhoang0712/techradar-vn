@@ -14,6 +14,7 @@ public record JobMatch(
         String salaryRaw,
         Double salaryMinVnd,
         Double salaryMaxVnd,
+        String level,
         String sourceUrl,
         LocalDate dueDate,
         List<String> matchedSkills,

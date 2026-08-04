@@ -62,10 +62,12 @@ class Neo4jGraphMergeAdapterTest {
 
     @Test
     void mergeTechnology_bothNodesExist_redirectsAllKnownTypesThenDeletes() {
-        stubExistenceCheck(1);
+        // Generic catch-all registered BEFORE stubExistenceCheck so its more specific
+        // "RETURN count(*)" stub is the most-recently-defined match and takes precedence
+        // (Mockito resolves overlapping stubs by registration order, not matcher specificity).
         Result genericResult = mock(Result.class);
         lenient().when(session.run(anyString(), any(Value.class))).thenReturn(genericResult);
-        when(session.run(contains("RETURN count(*)"), any(Value.class))).thenReturn(existsResult);
+        stubExistenceCheck(1);
 
         StepVerifier.create(adapter.mergeTechnology("Golang", "Go"))
                 .expectNext(true)
@@ -101,10 +103,12 @@ class Neo4jGraphMergeAdapterTest {
 
     @Test
     void mergeCompany_bothNodesExist_redirectsCompanyRelTypesWithoutRelatedTo() {
-        stubExistenceCheck(1);
+        // Generic catch-all registered BEFORE stubExistenceCheck so its more specific
+        // "RETURN count(*)" stub is the most-recently-defined match and takes precedence
+        // (Mockito resolves overlapping stubs by registration order, not matcher specificity).
         Result genericResult = mock(Result.class);
         lenient().when(session.run(anyString(), any(Value.class))).thenReturn(genericResult);
-        when(session.run(contains("RETURN count(*)"), any(Value.class))).thenReturn(existsResult);
+        stubExistenceCheck(1);
 
         StepVerifier.create(adapter.mergeCompany("dup-id", "canonical-id"))
                 .expectNext(true)

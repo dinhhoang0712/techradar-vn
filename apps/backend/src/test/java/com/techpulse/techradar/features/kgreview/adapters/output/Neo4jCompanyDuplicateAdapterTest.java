@@ -63,10 +63,14 @@ class Neo4jCompanyDuplicateAdapterTest {
 
     @Test
     void detect_legalEntityVariants_groupTogether() {
-        when(result.list()).thenReturn(List.of(
+        // Records must be fully built (each calls mock()/when() internally) BEFORE when(result.list())
+        // starts — nesting them inside .thenReturn(...)'s argument trips Mockito's "unfinished
+        // stubbing" detector, since the outer when() isn't closed yet while the inner ones run.
+        List<Record> records = List.of(
                 companyRecord("fpt-software", "FPT Software"),
                 companyRecord("fpt-corp", "Công Ty Cổ Phần Viễn Thông FPT Software")
-        ));
+        );
+        when(result.list()).thenReturn(records);
 
         List<CompanyDuplicateGroup> groups = detect();
 
@@ -77,10 +81,11 @@ class Neo4jCompanyDuplicateAdapterTest {
 
     @Test
     void detect_unrelatedCompaniesWithoutWordBoundaryMatch_notGrouped() {
-        when(result.list()).thenReturn(List.of(
+        List<Record> records = List.of(
                 companyRecord("vinsmart", "VinSmart"),
                 companyRecord("insmart", "Insmart")
-        ));
+        );
+        when(result.list()).thenReturn(records);
 
         List<CompanyDuplicateGroup> groups = detect();
 
@@ -95,10 +100,11 @@ class Neo4jCompanyDuplicateAdapterTest {
         // Two different physical Company nodes sharing the exact same name — an even more
         // obvious duplicate signal than a legal-entity variant, and one the Python version's
         // lexicographic name_a >= name_b skip would miss entirely (see class javadoc).
-        when(result.list()).thenReturn(List.of(
+        List<Record> records = List.of(
                 companyRecord("id-1", "Vietnam Solutions"),
                 companyRecord("id-2", "Vietnam Solutions")
-        ));
+        );
+        when(result.list()).thenReturn(records);
 
         List<CompanyDuplicateGroup> groups = detect();
 
@@ -117,10 +123,11 @@ class Neo4jCompanyDuplicateAdapterTest {
     void detect_shortCoreBelowMinLength_notGrouped() {
         // Boilerplate-only names strip down to an empty/very short core (< CORE_MIN_LEN) and
         // must be excluded even if their raw names happen to be identical after stripping.
-        when(result.list()).thenReturn(List.of(
+        List<Record> records = List.of(
                 companyRecord("c1", "Công Ty TNHH ABC"),
                 companyRecord("c2", "Công Ty Cổ Phần ABC")
-        ));
+        );
+        when(result.list()).thenReturn(records);
 
         // Core after stripping boilerplate is just "abc" (3 chars) — below CORE_MIN_LEN (6).
         assertThat(detect()).isEmpty();
@@ -128,13 +135,14 @@ class Neo4jCompanyDuplicateAdapterTest {
 
     @Test
     void detect_groupsSortedByDescendingSize() {
-        when(result.list()).thenReturn(List.of(
+        List<Record> records = List.of(
                 companyRecord("a1", "Alpha Solutions JSC"),
                 companyRecord("a2", "Công Ty Cổ Phần Alpha Solutions"),
                 companyRecord("a3", "Alpha Solutions Corp"),
                 companyRecord("b1", "Beta Technologies Ltd"),
                 companyRecord("b2", "Công Ty TNHH Beta Technologies")
-        ));
+        );
+        when(result.list()).thenReturn(records);
 
         List<CompanyDuplicateGroup> groups = detect();
 

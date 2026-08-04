@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -8,6 +9,18 @@ import pytest
 rag_core_path = str(Path(__file__).parent.parent)
 if rag_core_path not in sys.path:
     sys.path.insert(0, rag_core_path)
+
+# Phải set TRƯỚC khi bất kỳ test module nào được pytest collect (import) — test_routes.py làm
+# `from app.main import app` ở module level, việc này gọi get_settings() ngay lúc import, TRƯỚC
+# khi fixture autouse mock_env_vars bên dưới kịp chạy (fixture chỉ áp dụng lúc chạy test, không
+# áp dụng lúc collection). Thiếu bước set ở module-level này thì collection tự crash với
+# pydantic ValidationError (neo4j_uri/neo4j_password required, không có default).
+os.environ.setdefault("NEO4J_URI", "bolt://localhost:7687")
+os.environ.setdefault("NEO4J_USERNAME", "neo4j")
+os.environ.setdefault("NEO4J_PASSWORD", "password")
+os.environ.setdefault("GEMINI_API_KEY", "fake_key")
+os.environ.setdefault("POSTGRES_HOST", "localhost")
+os.environ.setdefault("POSTGRES_DB", "test_db")
 
 
 @pytest.fixture(autouse=True)

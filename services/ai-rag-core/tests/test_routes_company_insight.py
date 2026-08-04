@@ -18,11 +18,18 @@ from app.services import company_insight_service
 
 @pytest.fixture
 def client(monkeypatch):
+    fake_generate_calls = []
+
     async def fake_generate(messages):
-        fake_generate.last_messages = messages
+        # handle() calls generate() twice per request (summary, then highlights extracted from
+        # that summary) — record every call so tests can inspect the SUMMARY prompt specifically
+        # instead of whichever call happened to run last.
+        fake_generate_calls.append(messages)
         if "Trích" in messages[0]["content"]:
             return '["Đang tuyển mạnh backend", "Stack hiện đại"]'
         return "Acme đang mở rộng đội ngũ kỹ thuật với stack hiện đại."
+
+    fake_generate.calls = fake_generate_calls
 
     monkeypatch.setattr(company_insight_service, "generate", fake_generate)
 
@@ -62,7 +69,7 @@ def test_returns_summary_and_highlights_when_company_has_job_data(client, monkey
     assert "Acme" in body["summary"]
     assert body["highlights"] == ["Đang tuyển mạnh backend", "Stack hiện đại"]
 
-    user_prompt = fake.last_messages[1]["content"]
+    user_prompt = fake.calls[0][1]["content"]
     assert "Acme Corp" in user_prompt
     assert "Fintech" in user_prompt
     assert "Java, Spring" in user_prompt

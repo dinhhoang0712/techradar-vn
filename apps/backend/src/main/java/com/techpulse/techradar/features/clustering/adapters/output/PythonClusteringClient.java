@@ -6,8 +6,10 @@ import com.techpulse.techradar.shared.exception.ConflictException;
 import com.techpulse.techradar.shared.exception.ErrorCode;
 import com.techpulse.techradar.shared.exception.NotFoundException;
 import com.techpulse.techradar.shared.http.AbstractPythonServiceClient;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
@@ -37,6 +39,10 @@ public class PythonClusteringClient extends AbstractPythonServiceClient implemen
 
     private final WebClient.Builder webClientBuilder;
 
+    /** ml-clustering's own breaker — independent of the 4 ai-rag-core clients' breaker. */
+    @Qualifier("mlClusteringCircuitBreaker")
+    private final CircuitBreaker circuitBreaker;
+
     @Value("${app.python.clustering.base-url:http://localhost:8001}")
     private String clusteringBaseUrl;
 
@@ -61,7 +67,7 @@ public class PythonClusteringClient extends AbstractPythonServiceClient implemen
                 .uri(uri)
                 .retrieve()
                 .bodyToFlux(MAP_TYPE);
-        return mapFlux(request, true, Duration.ofMillis(timeout),
+        return mapFlux(request, circuitBreaker, true, Duration.ofMillis(timeout),
                 ex -> log.error("Failed to get clusters", ex), UNAVAILABLE);
     }
 
@@ -72,7 +78,7 @@ public class PythonClusteringClient extends AbstractPythonServiceClient implemen
                 .uri(clusteringBaseUrl + "/clusters/" + clusterId)
                 .retrieve()
                 .bodyToMono(MAP_TYPE);
-        return mapMono(request, true, Duration.ofMillis(timeout),
+        return mapMono(request, circuitBreaker, true, Duration.ofMillis(timeout),
                 ex -> log.error("Failed to get cluster {}", clusterId, ex), UNAVAILABLE);
     }
 
@@ -83,7 +89,7 @@ public class PythonClusteringClient extends AbstractPythonServiceClient implemen
                 .uri(clusteringBaseUrl + "/tech/{name}/cluster", techName)
                 .retrieve()
                 .bodyToMono(MAP_TYPE);
-        return mapMono(request, true, Duration.ofMillis(timeout),
+        return mapMono(request, circuitBreaker, true, Duration.ofMillis(timeout),
                 ex -> log.error("Failed to get cluster for technology {}", techName, ex), UNAVAILABLE);
     }
 
@@ -96,7 +102,7 @@ public class PythonClusteringClient extends AbstractPythonServiceClient implemen
                 .bodyValue(body)
                 .retrieve()
                 .bodyToMono(MAP_TYPE);
-        return mapMono(request, true, Duration.ofMillis(timeout),
+        return mapMono(request, circuitBreaker, true, Duration.ofMillis(timeout),
                 ex -> log.error("Failed to batch predict clusters", ex), UNAVAILABLE);
     }
 
@@ -107,7 +113,7 @@ public class PythonClusteringClient extends AbstractPythonServiceClient implemen
                 .uri(clusteringBaseUrl + "/pipeline/status")
                 .retrieve()
                 .bodyToMono(MAP_TYPE);
-        return mapMono(request, true, Duration.ofMillis(timeout),
+        return mapMono(request, circuitBreaker, true, Duration.ofMillis(timeout),
                 ex -> log.error("Failed to get pipeline status", ex), UNAVAILABLE);
     }
 
@@ -121,7 +127,7 @@ public class PythonClusteringClient extends AbstractPythonServiceClient implemen
                 .onStatus(status -> status.value() == 409, resp -> Mono.error(
                         new ConflictException(ErrorCode.PIPELINE_RUNNING, "Đang có một lượt huấn luyện lại đang chạy, vui lòng đợi")))
                 .bodyToMono(MAP_TYPE);
-        return mapMono(request, false, Duration.ofMillis(timeout),
+        return mapMono(request, circuitBreaker, false, Duration.ofMillis(timeout),
                 ex -> log.error("Failed to trigger pipeline retrain", ex), UNAVAILABLE);
     }
 
@@ -132,7 +138,7 @@ public class PythonClusteringClient extends AbstractPythonServiceClient implemen
                 .uri(clusteringBaseUrl + "/pipeline/runs")
                 .retrieve()
                 .bodyToFlux(MAP_TYPE);
-        return mapFlux(request, true, Duration.ofMillis(timeout),
+        return mapFlux(request, circuitBreaker, true, Duration.ofMillis(timeout),
                 ex -> log.error("Failed to get pipeline run history", ex), UNAVAILABLE);
     }
 
@@ -151,7 +157,7 @@ public class PythonClusteringClient extends AbstractPythonServiceClient implemen
                 .onStatus(status -> status.value() == 404, resp -> Mono.error(
                         new NotFoundException("Cluster " + clusterId + " không tồn tại")))
                 .bodyToMono(MAP_TYPE);
-        return mapMono(request, false, Duration.ofMillis(timeout),
+        return mapMono(request, circuitBreaker, false, Duration.ofMillis(timeout),
                 ex -> log.error("Failed to update cluster label {}", clusterId, ex), UNAVAILABLE);
     }
 }

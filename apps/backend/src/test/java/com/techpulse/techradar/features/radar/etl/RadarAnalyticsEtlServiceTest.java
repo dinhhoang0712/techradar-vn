@@ -2,7 +2,6 @@ package com.techpulse.techradar.features.radar.etl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.techpulse.techradar.features.kafka.KafkaTopicConstants;
-import com.techpulse.techradar.features.kafka.adapters.output.KafkaProducerService;
 import com.techpulse.techradar.features.notification.event.TrendAlertEvent;
 import com.techpulse.techradar.features.radar.domain.TechAnalyticsRow;
 import com.techpulse.techradar.features.radar.domain.TechCount;
@@ -11,6 +10,7 @@ import com.techpulse.techradar.features.radar.ports.RadarGraphReadPort;
 import com.techpulse.techradar.features.radar.ports.TechAnalyticsWritePort;
 import com.techpulse.techradar.features.system.application.CmsService;
 import com.techpulse.techradar.features.system.domain.CmsContent;
+import com.techpulse.techradar.shared.outbox.OutboxEventRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.data.redis.core.ReactiveValueOperations;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -36,7 +37,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -44,7 +44,9 @@ import static org.mockito.Mockito.when;
  * {@link RadarGraphReadPort} reads into {@link com.techpulse.techradar.features.radar.domain.TechAnalyticsTransformer}
  * and {@link TechAnalyticsWritePort} writes, so no Neo4j {@code Driver} or R2DBC
  * {@code DatabaseClient} mocking is needed here — the scoring math itself is covered separately by
- * {@code TechAnalyticsTransformerTest}.
+ * {@code TechAnalyticsTransformerTest}. {@link TransactionalOperator} is stubbed as a pass-through
+ * (real atomicity is exercised by {@code RadarOutboxIntegrationTest} against a real Postgres
+ * transaction) — these tests pin *what* gets wrapped in the transaction, not the rollback itself.
  */
 @ExtendWith(MockitoExtension.class)
 class RadarAnalyticsEtlServiceTest {
@@ -58,7 +60,10 @@ class RadarAnalyticsEtlServiceTest {
     private TechAnalyticsWritePort writePort;
 
     @Mock
-    private KafkaProducerService kafkaProducer;
+    private OutboxEventRepository outboxEventRepository;
+
+    @Mock
+    private TransactionalOperator transactionalOperator;
 
     @Mock
     private ReactiveStringRedisTemplate redisTemplate;
@@ -69,13 +74,19 @@ class RadarAnalyticsEtlServiceTest {
     private RadarAnalyticsEtlService service;
 
     @BeforeEach
+    @SuppressWarnings("unchecked")
     void setUp() {
-        service = new RadarAnalyticsEtlService(graphReadPort, writePort, kafkaProducer, redisTemplate, new ObjectMapper(), cmsService);
+        service = new RadarAnalyticsEtlService(
+                graphReadPort, writePort, outboxEventRepository, transactionalOperator, redisTemplate, new ObjectMapper(), cmsService);
         ReflectionTestUtils.setField(service, "trendThreshold", THRESHOLD);
+        // Pass-through transaction — and lenient, since the early-failure test below never reaches
+        // persistRowsAndQueueTrendAlerts (computeRows() throws first), so this stub goes unused there.
+        lenient().when(transactionalOperator.transactional(any(Mono.class))).thenAnswer(inv -> inv.getArgument(0));
         // Not every test's snapshot data produces a ranked current-month row (see
         // writeKeywordDigest_* tests below for the cases that do) — lenient so the other tests
         // don't fail Mockito's unnecessary-stubbing check when this is never invoked.
         lenient().when(cmsService.create(any(), any(), any(), any())).thenReturn(Mono.just(CmsContent.builder().build()));
+        lenient().when(outboxEventRepository.save(anyString(), any())).thenReturn(Mono.empty());
     }
 
     @Test
@@ -99,7 +110,7 @@ class RadarAnalyticsEtlServiceTest {
         assertThat(row.jobCount()).isEqualTo(2);
         assertThat(row.month()).isEqualTo(current.atDay(1));
 
-        verifyNoInteractions(kafkaProducer);
+        verify(outboxEventRepository, never()).save(any(), any());
     }
 
     @Test
@@ -127,11 +138,13 @@ class RadarAnalyticsEtlServiceTest {
         when(writePort.upsert(any())).thenReturn(Mono.just(1L));
 
         // Two rows: the historical previous-month row plus the current-month row created by
-        // folding the snapshot in.
+        // folding the snapshot in. The outbox insert happens INSIDE this same rebuild() Mono (see
+        // persistRowsAndQueueTrendAlerts), so it's already done by the time rebuild() completes —
+        // no async timeout needed, unlike the old fire-and-forget Kafka publish this replaced.
         StepVerifier.create(service.rebuild()).expectNext(2L).verifyComplete();
 
         ArgumentCaptor<TrendAlertEvent> captor = ArgumentCaptor.forClass(TrendAlertEvent.class);
-        verify(kafkaProducer, timeout(2000)).send(eq(KafkaTopicConstants.TREND_ALERTS), captor.capture());
+        verify(outboxEventRepository).save(eq(KafkaTopicConstants.TREND_ALERTS), captor.capture());
         TrendAlertEvent event = captor.getValue();
         assertThat(event.getTechnology()).isEqualTo("Java");
         assertThat(event.getJobCount()).isEqualTo(20);
@@ -151,7 +164,26 @@ class RadarAnalyticsEtlServiceTest {
 
         StepVerifier.create(service.rebuild()).expectNext(2L).verifyComplete();
 
-        verifyNoInteractions(kafkaProducer);
+        verify(outboxEventRepository, never()).save(any(), any());
+    }
+
+    @Test
+    void rebuild_propagatesFailure_whenOutboxInsertFails() {
+        // Proves persistRowsAndQueueTrendAlerts wraps BOTH the upsert and the outbox insert in the
+        // transactional operator: if queuing the alert fails, the whole rebuild() must fail too —
+        // in a real transaction (see RadarOutboxIntegrationTest) that means the tech_analytics
+        // upsert rolls back with it, so the two can never disagree about whether the alert happened.
+        YearMonth current = YearMonth.now();
+        YearMonth previous = current.minusMonths(1);
+        when(graphReadPort.findArticleMentionDates()).thenReturn(List.of());
+        when(graphReadPort.findJobPostingDates())
+                .thenReturn(List.of(new TechDateSample("Java", previous.atDay(10).toString())));
+        when(graphReadPort.findJobDemandSnapshot()).thenReturn(List.of(new TechCount("Java", 20)));
+        when(writePort.upsert(any())).thenReturn(Mono.just(1L));
+        when(outboxEventRepository.save(eq(KafkaTopicConstants.TREND_ALERTS), any()))
+                .thenReturn(Mono.error(new RuntimeException("db unreachable")));
+
+        StepVerifier.create(service.rebuild()).expectError(RuntimeException.class).verify();
     }
 
     @Test

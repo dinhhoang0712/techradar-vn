@@ -134,6 +134,19 @@ cms_content                                       -- (V3) AdminCMS content
                                                          MonthlyReportSchedulerService sinh; NULL cho
                                                          row crawler/keyword-digest (không có body riêng)
 
+outbox_event                                      -- (V36) transactional outbox — xem
+                                                      docs/adr/0005-transactional-outbox-trend-alerts.md
+  id           UUID PK
+  topic        VARCHAR(100) NOT NULL               -- vd. 'trend.alerts'
+  payload      TEXT NOT NULL                        -- JSON đã serialize (snake_case, cùng ObjectMapper
+                                                        dùng cho Kafka), publish verbatim, không serialize lại
+  status       VARCHAR(20) NOT NULL = 'PENDING'     -- CHECK IN ('PENDING','PUBLISHED','FAILED')
+  attempts     INT NOT NULL = 0
+  last_error   TEXT
+  created_at   TIMESTAMP NOT NULL = now()
+  published_at TIMESTAMP
+  INDEX idx_outbox_event_status_created(status, created_at)   -- relay poller: oldest-unpublished-first
+
 notification                                      -- (V6) in-app/email, ghi bởi backend
   id         UUID PK
   user_id    UUID NOT NULL -> users(id) ON DELETE CASCADE
@@ -386,12 +399,16 @@ V33 `llm_usage_log` (cost tracking mỗi lần gọi LLM qua `services/llm-gatew
 V34 nới `chk_activity_type` cho phép `'ai_request'` — trước đó `AiProxyRequestHandler.recordAiRequest()`
 insert bị constraint chặn âm thầm (best-effort `.onErrorResume()`), khiến tile admin live-metrics
 "Request AI hôm nay" luôn đọc ra 0 ·
-V35 `cms_content.body` (TEXT) — lưu nội dung report tháng do `MonthlyReportSchedulerService` sinh.
+V35 `cms_content.body` (TEXT) — lưu nội dung report tháng do `MonthlyReportSchedulerService` sinh ·
+V36 `outbox_event` — transactional outbox cho `trend.alerts` (xem
+[ADR-0005](../../../../../../docs/adr/0005-transactional-outbox-trend-alerts.md)); `RadarAnalyticsEtlService`
+ghi row PENDING trong CÙNG transaction với `tech_analytics` upsert, `OutboxRelayScheduler` publish
+qua Kafka và đánh dấu PUBLISHED/FAILED.
 Dev-only: V900 admin seed · V901 sample data (demo user, tech_analytics, cms) · V902-V905 (jobs/articles/activity_log/tech_analytics/users+cms mở rộng cho dev).
 
 Xem thêm [`docs/DATABASE.md`](../../../../../../docs/DATABASE.md) cho bức tranh toàn hệ CSDL
 (Postgres + Neo4j + Redis) và các quy ước cross-service; file này (`db/README.md`) vẫn là
-nguồn sự thật cho **DDL chi tiết** của Postgres (do Flyway quản lý, cập nhật đến V35).
+nguồn sự thật cho **DDL chi tiết** của Postgres (do Flyway quản lý, cập nhật đến V36).
 
 ## 4. Quy ước migration
 

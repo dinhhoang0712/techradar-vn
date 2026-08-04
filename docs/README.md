@@ -9,13 +9,16 @@
 ### Tổng quan
 
 - **[Architecture Overview](./ARCHITECTURE.md)** - Kiến trúc tổng thể của hệ thống, bao gồm các thành phần, luồng dữ liệu và thiết kế kỹ thuật.
+- **[Architecture Decision Records](./adr/)** - Các quyết định kiến trúc đã có hiệu lực trong code (vì sao, không phải cái gì) — đọc trước khi "sửa" một chỗ trông có vẻ không nhất quán.
 
 ### Hướng dẫn phát triển
 
 - **[Development Guide](./DEVELOPMENT_GUIDE.md)** - Hướng dẫn thiết lập môi trường, quy trình phát triển, coding standards và troubleshooting.
+- **[Contributing](../CONTRIBUTING.md)** - Quy trình PR, quy ước theo từng phần (backend/frontend/Python), danh sách docs cần đồng bộ khi đổi behavior.
 
 ### Backend
 
+- **[Backend README](../apps/backend/README.md)** - Chạy/test module backend, quy ước cần biết trước PR đầu tiên (envelope response, RBAC, transactional outbox).
 - **[Backend Guide](./BACKEND_GUIDE.md)** - Tài liệu chi tiết về Spring Boot backend, kiến trúc Hexagonal, database layer, security và testing.
 
 ### Database
@@ -206,14 +209,9 @@ VITE_API_BASE_URL=http://localhost:8080/api/v1
 
 ## 🤝 Contributing
 
-Để đóng góp vào tài liệu:
-
-1. Fork repository
-2. Tạo branch feature mới
-3. Thêm hoặc cập nhật tài liệu
-4. Submit Pull Request với mô tả rõ ràng
-
-Xem [Development Guide](./DEVELOPMENT_GUIDE.md) để biết thêm chi tiết về quy trình đóng góp.
+Xem [`CONTRIBUTING.md`](../CONTRIBUTING.md) ở repository root cho quy trình PR đầy đủ, quy ước
+theo từng phần (backend/frontend/Python), và danh sách tài liệu cần đồng bộ khi thay đổi hành vi
+runtime.
 
 ---
 

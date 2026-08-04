@@ -95,6 +95,10 @@ Tech Alias / Canonicalization (V21 — dùng CHUNG bởi apps/backend VÀ data-p
 
 Tech Category Classification (V29 — nội bộ data-platform, không chia sẻ với backend)
   dp_tech_category
+
+Transactional Outbox (V36 — mới; xem docs/adr/0005-transactional-outbox-trend-alerts.md)
+  outbox_event   -- trend.alerts ghi trong CÙNG transaction với tech_analytics upsert;
+                    OutboxRelayScheduler publish Kafka + đánh dấu PUBLISHED/FAILED
 ```
 
 Quan hệ chính: `users 1—1 user_profile`; `users 1—N chat_session 1—N chat_message`;
@@ -102,6 +106,124 @@ Quan hệ chính: `users 1—1 user_profile`; `users 1—N chat_session 1—N ch
 (không có bảng "friendship" riêng — follow là một chiều, có CHECK chặn tự follow); `users 1—1 conversation`
 với ràng buộc canonical `user_a_id < user_b_id` (tránh tạo 2 conversation cho cùng 1 cặp theo 2 thứ tự)
 `1—N direct_message`.
+
+### 3.1a ERD (logical — Postgres core domains)
+
+Sơ đồ dưới đây là ERD **logic** (rút gọn cột, chỉ giữ khoá + cột định danh nghiệp vụ) cho các
+domain lõi ở trên; DDL đầy đủ từng cột/index vẫn ở
+[`apps/backend/.../db/README.md`](../apps/backend/src/main/resources/db/README.md).
+
+```mermaid
+erDiagram
+    USERS ||--o| USER_PROFILE : "1-1"
+    USERS ||--o| USER_AVATAR : "1-1"
+    USERS ||--o{ PASSWORD_RESET : "1-N"
+    USERS }o--|| ROLES : "role → code"
+    ROLES ||--o{ ROLE_PERMISSIONS : "1-N"
+    PERMISSIONS ||--o{ ROLE_PERMISSIONS : "1-N"
+
+    USERS ||--o{ CHAT_SESSION : "1-N"
+    CHAT_SESSION ||--o{ CHAT_MESSAGE : "1-N (ai-rag-core ghi)"
+
+    USERS ||--o{ POST : "1-N"
+    POST ||--o{ POST_COMMENT : "1-N"
+    POST ||--o{ POST_LIKE : "1-N"
+    POST ||--o{ POST_IMAGE : "1-N"
+    USERS ||--o{ POST_COMMENT : "1-N"
+    USERS ||--o{ POST_LIKE : "1-N"
+    USERS ||--o{ FOLLOW : "follower_id"
+    USERS ||--o{ FOLLOW : "followee_id"
+
+    USERS ||--o{ CONTENT_REPORT : "reporter_id"
+    POST ||--o{ CONTENT_REPORT : "post_id (nullable)"
+    POST_COMMENT ||--o{ CONTENT_REPORT : "comment_id (nullable)"
+
+    USERS ||--o{ CONVERSATION : "user_a_id"
+    USERS ||--o{ CONVERSATION : "user_b_id"
+    CONVERSATION ||--o{ DIRECT_MESSAGE : "1-N"
+    DIRECT_MESSAGE ||--o{ MESSAGE_REACTION : "1-N"
+    USERS ||--o{ MESSAGE_REACTION : "1-N"
+
+    USERS ||--o{ NOTIFICATION : "1-N"
+    USERS ||--o{ AUDIT_LOG : "actor_id (no FK — outlives deleted user)"
+
+    USERS {
+        uuid id PK
+        string email
+        string role FK
+        string status
+        string security_stamp
+    }
+    USER_PROFILE {
+        uuid user_id PK_FK
+        string_array technologies
+        string_array target_skills
+        bool notify_inapp
+        bool notify_email
+    }
+    ROLES {
+        string code PK
+    }
+    PERMISSIONS {
+        string code PK
+    }
+    CHAT_SESSION {
+        uuid id PK
+        uuid user_id FK
+        string title
+    }
+    CHAT_MESSAGE {
+        uuid id PK
+        uuid session_id FK
+        string role
+    }
+    POST {
+        uuid id PK
+        uuid user_id FK
+        text content
+        timestamp deleted_at
+    }
+    FOLLOW {
+        uuid follower_id PK_FK
+        uuid followee_id PK_FK
+    }
+    CONVERSATION {
+        uuid id PK
+        uuid user_a_id FK
+        uuid user_b_id FK
+    }
+    DIRECT_MESSAGE {
+        uuid id PK
+        uuid conversation_id FK
+        uuid sender_id FK
+        bytea attachment_data
+    }
+    MESSAGE_REACTION {
+        uuid message_id PK_FK
+        uuid user_id PK_FK
+        string emoji
+    }
+    CONTENT_REPORT {
+        uuid id PK
+        uuid reporter_id FK
+        string status
+    }
+    NOTIFICATION {
+        uuid id PK
+        uuid user_id FK
+        string type
+        bool is_read
+    }
+    AUDIT_LOG {
+        uuid id PK
+        uuid actor_id
+        string action
+    }
+```
+
+`tech_analytics`, `activity_log`, `settings`, `cms_content`, `llm_usage_log`, và các bảng
+`dp_*` (sở hữu bởi `data-platform`) không có FK vào `users` — chúng là bảng thời gian/catalog
+độc lập, xem mô tả từng bảng ở §2 phía trên.
 
 ### 3.2 Bảng migration (Flyway ledger)
 
@@ -142,6 +264,7 @@ với ràng buộc canonical `user_a_id < user_b_id` (tránh tạo 2 conversatio
 | V33 | **LLM usage/billing**: bảng mới `llm_usage_log(id, service, provider, model, input_tokens, output_tokens, cost_usd, fallback_from, created_at)` — Flyway/backend chỉ tạo bảng, writer thật là `services/ai-rag-core` (xem §2) |
 | V34 | Bugfix: nới CHECK `chk_activity_type` để cho phép `activity_log.type = 'ai_request'` — thiếu giá trị này từ lúc AI-proxy consolidation khiến mọi insert của `AiProxyRequestHandler.recordAiRequest()` bị CHECK chặn và nuốt lỗi âm thầm (`.onErrorResume`), tile admin "Request AI hôm nay" luôn đọc 0 cho tới khi có V34 — xem gotcha ở §6 |
 | V35 | `cms_content.body TEXT` (nullable) — nội dung đầy đủ cho row do `MonthlyReportSchedulerService` (report tháng) và `RadarAnalyticsEtlService` (keyword digest) sinh; NULL với cms row khác |
+| V36 | **Transactional outbox**: bảng mới `outbox_event(id, topic, payload, status, attempts, last_error, created_at, published_at)` — `RadarAnalyticsEtlService` ghi row `PENDING` cho mỗi `trend.alerts` trong CÙNG transaction R2DBC với `tech_analytics` upsert (`TransactionalOperator`, xem [ADR-0002](./adr/0002-webflux-reactive-stack.md)); `OutboxRelayScheduler` (poll định kỳ) publish qua Kafka rồi đánh dấu `PUBLISHED`, hoặc `FAILED` + tăng `attempts` khi lỗi. Xem [ADR-0005](./adr/0005-transactional-outbox-trend-alerts.md) cho lý do và phạm vi (chỉ áp dụng cho luồng nguồn Postgres, không áp dụng cho `job.match.alerts`/`roadmap.alerts` vốn nguồn từ Neo4j). |
 | V900–V905 (dev only) | Seed: admin/demo user, sample data, jobs/articles, activity_log, tech_analytics mở rộng, thêm users + cms cho môi trường dev |
 
 DDL đầy đủ từng cột/index: [`apps/backend/.../db/README.md`](../apps/backend/src/main/resources/db/README.md) §3.

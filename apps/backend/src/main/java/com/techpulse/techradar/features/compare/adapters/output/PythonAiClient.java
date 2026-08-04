@@ -4,8 +4,10 @@ import com.techpulse.techradar.features.compare.domain.TechComparison;
 import com.techpulse.techradar.features.compare.ports.LlmSummaryPort;
 import com.techpulse.techradar.shared.client.PythonServiceWebClientFactory;
 import com.techpulse.techradar.shared.http.AbstractPythonServiceClient;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -25,6 +27,10 @@ import java.util.Map;
 public class PythonAiClient extends AbstractPythonServiceClient implements LlmSummaryPort {
 
     private final WebClient.Builder webClientBuilder;
+
+    /** Shared with every other ai-rag-core client — see Resilience4jConfig. */
+    @Qualifier("aiRagCoreCircuitBreaker")
+    private final CircuitBreaker circuitBreaker;
 
     @Value("${app.python.ai.base-url:http://localhost:8000}")
     private String pythonAiBaseUrl;
@@ -59,7 +65,7 @@ public class PythonAiClient extends AbstractPythonServiceClient implements LlmSu
                 .bodyToMono(Map.class)
                 .map(response -> (String) response.get("summary"));
 
-        return mapMono(request, true, Duration.ofMillis(timeout),
+        return mapMono(request, circuitBreaker, true, Duration.ofMillis(timeout),
                 ex -> log.error("Failed to generate LLM summary from Python AI service", ex),
                 ex -> "AI service unavailable: " + ex.getMessage());
     }

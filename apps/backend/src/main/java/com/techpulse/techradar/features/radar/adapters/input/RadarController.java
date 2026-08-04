@@ -39,7 +39,9 @@ public class RadarController {
     private final RadarExporter radarExporter;
     private final RadarBroadcaster radarBroadcaster;
 
-    @Operation(summary = "Get top 4 growing technologies")
+    @Operation(summary = "Get top 4 growing technologies",
+            description = "Ranked by month-over-month growth from the tech_analytics ETL; the " +
+                    "same rows that raise trend.alerts when momRate crosses the configured threshold.")
     @GetMapping("/top4")
     public Mono<ResponseEntity<ApiResponse<List<RadarDtos.Top4Item>>>> getTop4() {
         return getTopTechnologiesUseCase.execute(4)
@@ -68,7 +70,9 @@ public class RadarController {
         return Flux.merge(events, heartbeat);
     }
 
-    @Operation(summary = "Monthly trend for one or more technologies")
+    @Operation(summary = "Monthly trend for one or more technologies",
+            description = "One point per month with an activity count per requested keyword " +
+                    "(400 with ApiResponse.error if a keyword is unknown).")
     @GetMapping("/search")
     public Mono<ResponseEntity<ApiResponse<List<RadarDtos.TrendPoint>>>> search(
             @RequestParam List<String> keywords,

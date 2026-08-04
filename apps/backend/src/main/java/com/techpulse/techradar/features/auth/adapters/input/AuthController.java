@@ -46,8 +46,15 @@ public class AuthController {
     // NOTE: auth + /status responses are returned BARE (no ApiResponse envelope) because the
     // web/mobile clients read these fields at the top level (e.g. res.access_token, user.role).
     // Error bodies still use ApiResponse.error so the client can read errData.message.
+    private static final String BARE_RESPONSE_NOTE =
+            " Success body is returned BARE (top-level fields, e.g. `access_token`/`role` — " +
+            "NOT wrapped in the `ApiResponse` envelope used by every other endpoint). This is " +
+            "intentional, see docs/adr/0003-api-envelope-with-auth-exception.md. Error bodies " +
+            "still use the standard `ApiResponse.error` shape.";
 
-    @Operation(summary = "Login with email and password")
+    @Operation(summary = "Login with email and password",
+            description = "Returns access_token/refresh_token/user on success (429 after too many " +
+                    "failed attempts from the same IP)." + BARE_RESPONSE_NOTE)
     @PostMapping("/login")
     public Mono<ResponseEntity<Object>> login(
             @Valid @RequestBody LoginRequest request,
@@ -60,7 +67,9 @@ public class AuthController {
                         : Mono.error(new RateLimitExceededException("Too many login attempts. Please try again later.")));
     }
 
-    @Operation(summary = "Register new user")
+    @Operation(summary = "Register new user",
+            description = "Creates the account and returns access_token/refresh_token/user (201) " +
+                    "so the client can log in immediately without a separate /login call." + BARE_RESPONSE_NOTE)
     @PostMapping("/register")
     public Mono<ResponseEntity<Object>> register(
             @Valid @RequestBody RegisterRequest request,
@@ -74,7 +83,9 @@ public class AuthController {
                         : Mono.error(new RateLimitExceededException("Too many registration attempts. Please try again later.")));
     }
 
-    @Operation(summary = "Refresh access token using refresh token")
+    @Operation(summary = "Refresh access token using refresh token",
+            description = "Rotates the refresh token (the old one is blacklisted) and returns a " +
+                    "new access_token/refresh_token pair." + BARE_RESPONSE_NOTE)
     @PostMapping("/refresh")
     public Mono<ResponseEntity<Object>> refresh(
             @Valid @RequestBody RefreshRequest request
@@ -113,7 +124,9 @@ public class AuthController {
                 .thenReturn(ResponseEntity.ok(ApiResponse.<Void>success(null, "Password updated")));
     }
 
-    @Operation(summary = "Get current authenticated user info")
+    @Operation(summary = "Get current authenticated user info",
+            description = "Returns the caller's profile fields at the top level (401 with the " +
+                    "standard ApiResponse.error shape if unauthenticated)." + BARE_RESPONSE_NOTE)
     @GetMapping("/me")
     public Mono<ResponseEntity<Object>> getCurrentUser() {
         return SecurityUtils.currentUserId()

@@ -1187,13 +1187,28 @@ public class PythonClusteringClient implements ClusteringServicePort {
 
 ### 8.3 Resilience
 
-**Không có Resilience4j / circuit breaker nào trong codebase** (không có dependency trong
-`pom.xml`, không có class `CircuitBreaker`/`CircuitBreakerRegistry` ở đâu cả) — một tài liệu
-trước đây mô tả sai điều này. Cơ chế chịu lỗi thật, đơn giản hơn nhiều:
-- **Timeout cố định** trên mỗi `WebClient` call (`Duration.ofSeconds(60)`/`120)` tuỳ endpoint) —
-  không retry, không circuit-open state.
-- **`AiProxyRequestHandler`** (`features/aiproxy`) gộp MỌI lỗi từ `ai-rag-core` thành
-  `503 SERVICE_UNAVAILABLE` chung, không phân biệt loại lỗi upstream (xem §4.16).
+**Resilience4j circuit breaker** (`resilience4j-spring-boot3` + `resilience4j-reactor` trong
+`pom.xml`) bọc quanh mọi lệnh gọi tới `ai-rag-core`/`ml-clustering`, ở đúng 1 điểm chung:
+`AbstractPythonServiceClient.mapMono`/`mapFlux` (`shared/http/`) — 5 client con
+(`PythonChatClient`, `PythonAiClient`, `PythonAiProxyClient`, `PythonModerationClient`,
+`PythonClusteringClient`) không tự viết logic circuit breaker, chỉ inject đúng bean qua
+`@Qualifier`. Chi tiết + lý do thiết kế: xem
+[`docs/adr/0007-circuit-breaker-for-python-service-calls.md`](./adr/0007-circuit-breaker-for-python-service-calls.md).
+Tóm tắt:
+- **2 circuit breaker instance, theo SERVICE đích chứ không theo client class**:
+  `aiRagCoreCircuitBreaker` (dùng chung bởi cả 4 client gọi `ai-rag-core`) và
+  `mlClusteringCircuitBreaker` (`ml-clustering`) — bean định nghĩa ở `config/Resilience4jConfig.java`,
+  ngưỡng cấu hình ở `application.yml` (`resilience4j.circuitbreaker.instances.*`).
+- **Timeout + retry (cho lệnh gọi idempotent) vẫn giữ nguyên** như trước, circuit breaker bọc
+  NGOÀI cùng pipeline retry+timeout đã có — nên nó ghi nhận đúng 1 kết quả/lệnh gọi (không phải
+  1 kết quả/lần retry), và coi timeout cũng là 1 lỗi.
+- **`CallNotPermittedException`** (circuit đang mở) được map riêng thành
+  `DatabaseUnavailableException` với message chứa "circuit breaker open" — phân biệt được với lỗi
+  mạng/timeout thật khi đọc log.
+- Trạng thái circuit phơi ra qua `/actuator/health` (`management.health.circuitbreakers.enabled=true`).
+- **`AiProxyRequestHandler`** (`features/aiproxy`) vẫn gộp MỌI lỗi từ `ai-rag-core` (kể cả
+  `CallNotPermittedException` đã map) thành `503 SERVICE_UNAVAILABLE` chung phía client, không
+  phân biệt loại lỗi upstream ở tầng response (xem §4.16) — phân biệt chỉ có ở log/metrics.
 - **Rate limiting** (khác circuit breaker — chặn *trước* khi gọi, không phải phản ứng *sau* khi
   upstream lỗi) qua Redis INCR+EXPIRE: `AuthRateLimiterService`, `ChatRateLimiterService`,
   `AiProxyRateLimiterService` (`shared/redis/`).

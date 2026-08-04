@@ -178,6 +178,28 @@ app:
       enabled: ${ROADMAP_ALERT_ENABLED:false}
       cron: ${ROADMAP_ALERT_CRON:0 0 4 * * MON}
 
+# Circuit breakers around Python service calls (ai-rag-core / ml-clustering) — see
+# docs/adr/0007-circuit-breaker-for-python-service-calls.md. One instance per downstream service
+# (not per client class) so e.g. ai-rag-core being down trips the SAME breaker for every one of
+# its 4 clients (Chat/AiClient/AiProxyClient/ModerationClient), reflecting its real health.
+resilience4j:
+  circuitbreaker:
+    instances:
+      aiRagCore:
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 5
+        automatic-transition-from-open-to-half-open-enabled: true
+      mlClustering:
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 5
+        automatic-transition-from-open-to-half-open-enabled: true
+
 # Log appenders/patterns live in logback-spring.xml (console for dev, JSON+file for prod).
 # Only levels are configured here; LOG_DIR (file output dir) is read by logback-spring.xml.
 logging:
@@ -200,6 +222,9 @@ management:
   endpoint:
     health:
       show-details: always
+  health:
+    circuitbreakers:
+      enabled: true
   metrics:
     tags:
       application: tech-radar-api

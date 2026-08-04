@@ -2,6 +2,7 @@ package com.techpulse.techradar.features.aiproxy.adapters.output;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.techpulse.techradar.shared.exception.DatabaseUnavailableException;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,6 +28,7 @@ class PythonAiProxyClientTest {
 
     private WireMockServer wireMockServer;
     private PythonAiProxyClient client;
+    private CircuitBreaker circuitBreaker;
 
     @BeforeEach
     void setUp() {
@@ -34,7 +36,8 @@ class PythonAiProxyClientTest {
         wireMockServer.start();
         configureFor("localhost", wireMockServer.port());
 
-        client = new PythonAiProxyClient(WebClient.builder());
+        circuitBreaker = CircuitBreaker.ofDefaults("test-ai-rag-core");
+        client = new PythonAiProxyClient(WebClient.builder(), circuitBreaker);
         ReflectionTestUtils.setField(client, "aiBaseUrl", "http://localhost:" + wireMockServer.port());
         ReflectionTestUtils.setField(client, "internalToken", "test-token");
     }
@@ -79,5 +82,18 @@ class PythonAiProxyClientTest {
         StepVerifier.create(client.forward("/career", Map.of(), Duration.ofMillis(100)))
                 .expectErrorMatches(ex -> ex instanceof DatabaseUnavailableException)
                 .verify(Duration.ofSeconds(15));
+    }
+
+    @Test
+    void forward_failsFastWithoutCallingWireMock_whenCircuitBreakerIsOpen() {
+        circuitBreaker.transitionToOpenState();
+        stubFor(post(urlEqualTo("/career")).willReturn(aResponse().withStatus(200)));
+
+        StepVerifier.create(client.forward("/career", Map.of(), Duration.ofSeconds(5)))
+                .expectErrorMatches(ex -> ex instanceof DatabaseUnavailableException
+                        && ex.getMessage().contains("circuit breaker open"))
+                .verify(Duration.ofSeconds(5));
+
+        verify(0, postRequestedFor(urlEqualTo("/career")));
     }
 }

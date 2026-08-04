@@ -14,7 +14,7 @@
 
   **Technology Trend Analytics Platform powered by Knowledge Graph, Graph RAG and Machine Learning**
 
-  [Documentation](docs/README.md) • [API Docs](docs/API_DOCs_v1.md) • [Architecture](docs/ARCHITECTURE.md) • [Deployment](docs/DEPLOYMENT.md)
+  [Documentation](docs/README.md) • [API Docs](docs/API_DOCs_v1.md) • [Architecture](docs/ARCHITECTURE.md) • [ADRs](docs/adr/) • [Deployment](docs/DEPLOYMENT.md) • [Contributing](CONTRIBUTING.md)
 
 </div>
 
@@ -477,9 +477,10 @@ TECH-RADAR/
 │   │   │   │   │   └── shared/         # Shared infrastructure
 │   │   │   │   └── resources/
 │   │   │   │       ├── application.yml
-│   │   │   │       ├── db/migration/   # Flyway migrations (V1..V27)
+│   │   │   │       ├── db/migration/   # Flyway migrations (V1..V36)
 │   │   │   │       └── logback-spring.xml
 │   │   │   └── test/                   # Unit + integration tests (Testcontainers)
+│   │   ├── README.md                   # Backend-specific dev/test/convention guide
 │   │   └── pom.xml
 │   │
 │   ├── web/                  # React 19 + Vite + TypeScript (strict) SPA
@@ -539,12 +540,14 @@ TECH-RADAR/
 │   ├── DATA_PLATFORM.md      # Data platform documentation
 │   ├── DATABASE.md           # Database schema & ownership
 │   ├── API_DOCs_v1.md       # API documentation
-│   └── DEPLOYMENT.md         # Deployment guide
+│   ├── DEPLOYMENT.md         # Deployment guide
+│   └── adr/                  # Architecture Decision Records
 │
 ├── tests/                    # Cross-service tests
 │
 ├── docker-compose.yml        # Full stack orchestration
 ├── .env.docker.example       # Environment variables template
+├── CONTRIBUTING.md           # PR workflow, per-module conventions
 └── README.md
 ```
 

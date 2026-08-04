@@ -26,6 +26,7 @@
         <neo4j-driver.version>5.28.4</neo4j-driver.version>
         <jjwt.version>0.12.5</jjwt.version>
         <lombok.version>1.18.30</lombok.version>
+        <resilience4j.version>2.2.0</resilience4j.version>
         <!-- Override Spring Boot 3.4.0's managed 1.20.4: its bundled docker-java can't negotiate
              with newer Docker Engine API versions (this host runs Docker Engine 29.x / API 1.54,
              min supported 1.40) - the ping probe in UnixSocketClientProviderStrategy hardcodes an
@@ -179,6 +180,21 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
+        <!-- Resilience4j: circuit breaker around calls to ai-rag-core/ml-clustering — see
+             docs/adr/0007-circuit-breaker-for-python-service-calls.md. reactor module is required
+             separately from the spring-boot3 starter for CircuitBreakerOperator to decorate
+             Mono/Flux directly (this codebase's clients are reactive, not annotation-only). -->
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-spring-boot3</artifactId>
+            <version>${resilience4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-reactor</artifactId>
+            <version>${resilience4j.version}</version>
         </dependency>
 
         <!-- Test dependencies -->

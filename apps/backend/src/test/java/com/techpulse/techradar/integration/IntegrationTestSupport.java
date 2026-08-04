@@ -58,7 +58,11 @@ import static org.mockito.Mockito.when;
 @TestPropertySource(properties = {
         "app.redis.auth-rate-limit.login.max-requests=100000",
         "app.redis.auth-rate-limit.register.max-requests=100000",
-        "app.redis.auth-rate-limit.forgot-password.max-requests=100000"
+        "app.redis.auth-rate-limit.forgot-password.max-requests=100000",
+        // Off in tests so the poller doesn't attempt real Kafka sends (and its own log noise)
+        // against a broker most integration tests never start — the outbox write itself (the
+        // thing under test) still happens synchronously inside the ETL transaction regardless.
+        "app.outbox.relay.enabled=false"
 })
 abstract class IntegrationTestSupport {
 

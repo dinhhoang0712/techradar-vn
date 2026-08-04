@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
 
 /**
  * Producer service for sending JSON payloads to Kafka topics.
@@ -47,5 +48,16 @@ public class KafkaProducerService {
             LOGGER.error("Failed to serialize Kafka payload for topic {}", topic, e);
             throw new IllegalStateException("Unable to serialize Kafka payload", e);
         }
+    }
+
+    /**
+     * Sends an already-serialized JSON payload verbatim (no re-serialization) and completes only
+     * once the broker acknowledges the send — unlike {@link #send(String, Object)}, which is
+     * fire-and-forget and never observes a broker-side failure. Used by
+     * {@code shared.outbox.OutboxRelayScheduler} so a failed publish can be detected and retried
+     * instead of silently dropped.
+     */
+    public Mono<Void> sendRaw(String topic, String rawJsonPayload) {
+        return Mono.fromFuture(() -> kafkaTemplate.send(topic, rawJsonPayload)).then();
     }
 }

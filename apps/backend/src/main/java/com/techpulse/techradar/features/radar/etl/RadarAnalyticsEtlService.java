@@ -2,19 +2,20 @@ package com.techpulse.techradar.features.radar.etl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.techpulse.techradar.features.kafka.KafkaTopicConstants;
-import com.techpulse.techradar.features.kafka.adapters.output.KafkaProducerService;
 import com.techpulse.techradar.features.notification.event.TrendAlertEvent;
 import com.techpulse.techradar.features.radar.domain.TechAnalyticsRow;
 import com.techpulse.techradar.features.radar.domain.TechAnalyticsTransformer;
 import com.techpulse.techradar.features.radar.ports.RadarGraphReadPort;
 import com.techpulse.techradar.features.radar.ports.TechAnalyticsWritePort;
 import com.techpulse.techradar.features.system.application.CmsService;
+import com.techpulse.techradar.shared.outbox.OutboxEventRepository;
 import com.techpulse.techradar.shared.redis.RedisJsonStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -48,7 +49,8 @@ public class RadarAnalyticsEtlService {
 
     private final RadarGraphReadPort graphReadPort;
     private final TechAnalyticsWritePort writePort;
-    private final KafkaProducerService kafkaProducer;
+    private final OutboxEventRepository outboxEventRepository;
+    private final TransactionalOperator transactionalOperator;
     private final ReactiveStringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
     private final CmsService cmsService;
@@ -68,12 +70,9 @@ public class RadarAnalyticsEtlService {
         return writeStatus(RadarStatus.running(startedAt))
                 .then(Mono.fromCallable(this::computeRows)
                         .subscribeOn(Schedulers.boundedElastic())
-                        .flatMap(rows -> Flux.fromIterable(rows)
-                                .concatMap(writePort::upsert)
-                                .reduce(0L, Long::sum)
+                        .flatMap(rows -> persistRowsAndQueueTrendAlerts(rows)
                                 .doOnSuccess(n -> {
                                     log.info("tech_analytics ETL upserted {} rows", n);
-                                    emitTrendAlerts(rows);
                                     writeKeywordDigest(rows);
                                 })))
                 .doOnSuccess(count -> writeStatus(RadarStatus.idle(startedAt, Instant.now().toString(), count)).subscribe())
@@ -88,32 +87,37 @@ public class RadarAnalyticsEtlService {
     }
 
     /**
-     * Publish a {@code trend.alerts} event for each technology whose current-month demand grew at
-     * least {@link #trendThreshold}%. Producing is offloaded to a worker thread so an unreachable
-     * Kafka broker never stalls the ETL completion.
+     * Upserts every row and queues an {@code outbox_event} row per qualifying trend alert inside
+     * ONE R2DBC transaction — a crash or Kafka outage between "tech_analytics committed" and
+     * "alert actually published" can no longer silently drop the alert. The relay poller
+     * ({@code shared.outbox.OutboxRelayScheduler}) publishes queued rows to Kafka separately,
+     * outside this transaction. See {@code docs/adr/0005-transactional-outbox-trend-alerts.md}.
      */
-    private void emitTrendAlerts(List<TechAnalyticsRow> rows) {
+    private Mono<Long> persistRowsAndQueueTrendAlerts(List<TechAnalyticsRow> rows) {
+        List<TrendAlertEvent> alerts = trendAlerts(rows);
+        Mono<Long> upserts = Flux.fromIterable(rows).concatMap(writePort::upsert).reduce(0L, Long::sum);
+        Mono<Void> outboxInserts = Flux.fromIterable(alerts)
+                .concatMap(alert -> outboxEventRepository.save(KafkaTopicConstants.TREND_ALERTS, alert))
+                .then();
+        return upserts.flatMap(count -> outboxInserts.thenReturn(count))
+                .as(transactionalOperator::transactional)
+                .doOnSuccess(count -> {
+                    if (!alerts.isEmpty()) {
+                        log.info("Queued {} trend alert(s) to outbox (threshold {}% MoM)", alerts.size(), trendThreshold);
+                    }
+                });
+    }
+
+    /** Technologies whose current-month demand grew at least {@link #trendThreshold}%. Pure — no I/O. */
+    private List<TrendAlertEvent> trendAlerts(List<TechAnalyticsRow> rows) {
         LocalDate currentMonth = YearMonth.now().atDay(1);
         String monthLabel = YearMonth.now().toString();
-        List<TrendAlertEvent> alerts = rows.stream()
+        return rows.stream()
                 .filter(r -> currentMonth.equals(r.month()))
                 .filter(r -> r.jobCount() > 0)
                 .filter(r -> r.momGrowth() >= trendThreshold)
                 .map(r -> new TrendAlertEvent(r.tech(), r.momGrowth(), r.growthRate(), r.jobCount(), monthLabel))
                 .toList();
-        if (alerts.isEmpty()) {
-            return;
-        }
-        Schedulers.boundedElastic().schedule(() -> {
-            for (TrendAlertEvent alert : alerts) {
-                try {
-                    kafkaProducer.send(KafkaTopicConstants.TREND_ALERTS, alert);
-                } catch (Exception e) {
-                    log.warn("Could not publish trend alert for {} (Kafka unavailable?)", alert.getTechnology(), e);
-                }
-            }
-            log.info("Published {} trend alert(s) (threshold {}% MoM)", alerts.size(), trendThreshold);
-        });
     }
 
     /**

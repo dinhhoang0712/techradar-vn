@@ -78,7 +78,10 @@ public class ChatController {
                 .map(messages -> ResponseEntity.ok(ApiResponse.success(messages, "Message history retrieved")));
     }
 
-    @Operation(summary = "Send a chat message and receive a full non-stream response")
+    @Operation(summary = "Send a chat message and receive a full non-stream response",
+            description = "Forwards to ai-rag-core's Adaptive Hybrid Graph RAG pipeline (vector " +
+                    "search + optional graph traversal/expansion/SQL analytics, see ARCHITECTURE.md " +
+                    "§4.2) and persists both the user message and the answer to chat_message.")
     @PostMapping("/session/{sessionId}/messages")
     public Mono<ResponseEntity<ApiResponse<ChatResponse>>> postMessage(
             @PathVariable String sessionId,
@@ -89,7 +92,9 @@ public class ChatController {
                 .map(response -> ResponseEntity.ok(ApiResponse.success(response, "Chat response returned")));
     }
 
-    @Operation(summary = "Send a chat message and stream the RAG answer via SSE")
+    @Operation(summary = "Send a chat message and stream the RAG answer via SSE",
+            description = "Same pipeline as the non-stream endpoint, but tokens arrive incrementally " +
+                    "as they're generated instead of waiting for the full answer.")
     @PostMapping(value = "/session/{sessionId}/messages/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<String>> postMessageStream(
             @PathVariable String sessionId,

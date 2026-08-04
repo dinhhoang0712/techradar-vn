@@ -3,6 +3,7 @@ package com.techpulse.techradar.features.chat.adapters.output;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.techpulse.techradar.features.chat.domain.ChatRequest;
 import com.techpulse.techradar.shared.exception.DatabaseUnavailableException;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,6 +19,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
+import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -26,6 +28,7 @@ class PythonChatClientTest {
 
     private WireMockServer wireMockServer;
     private PythonChatClient client;
+    private CircuitBreaker circuitBreaker;
 
     @BeforeEach
     void setUp() {
@@ -33,7 +36,8 @@ class PythonChatClientTest {
         wireMockServer.start();
         configureFor("localhost", wireMockServer.port());
 
-        client = new PythonChatClient(WebClient.builder());
+        circuitBreaker = CircuitBreaker.ofDefaults("test-ai-rag-core");
+        client = new PythonChatClient(WebClient.builder(), circuitBreaker);
         ReflectionTestUtils.setField(client, "pythonRagBaseUrl", "http://localhost:" + wireMockServer.port());
         ReflectionTestUtils.setField(client, "timeout", 5000L);
         ReflectionTestUtils.setField(client, "internalToken", "test-token");
@@ -87,6 +91,21 @@ class PythonChatClientTest {
         StepVerifier.create(client.chat(new ChatRequest("hello", null, "user-1")))
                 .expectErrorMatches(ex -> ex instanceof DatabaseUnavailableException)
                 .verify(Duration.ofSeconds(15));
+    }
+
+    @Test
+    void chat_failsFastWithoutCallingWireMock_whenCircuitBreakerIsOpen() {
+        circuitBreaker.transitionToOpenState();
+        stubFor(post(urlEqualTo("/chat")).willReturn(aResponse().withStatus(200)
+                .withHeader("Content-Type", "application/json")
+                .withBody("{\"answer\":\"should never be reached\"}")));
+
+        StepVerifier.create(client.chat(new ChatRequest("hello", null, "user-1")))
+                .expectErrorMatches(ex -> ex instanceof DatabaseUnavailableException
+                        && ex.getMessage().contains("circuit breaker open"))
+                .verify(Duration.ofSeconds(5));
+
+        wireMockServer.verify(0, postRequestedFor(urlEqualTo("/chat")));
     }
 
     @Test

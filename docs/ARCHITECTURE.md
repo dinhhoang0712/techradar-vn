@@ -42,64 +42,66 @@ TechRadar VN là nền tảng phân tích xu hướng công nghệ và thị tr�
 
 ## 2. Kiến trúc High-level
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              CLIENT LAYER                                     │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │  React Web   │  │ Expo Mobile  │  │  Admin UI    │  │  Public API  │     │
-│  │  (Vite)      │  │  (React Nat) │  │  (React)     │  │  (Swagger)   │     │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘     │
-│         │                 │                 │                 │             │
-└─────────┼─────────────────┼─────────────────┼─────────────────┼─────────────┘
-          │                 │                 │                 │
-          └─────────────────┴─────────────────┴─────────────────┘
-                            │
-                    ┌───────▼────────┐
-                    │  Nginx Proxy  │
-                    │  (Reverse)    │
-                    └───────┬────────┘
-                            │
-          ┌─────────────────┼─────────────────┐
-          │                 │                 │
-┌─────────▼─────────┐ ┌────▼────┐ ┌────────▼────────┐
-│  Spring Boot API  │ │  Redis  │ │  MailHog (dev)  │
-│  Gateway          │ │ (Cache) │ │  (SMTP)         │
-│  (WebFlux)        │ └─────────┘ └─────────────────┘
-│  /api/v1/*        │
-└─────────┬─────────┘
-          │
-    ┌─────┼─────┬──────────────┬──────────────┐
-    │     │     │              │              │
-┌───▼───┐ │ ┌───▼────┐  ┌─────▼─────┐  ┌─────▼─────┐
-│PostgreSQL│ │ │ Neo4j  │  │ai-rag-core│  │ml-clustering│
-│(R2DBC)   │ │ │ (Graph)│  │(FastAPI)  │  │(FastAPI)   │
-│- users   │ │ │        │  │:8000      │  │:8001       │
-│- chat    │ │ │        │  │- RAG chat │  │- HDBSCAN   │
-│- analytics│ │ │        │  │- Recommend│  │- Cluster   │
-│- CMS     │ │ │        │  │- Forecast │  │  serving   │
-└─────────┘ │ └────────┘  └─────┬─────┘  └─────┬─────┘
-            │                   │               │
-            └───────────────────┴───────────────┘
-                            │
-                    ┌───────▼────────┐
-                    │     Kafka      │
-                    │  (Event Bus)   │
-                    └───────┬────────┘
-                            │
-          ┌─────────────────┼─────────────────┐
-          │                 │                 │
-┌─────────▼─────────┐ ┌───▼────┐ ┌────────▼────────┐
-│  Data Platform     │ │Crawlers│ │  Qdrant (opt)   │
-│  - Bronze Writer   │ │(8 sources)│  (Vector Store) │
-│  - Silver Processor│ │        │ └─────────────────┘
-│  - Gold ETL        │ │        │
-│  - Scheduler       │ │        │
-└─────────┬─────────┘ └────────┘
-          │
-    ┌─────▼─────┐
-    │  MinIO    │
-    │ (S3-like) │
-    └───────────┘
+```mermaid
+flowchart TB
+    subgraph CLIENT["🖥️ CLIENT LAYER"]
+        WEB["React Web<br/>(Vite)"]
+        MOBILE["Expo Mobile<br/>(React Native)"]
+        ADMIN["Admin UI<br/>(React)"]
+        PUBLIC["Public API<br/>(Swagger)"]
+    end
+
+    NGINX["Nginx Proxy<br/>(Reverse)"]
+
+    subgraph GATEWAY["API Gateway Layer"]
+        API["Spring Boot API Gateway<br/>(WebFlux) — /api/v1/*"]
+        REDIS[("Redis<br/>(Cache)")]
+        MAILHOG["MailHog (dev)<br/>(SMTP)"]
+    end
+
+    subgraph DATA["Data Layer"]
+        PG[("PostgreSQL<br/>(R2DBC)<br/>users · chat · analytics · CMS")]
+        NEO4J[("Neo4j<br/>(Graph)")]
+    end
+
+    subgraph AI["AI Services Layer"]
+        RAG["ai-rag-core<br/>(FastAPI :8000)<br/>RAG chat · Recommend · Forecast"]
+        ML["ml-clustering<br/>(FastAPI :8001)<br/>HDBSCAN · Cluster serving"]
+    end
+
+    KAFKA["Kafka<br/>(Event Bus)"]
+
+    subgraph PLATFORM["Data Platform"]
+        DP["Data Platform<br/>Bronze Writer · Silver Processor<br/>Gold ETL · Scheduler"]
+        CRAWL["Crawlers<br/>(8 sources)"]
+        QDRANT[("Qdrant (opt)<br/>Vector Store")]
+    end
+
+    MINIO[("MinIO<br/>(S3-like)")]
+
+    WEB --> NGINX
+    MOBILE --> NGINX
+    ADMIN --> NGINX
+    PUBLIC --> NGINX
+    NGINX --> API
+
+    API --> PG
+    API --> NEO4J
+    API --> REDIS
+    API --> MAILHOG
+    API --> RAG
+    API --> ML
+
+    PG --> KAFKA
+    NEO4J --> KAFKA
+    RAG --> KAFKA
+    ML --> KAFKA
+
+    KAFKA --> DP
+    KAFKA --> CRAWL
+    KAFKA --> QDRANT
+
+    DP --> MINIO
 ```
 
 ---
@@ -161,59 +163,39 @@ TechRadar VN là nền tảng phân tích xu hướng công nghệ và thị tr�
 
 ### 4.1 Data Ingestion Pipeline
 
-```
-Crawlers (8 sources)
-    │
-    ▼  Kafka: raw_articles, raw_jobs
-Kafka Broker
-    │
-    ├───────────────────┬──────────────────────────┐
-    │                   │                          │
-    ▼                   ▼                          ▼
-Bronze Writer      Silver Processor        KafkaExtractorService
-(Kafka consumer)   (Kafka consumer)*       (Spring Boot, LLM NER)
-    │                   │                          │
-    ▼                   ▼                          ▼  Kafka: extracted_articles, extracted_jobs
-MinIO (immutable)  PostgreSQL                  Kafka Broker
-s3://techradar-    (dp_processed_articles,          │
-bronze/             dp_processed_jobs)              │
-                        ▲                            │
-                        └──────────────*─────────────┤
-                                                      │
-                    ┌─────────────────────┬───────────┴──────────┐
-                    │                     │                      │
-                    ▼                     ▼                      ▼
-          KafkaNeo4jWriterService   embedding-service      (Silver Processor
-          (Spring Boot)             (Kafka consumer)        also consumes
-                    │                     │                  extracted_*, see *)
-                    ▼                     ▼  Kafka: article_vectors, job_vectors
-          Neo4j Knowledge Graph     Kafka Broker
-            │             │              │
-            │             ▼              ▼
-            │   (job MERGE'd — is it   qdrant-writer (Kafka consumer)
-            │    brand new? if yes:)        │
-            │             ▼                 ▼
-            │   Kafka: job.match.alerts   Qdrant Vector DB
-            │             │              (optional, --profile vector)
-            │             ▼
-            │   JobMatchDispatcher (feature notification, NEW)
-            │             │
-            ▼             ▼
-    Gold ETL (3:00 AM daily)   Fan-out: in-app + email
-            │                 (theo user_profile.technologies /
-            ▼                  notify_inapp / notify_email)
-    PostgreSQL tech_analytics
-            │
-            ▼  MoM growth ≥ 20% threshold
-    Kafka: trend.alerts
-            │
-            ▼
-    TrendAlertDispatcher (feature notification)
-            │
-            ▼
-    Fan-out: in-app + email
-    (theo user_profile.technologies /
-     notify_inapp / notify_email)
+```mermaid
+flowchart TB
+    CRAWL["Crawlers (8 nguồn)"]
+    KAFKA1["Kafka: raw_articles, raw_jobs"]
+
+    CRAWL --> KAFKA1
+
+    KAFKA1 --> BRONZE["Bronze Writer<br/>(Kafka consumer)"]
+    KAFKA1 --> SILVER["Silver Processor<br/>(Kafka consumer)*"]
+    KAFKA1 --> EXTRACT["KafkaExtractorService<br/>(Spring Boot, LLM NER)"]
+
+    BRONZE --> MINIO[("MinIO (immutable)<br/>s3://techradar-bronze/")]
+    SILVER --> SILVERPG[("PostgreSQL<br/>dp_processed_articles/jobs")]
+    EXTRACT --> KAFKA2["Kafka: extracted_articles, extracted_jobs"]
+    KAFKA2 -. "*dual-topic read" .-> SILVER
+
+    KAFKA2 --> NEO4JWRITER["KafkaNeo4jWriterService<br/>(Spring Boot)"]
+    KAFKA2 --> EMBED["embedding-service<br/>(Kafka consumer)"]
+
+    NEO4JWRITER --> NEO4J[("Neo4j Knowledge Graph")]
+    EMBED --> KAFKA3["Kafka: article_vectors, job_vectors"]
+    KAFKA3 --> QDRANTWRITER["qdrant-writer<br/>(Kafka consumer)"]
+    QDRANTWRITER --> QDRANT[("Qdrant Vector DB<br/>(optional, --profile vector)")]
+
+    NEO4J -->|"job MERGE'd — brand new?"| JOBALERT["Kafka: job.match.alerts"]
+    JOBALERT --> JOBDISPATCH["JobMatchDispatcher<br/>(feature notification)"]
+    JOBDISPATCH --> FANOUT1["Fan-out: in-app + email<br/>(theo user_profile.technologies /<br/>notify_inapp / notify_email)"]
+
+    NEO4J --> GOLD["Gold ETL (3:00 AM daily)"]
+    GOLD --> TECHPG[("PostgreSQL tech_analytics")]
+    TECHPG -->|"MoM growth ≥ 20% threshold"| TRENDALERT["Kafka: trend.alerts"]
+    TRENDALERT --> TRENDDISPATCH["TrendAlertDispatcher<br/>(feature notification)"]
+    TRENDDISPATCH --> FANOUT2["Fan-out: in-app + email<br/>(theo user_profile.technologies /<br/>notify_inapp / notify_email)"]
 ```
 
 \* **Silver Processor đọc dual-topic**: cả `raw_*` (từ crawler, khi Spring Boot tắt) lẫn `extracted_*`
@@ -231,37 +213,33 @@ cơ chế này, hoặc case LLM mới phát hiện) được dọn định kỳ 
 
 ### 4.2 RAG Query Pipeline (Adaptive Hybrid Graph RAG)
 
+```mermaid
+sequenceDiagram
+    participant U as User (React)
+    participant GW as Spring Boot API Gateway
+    participant RAG as ai-rag-core (/chat)
+    participant N4J as Neo4j
+    participant PG as PostgreSQL (tech_analytics)
+    participant LLM as llm-gateway (OpenAI/Gemini/Groq/Claude)
+
+    U->>GW: Query (JWT auth)
+    GW->>RAG: Forward (X-Internal-Auth header)
+    RAG->>RAG: [0] Extract entities (NER, 1 lần) +<br/>Strategy Selector (rule-based)<br/>quyết định use_graph? expansion_depth? use_sql_analytics?
+    RAG->>N4J: [1] Vector Search — luôn chạy
+    RAG->>N4J: [2] Graph Traversal (Cypher, 1-hop) — nếu use_graph
+    RAG->>N4J: [3] Graph Expansion (1-2 hop, PageRank) — nếu expansion_depth > 0
+    RAG->>PG: [4] SQL Analytics — nếu use_sql_analytics
+    RAG->>PG: [5] User Context (user_profile) — nếu có user_id
+    RAG->>RAG: Unified Rerank (BGE, riêng từng loại nguồn:<br/>article/job/company/analytics)
+    RAG->>RAG: Build Prompt (article + job/company +<br/>analytics + subgraph theo hop + history)
+    RAG->>LLM: Generate (fallback chain theo provider)
+    LLM-->>RAG: Response text
+    RAG-->>GW: Response + Sources + subgraph (JSON-LD) + strategy
+    GW-->>U: Response (explainability: strategy đã dùng)
 ```
-User Query (React)
-    │
-    ▼  JWT auth
-Spring Boot API Gateway
-    │
-    ▼  X-Internal-Auth header
-ai-rag-core (/chat)
-    │
-    ├─[0] Extract entities (NER, 1 lần) + Strategy Selector (rule-based)
-    │       quyết định ĐỘC LẬP: use_graph? graph_expansion_depth (0/1/2)? use_sql_analytics?
-    │       — một câu hỏi có thể bật nhiều nhánh cùng lúc, không phân loại theo 1 type cố định
-    │
-    ├─[1] Vector Search (Neo4j)                — luôn chạy
-    ├─[2] Graph Traversal (Cypher, 1-hop)       — nếu use_graph
-    ├─[3] Graph Expansion (1-2 hop, PageRank)   — nếu graph_expansion_depth > 0
-    ├─[4] SQL Analytics (tech_analytics)        — nếu use_sql_analytics
-    ├─[5] User Context (user_profile)           — nếu có user_id
-    │
-    ▼
-Unified Rerank (BGE reranker, riêng từng loại nguồn: article/job/company/analytics)
-    │
-    ▼
-Build Prompt (article + job/company + analytics + subgraph theo hop + history)
-    │
-    ▼
-LLM Generate (OpenAI/Gemini/Groq/Claude qua llm-gateway fallback chain)
-    │
-    ▼
-Response + Sources + subgraph (JSON-LD) + strategy (explainability)
-```
+
+Một câu hỏi có thể bật nhiều nhánh cùng lúc (không phân loại theo 1 type cố định) — Strategy
+Selector quyết định độc lập từng nhánh dựa trên capability của câu hỏi, không theo intent duy nhất.
 
 Chi tiết đầy đủ (bug fix nền tảng, thiết kế Strategy Selector, ablation evaluation) xem
 [`AI_PLATFORM.md` §2.3](./AI_PLATFORM.md#23-rag-pipeline-adaptive-hybrid-graph-rag) và
@@ -269,26 +247,13 @@ Chi tiết đầy đủ (bug fix nền tảng, thiết kế Strategy Selector, a
 
 ### 4.3 Clustering Pipeline
 
-```
-Neo4j Knowledge Graph
-    │
-    ▼  Snapshot (Stage 1)
-Parquet files
-    │
-    ▼  Feature Engineering (Stage 2)
-- Alias normalization
-- Name embedding (E5 → PCA)
-- Graph features
-- Job TF-IDF
-    │
-    ▼  HDBSCAN Clustering (Stage 3)
-Grid search hyperparameters
-    │
-    ▼  Evaluation (Stage 4)
-Silhouette score, DBI
-    │
-    ▼  Promote (Stage 5)
-Cluster labels → serving
+```mermaid
+flowchart TB
+    N4J[("Neo4j Knowledge Graph")] -->|"Snapshot (Stage 1)"| PARQUET["Parquet files"]
+    PARQUET -->|"Feature Engineering (Stage 2)"| FEAT["Alias normalization<br/>Name embedding (E5 → PCA)<br/>Graph features<br/>Job TF-IDF"]
+    FEAT -->|"HDBSCAN Clustering (Stage 3)"| TRAIN["Grid search hyperparameters"]
+    TRAIN -->|"Evaluation (Stage 4)"| EVAL["DBCV score"]
+    EVAL -->|"Promote (Stage 5)"| SERVE["Cluster labels → serving"]
 ```
 
 ---

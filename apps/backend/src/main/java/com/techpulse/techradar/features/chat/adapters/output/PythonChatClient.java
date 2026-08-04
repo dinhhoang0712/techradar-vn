@@ -7,7 +7,9 @@ import com.techpulse.techradar.features.chat.domain.ChatResponse;
 import com.techpulse.techradar.features.chat.ports.ChatPort;
 import com.techpulse.techradar.shared.client.PythonServiceWebClientFactory;
 import com.techpulse.techradar.shared.http.AbstractPythonServiceClient;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
@@ -27,6 +29,10 @@ import java.time.Duration;
 public class PythonChatClient extends AbstractPythonServiceClient implements ChatPort {
 
     private final WebClient.Builder webClientBuilder;
+
+    /** Shared with every other ai-rag-core client — see Resilience4jConfig. */
+    @Qualifier("aiRagCoreCircuitBreaker")
+    private final CircuitBreaker circuitBreaker;
 
     @Value("${app.python.rag.base-url:http://localhost:8000}")
     private String pythonRagBaseUrl;
@@ -49,7 +55,7 @@ public class PythonChatClient extends AbstractPythonServiceClient implements Cha
                 .accept(MediaType.APPLICATION_JSON)
                 .retrieve()
                 .bodyToMono(ChatHealthResponse.class);
-        return mapMono(request, false, Duration.ofMillis(timeout), "RAG service unavailable");
+        return mapMono(request, circuitBreaker, false, Duration.ofMillis(timeout), "RAG service unavailable");
     }
 
     @Override
@@ -61,7 +67,7 @@ public class PythonChatClient extends AbstractPythonServiceClient implements Cha
                 .bodyValue(chatRequest)
                 .retrieve()
                 .bodyToMono(ChatResponse.class);
-        return mapMono(response, false, Duration.ofMillis(timeout), "RAG service unavailable");
+        return mapMono(response, circuitBreaker, false, Duration.ofMillis(timeout), "RAG service unavailable");
     }
 
     @Override
@@ -72,7 +78,7 @@ public class PythonChatClient extends AbstractPythonServiceClient implements Cha
                 .accept(MediaType.APPLICATION_JSON)
                 .retrieve()
                 .bodyToFlux(ChatMessageItem.class);
-        return mapFlux(request, false, Duration.ofMillis(timeout), "RAG service unavailable");
+        return mapFlux(request, circuitBreaker, false, Duration.ofMillis(timeout), "RAG service unavailable");
     }
 
     @Override
@@ -85,6 +91,6 @@ public class PythonChatClient extends AbstractPythonServiceClient implements Cha
                 .bodyValue(chatRequest)
                 .retrieve()
                 .bodyToFlux(new ParameterizedTypeReference<ServerSentEvent<String>>() {});
-        return mapFlux(stream, false, Duration.ofMillis(timeout), "RAG stream unavailable");
+        return mapFlux(stream, circuitBreaker, false, Duration.ofMillis(timeout), "RAG stream unavailable");
     }
 }

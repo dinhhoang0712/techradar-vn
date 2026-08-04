@@ -1,5 +1,8 @@
 package com.techpulse.techradar.features.user.adapters.input;
 
+import com.techpulse.techradar.features.auth.domain.SubscriptionTier;
+import com.techpulse.techradar.features.auth.domain.UserStatus;
+import com.techpulse.techradar.shared.validation.OneOf;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -24,6 +27,10 @@ public class UpdateUserRequest {
 
     private String fullName;
     private String role;
+
+    @OneOf(UserStatus.class)
     private String status;
+
+    @OneOf(SubscriptionTier.class)
     private String subscriptionTier;
 }

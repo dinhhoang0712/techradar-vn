@@ -2,6 +2,7 @@ package com.techpulse.techradar.features.radar.adapters.output;
 
 import com.techpulse.techradar.features.radar.domain.TechAnalyticsRow;
 import com.techpulse.techradar.features.radar.ports.TechAnalyticsWritePort;
+import com.techpulse.techradar.shared.db.R2dbcBinders;
 import lombok.RequiredArgsConstructor;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
@@ -35,7 +36,7 @@ public class PostgresTechAnalyticsWriteAdapter implements TechAnalyticsWritePort
                 .bind("growth", row.growthRate())
                 .bind("yoy", row.yoyGrowth())
                 .bind("mom", row.momGrowth());
-        spec = row.ranking() != null ? spec.bind("ranking", row.ranking()) : spec.bindNull("ranking", Integer.class);
+        spec = R2dbcBinders.bindNullable(spec, "ranking", row.ranking(), Integer.class);
 
         return spec.fetch().rowsUpdated();
     }

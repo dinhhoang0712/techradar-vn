@@ -4,6 +4,7 @@ import com.techpulse.techradar.features.user.domain.JobMatchSubscriber;
 import com.techpulse.techradar.features.user.domain.NotificationRecipient;
 import com.techpulse.techradar.features.user.domain.UserProfile;
 import com.techpulse.techradar.features.user.ports.UserProfileRepository;
+import com.techpulse.techradar.shared.db.R2dbcBinders;
 import com.techpulse.techradar.shared.util.UuidUtils;
 import io.r2dbc.spi.Row;
 import lombok.RequiredArgsConstructor;
@@ -62,10 +63,10 @@ public class PostgresUserProfileRepository implements UserProfileRepository {
                 .bind("notify_inapp", profile.getNotifyInapp() != null ? profile.getNotifyInapp() : Boolean.TRUE)
                 .bind("notify_email", profile.getNotifyEmail() != null ? profile.getNotifyEmail() : Boolean.TRUE)
                 .bind("updated_at", LocalDateTime.now());
-        spec = bindNullable(spec, "job_role", profile.getJobRole());
-        spec = bindNullable(spec, "location", profile.getLocation());
-        spec = bindNullable(spec, "bio", profile.getBio());
-        spec = bindNullable(spec, "avatar_url", profile.getAvatarUrl());
+        spec = R2dbcBinders.bindNullable(spec, "job_role", profile.getJobRole());
+        spec = R2dbcBinders.bindNullable(spec, "location", profile.getLocation());
+        spec = R2dbcBinders.bindNullable(spec, "bio", profile.getBio());
+        spec = R2dbcBinders.bindNullable(spec, "avatar_url", profile.getAvatarUrl());
 
         return spec.fetch().rowsUpdated().thenReturn(profile);
     }
@@ -156,10 +157,5 @@ public class PostgresUserProfileRepository implements UserProfileRepository {
                 .notifyInapp(row.get("notify_inapp", Boolean.class))
                 .notifyEmail(row.get("notify_email", Boolean.class))
                 .build();
-    }
-
-    private static DatabaseClient.GenericExecuteSpec bindNullable(
-            DatabaseClient.GenericExecuteSpec spec, String name, String value) {
-        return value != null ? spec.bind(name, value) : spec.bindNull(name, String.class);
     }
 }

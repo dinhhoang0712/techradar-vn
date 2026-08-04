@@ -1,6 +1,7 @@
 package com.techpulse.techradar.features.system.adapters.output;
 
 import com.techpulse.techradar.features.system.ports.ActivityLogRepository;
+import com.techpulse.techradar.shared.db.R2dbcBinders;
 import com.techpulse.techradar.shared.util.UuidUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.r2dbc.core.DatabaseClient;
@@ -28,7 +29,7 @@ public class PostgresActivityLogRepository implements ActivityLogRepository {
         spec = userId != null && UuidUtils.isValid(userId)
                 ? spec.bind("user_id", UUID.fromString(userId))
                 : spec.bindNull("user_id", UUID.class);
-        spec = path != null ? spec.bind("path", path) : spec.bindNull("path", String.class);
+        spec = R2dbcBinders.bindNullable(spec, "path", path);
         return spec.fetch().rowsUpdated().then();
     }
 

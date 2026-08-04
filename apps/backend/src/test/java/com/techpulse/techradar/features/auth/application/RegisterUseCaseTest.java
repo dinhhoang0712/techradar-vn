@@ -70,9 +70,9 @@ class RegisterUseCaseTest {
 
         ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(captor.capture());
-        assertThat(captor.getValue().getSubscriptionTier()).isEqualTo("free");
+        assertThat(captor.getValue().getSubscriptionTier()).isEqualTo("FREE");
         assertThat(captor.getValue().getRole()).isEqualTo("user");
-        assertThat(captor.getValue().getStatus()).isEqualTo("active");
+        assertThat(captor.getValue().getStatus()).isEqualTo("ACTIVE");
         assertThat(captor.getValue().getPasswordHash()).isEqualTo("hashed");
     }
 
@@ -85,12 +85,12 @@ class RegisterUseCaseTest {
 
         RegisterRequest request = RegisterRequest.builder()
                 .email("paid@example.com").password("password123").fullName("Paid Dev")
-                .subscriptionTier("pro").build();
+                .subscriptionTier("PRO").build();
 
         StepVerifier.create(useCase.execute(request)).expectNextCount(1).verifyComplete();
 
         ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(captor.capture());
-        assertThat(captor.getValue().getSubscriptionTier()).isEqualTo("pro");
+        assertThat(captor.getValue().getSubscriptionTier()).isEqualTo("PRO");
     }
 }

@@ -5,6 +5,7 @@ import com.techpulse.techradar.shared.dto.ApiResponse.FieldErrorDetail;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.buffer.DataBufferLimitException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
@@ -55,6 +56,18 @@ public class GlobalExceptionHandler {
                 .toList();
         return ResponseEntity.status(ErrorCode.VALIDATION_ERROR.getStatus())
                 .body(ApiResponse.error(firstMessageOrDefault(errors), ErrorCode.VALIDATION_ERROR.name(), errors));
+    }
+
+    // Spring translates the R2DBC driver's CHECK/UNIQUE/FK violation into this generic DAO
+    // exception (auto-registered exception translation on DatabaseClient) - without this handler
+    // it falls through to the 500 catch-all below, hiding e.g. a CHECK constraint rejection (bad
+    // status/role value that slipped past Bean Validation) behind an opaque "Internal server error".
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
+        log.warn("Data integrity violation", ex);
+        return ResponseEntity.status(ErrorCode.DATA_INTEGRITY_VIOLATION.getStatus())
+                .body(ApiResponse.error("The request conflicts with a data constraint",
+                        ErrorCode.DATA_INTEGRITY_VIOLATION.name()));
     }
 
     @ExceptionHandler(ServerWebInputException.class)

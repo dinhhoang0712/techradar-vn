@@ -1,5 +1,7 @@
 package com.techpulse.techradar.features.auth.application;
 
+import com.techpulse.techradar.features.auth.domain.SubscriptionTier;
+import com.techpulse.techradar.shared.validation.OneOf;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -30,6 +32,7 @@ public class RegisterRequest {
     @Schema(example = "Passw0rd!", minLength = 8)
     private String password;
 
-    @Schema(description = "Optional; defaults to the free tier if omitted.", example = "free")
+    @OneOf(SubscriptionTier.class)
+    @Schema(description = "Optional; defaults to the FREE tier if omitted.", example = "FREE")
     private String subscriptionTier;
 }

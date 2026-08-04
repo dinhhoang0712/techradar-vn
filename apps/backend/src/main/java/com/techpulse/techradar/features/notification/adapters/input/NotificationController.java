@@ -3,6 +3,7 @@ package com.techpulse.techradar.features.notification.adapters.input;
 import com.techpulse.techradar.features.notification.application.NotificationService;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import com.techpulse.techradar.shared.security.SecurityUtils;
+import com.techpulse.techradar.shared.sse.SseHeartbeat;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -13,7 +14,6 @@ import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.time.Duration;
 import java.util.List;
 
 /**
@@ -74,9 +74,6 @@ public class NotificationController {
                 .map(n -> ServerSentEvent.builder(NotificationView.from(n))
                         .event("notification")
                         .build());
-        // Heartbeat keeps the connection alive through proxies that time out idle streams.
-        Flux<ServerSentEvent<NotificationView>> heartbeat = Flux.interval(Duration.ofSeconds(25))
-                .map(i -> ServerSentEvent.<NotificationView>builder().comment("ping").build());
-        return Flux.merge(events, heartbeat);
+        return SseHeartbeat.merge(events);
     }
 }

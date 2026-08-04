@@ -45,7 +45,7 @@ public class SendAdminNotificationUseCase {
         }
 
         return userService.listUsers()
-                .filter(u -> "active".equalsIgnoreCase(u.getStatus()))
+                .filter(u -> "ACTIVE".equalsIgnoreCase(u.getStatus()))
                 .flatMap(u -> sendTo(u.getId(), title, body, link))
                 .count()
                 .doOnSuccess(count -> log.info("Admin broadcast '{}' sent to {} user(s)", title, count));

@@ -3,6 +3,7 @@ package com.techpulse.techradar.features.auth.adapters.output;
 import com.techpulse.techradar.features.auth.domain.User;
 import com.techpulse.techradar.features.auth.ports.UserRepository;
 import com.techpulse.techradar.features.auth.ports.UserStatsRepository;
+import com.techpulse.techradar.shared.db.R2dbcBinders;
 import io.r2dbc.spi.Row;
 import lombok.RequiredArgsConstructor;
 import org.springframework.r2dbc.core.DatabaseClient;
@@ -105,9 +106,7 @@ public class PostgresUserRepository implements UserRepository, UserStatsReposito
         user.setId(id);
         user.setCreatedAt(now);
         user.setUpdatedAt(now);
-        if (user.getSecurityStamp() == null) {
-            user.setSecurityStamp(UUID.randomUUID());
-        }
+        user.ensureSecurityStamp();
 
         DatabaseClient.GenericExecuteSpec spec = dbClient.sql(
                 "INSERT INTO users (id, email, password_hash, full_name, role, status, subscription_tier, security_stamp, created_at, updated_at) " +
@@ -117,12 +116,12 @@ public class PostgresUserRepository implements UserRepository, UserStatsReposito
                 .bind("email", user.getEmail())
                 .bind("password_hash", user.getPasswordHash())
                 .bind("role", user.getRole())
-                .bind("status", user.getStatus() != null ? user.getStatus() : "active")
-                .bind("subscription_tier", user.getSubscriptionTier() != null ? user.getSubscriptionTier() : "free")
+                .bind("status", user.getStatus() != null ? user.getStatus() : "ACTIVE")
+                .bind("subscription_tier", user.getSubscriptionTier() != null ? user.getSubscriptionTier() : "FREE")
                 .bind("security_stamp", user.getSecurityStamp())
                 .bind("created_at", now)
                 .bind("updated_at", now);
-        spec = bindNullable(spec, "full_name", user.getFullName());
+        spec = R2dbcBinders.bindNullable(spec, "full_name", user.getFullName());
 
         return spec.fetch().rowsUpdated().map(rowsUpdated -> user);
     }
@@ -144,14 +143,9 @@ public class PostgresUserRepository implements UserRepository, UserStatsReposito
                 .bind("subscription_tier", user.getSubscriptionTier())
                 .bind("security_stamp", user.getSecurityStamp())
                 .bind("updated_at", now);
-        spec = bindNullable(spec, "full_name", user.getFullName());
+        spec = R2dbcBinders.bindNullable(spec, "full_name", user.getFullName());
 
         return spec.fetch().rowsUpdated().map(rowsUpdated -> user);
-    }
-
-    private static DatabaseClient.GenericExecuteSpec bindNullable(
-            DatabaseClient.GenericExecuteSpec spec, String name, String value) {
-        return value != null ? spec.bind(name, value) : spec.bindNull(name, String.class);
     }
 
     private User mapRowToUser(Row row) {

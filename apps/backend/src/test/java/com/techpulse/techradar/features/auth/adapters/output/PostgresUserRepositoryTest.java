@@ -132,7 +132,7 @@ class PostgresUserRepositoryTest {
         UUID id = UUID.fromString(USER_ID);
         UUID stamp = UUID.randomUUID();
         LocalDateTime now = LocalDateTime.now();
-        stubUserRow(id, "a@b.com", "hash", "Alice", "admin", "active", "pro", stamp, now, now);
+        stubUserRow(id, "a@b.com", "hash", "Alice", "admin", "ACTIVE", "PRO", stamp, now, now);
 
         repository.findById(USER_ID).subscribe();
         User mapped = captureRowMapper().apply(row);
@@ -142,8 +142,8 @@ class PostgresUserRepositoryTest {
         assertThat(mapped.getPasswordHash()).isEqualTo("hash");
         assertThat(mapped.getFullName()).isEqualTo("Alice");
         assertThat(mapped.getRole()).isEqualTo("admin");
-        assertThat(mapped.getStatus()).isEqualTo("active");
-        assertThat(mapped.getSubscriptionTier()).isEqualTo("pro");
+        assertThat(mapped.getStatus()).isEqualTo("ACTIVE");
+        assertThat(mapped.getSubscriptionTier()).isEqualTo("PRO");
         assertThat(mapped.getSecurityStamp()).isEqualTo(stamp);
         assertThat(mapped.getCreatedAt()).isEqualTo(now);
         assertThat(mapped.getUpdatedAt()).isEqualTo(now);
@@ -257,8 +257,8 @@ class PostgresUserRepositoryTest {
         verify(executeSpec).bind("email", "new@b.com");
         verify(executeSpec).bind("password_hash", "hash");
         verify(executeSpec).bind("role", "user");
-        verify(executeSpec).bind("status", "active");
-        verify(executeSpec).bind("subscription_tier", "free");
+        verify(executeSpec).bind("status", "ACTIVE");
+        verify(executeSpec).bind("subscription_tier", "FREE");
         verify(executeSpec).bind("full_name", "New User");
     }
 
@@ -287,7 +287,7 @@ class PostgresUserRepositoryTest {
     @Test
     void save_withId_updatesAllColumns_andDoesNotBindCreatedAt() {
         User user = User.builder().id(UUID.fromString(USER_ID)).email("existing@b.com").passwordHash("hash2")
-                .fullName("Existing").role("admin").status("suspended").subscriptionTier("pro")
+                .fullName("Existing").role("admin").status("SUSPENDED").subscriptionTier("PRO")
                 .securityStamp(UUID.randomUUID()).build();
 
         when(dbClient.sql(
@@ -305,8 +305,8 @@ class PostgresUserRepositoryTest {
 
         verify(executeSpec).bind("id", UUID.fromString(USER_ID));
         verify(executeSpec).bind("email", "existing@b.com");
-        verify(executeSpec).bind("status", "suspended");
-        verify(executeSpec).bind("subscription_tier", "pro");
+        verify(executeSpec).bind("status", "SUSPENDED");
+        verify(executeSpec).bind("subscription_tier", "PRO");
         verify(executeSpec, never()).bind(eq("created_at"), any());
     }
 }

@@ -58,7 +58,7 @@ class SystemAdminIntegrationTest extends IntegrationTestSupport {
         Map<String, Object> created = web.post().uri("/api/v1/admin/users").header("Authorization", bearer(admin))
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of("email", "crud@test.vn", "password", "Passw0rd!",
-                        "full_name", "Crud User", "role", "user", "status", "active"))
+                        "full_name", "Crud User", "role", "user", "status", "ACTIVE"))
                 .exchange().expectStatus().isCreated()
                 .expectBody(MAP).returnResult().getResponseBody();
         @SuppressWarnings("unchecked")
@@ -112,7 +112,7 @@ class SystemAdminIntegrationTest extends IntegrationTestSupport {
         web.post().uri("/api/v1/admin/users").header("Authorization", bearer(admin))
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of("email", "mod1@test.vn", "password", "Passw0rd!",
-                        "full_name", "Mod One", "role", "moderator", "status", "active"))
+                        "full_name", "Mod One", "role", "moderator", "status", "ACTIVE"))
                 .exchange().expectStatus().isCreated();
 
         String moderatorToken = login("mod1@test.vn", "Passw0rd!");

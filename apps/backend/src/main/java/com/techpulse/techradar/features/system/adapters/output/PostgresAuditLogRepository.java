@@ -2,6 +2,7 @@ package com.techpulse.techradar.features.system.adapters.output;
 
 import com.techpulse.techradar.features.system.domain.AuditLogEntry;
 import com.techpulse.techradar.features.system.ports.AuditLogRepository;
+import com.techpulse.techradar.shared.db.R2dbcBinders;
 import lombok.RequiredArgsConstructor;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
@@ -28,9 +29,9 @@ public class PostgresAuditLogRepository implements AuditLogRepository {
         )
                 .bind("actor_id", entry.getActorId())
                 .bind("action", entry.getAction());
-        spec = entry.getTargetType() != null ? spec.bind("target_type", entry.getTargetType()) : spec.bindNull("target_type", String.class);
-        spec = entry.getTargetId() != null ? spec.bind("target_id", entry.getTargetId()) : spec.bindNull("target_id", String.class);
-        spec = entry.getDetails() != null ? spec.bind("details", entry.getDetails()) : spec.bindNull("details", String.class);
+        spec = R2dbcBinders.bindNullable(spec, "target_type", entry.getTargetType());
+        spec = R2dbcBinders.bindNullable(spec, "target_id", entry.getTargetId());
+        spec = R2dbcBinders.bindNullable(spec, "details", entry.getDetails());
         return spec.then();
     }
 

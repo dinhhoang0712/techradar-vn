@@ -74,20 +74,21 @@ public class ProfileService {
                 u.setFullName(request.getFullName());
             }
             if (passwordChanging) {
-                u.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+                // Rotates securityStamp internally - see User.changePassword().
+                u.changePassword(passwordEncoder.encode(request.getPassword()));
             }
             if (StringUtils.hasText(request.getSubscriptionTier())) {
                 u.setSubscriptionTier(request.getSubscriptionTier());
             }
-            // Changing the password or the email (a common account-recovery identifier) should
-            // invalidate any other already-issued access token immediately, same as an admin
-            // forcing these changes does - otherwise a session left open on another device (or
-            // stolen alongside the old password) keeps working after the owner "secures" the account.
-            boolean revokes = emailChanging || passwordChanging;
-            if (revokes) {
-                u.setSecurityStamp(UUID.randomUUID());
+            // Changing the email (a common account-recovery identifier) should ALSO invalidate any
+            // other already-issued access token immediately, same as an admin forcing this change
+            // does - otherwise a session left open on another device keeps working after the owner
+            // "secures" the account by changing it. Plain email assignment carries no such
+            // invariant on its own (see User javadoc), so rotate explicitly here.
+            if (emailChanging) {
+                u.rotateSecurityStamp();
             }
-            return new AccountChange(u, revokes);
+            return new AccountChange(u, emailChanging || passwordChanging);
         });
     }
 

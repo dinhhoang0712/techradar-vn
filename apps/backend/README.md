@@ -72,9 +72,19 @@ notes.
 - **RBAC by permission code, not role name**: gate admin endpoints on a permission
   (`@PreAuthorize` checking a code like `social:moderate`), never on `hasRole('ADMIN')` directly —
   see [ADR-0006](../../docs/adr/0006-permission-based-rbac.md).
-- **R2DBC `bindNull`**: `.bind(name, null)` throws — use `.bindNull(name, Class)` for nullable
-  columns (see any `Postgres*Repository` for the pattern).
+- **R2DBC `bindNull`**: `.bind(name, null)` throws — use `shared.db.R2dbcBinders.bindNullable(spec,
+  name, value[, type])` for nullable columns, not a locally re-written ternary (see ADR-0011).
+- **New per-feature rate limiter?** Delegate the actual INCR+EXPIRE to
+  `shared.redis.FixedWindowRateLimiter.isAllowed(redisTemplate, key, max, windowSeconds)` — don't
+  hand-roll the counter logic again (see ADR-0011).
+- **New SSE endpoint?** Wrap the event `Flux` with `shared.sse.SseHeartbeat.merge(events)` — a
+  stream without a heartbeat can get silently killed by an idle-connection timeout somewhere in
+  front of it (see ADR-0011, which fixes exactly that bug in `ConversationController`).
 - **New Postgres-sourced event that must survive a crash before Kafka publish?** Use the
   transactional outbox (`shared.outbox`), not a direct fire-and-forget
   `KafkaProducerService.send()` — see ADR-0005 for when this applies (Postgres-sourced writes
   only; it doesn't help for Neo4j-sourced events like `job.match.alerts`).
+- **Request field limited to a fixed vocabulary** (a status/type/tier-like string): add an enum
+  next to the domain entity that owns it and annotate the DTO field with
+  `@OneOf(TheEnum.class)` (`shared.validation`) — don't inline a `String[]` of allowed values or
+  skip validation and rely on the DB `CHECK` alone. See ADR-0010.

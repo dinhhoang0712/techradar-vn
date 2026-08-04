@@ -11,6 +11,7 @@ import com.techpulse.techradar.features.messaging.application.SetMessageReaction
 import com.techpulse.techradar.features.messaging.realtime.MessageBroadcaster;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import com.techpulse.techradar.shared.security.SecurityUtils;
+import com.techpulse.techradar.shared.sse.SseHeartbeat;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -156,8 +157,9 @@ public class ConversationController {
     )
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<MessagingDtos.MessageLiveEventResponse>> stream() {
-        return SecurityUtils.currentUserId()
+        Flux<ServerSentEvent<MessagingDtos.MessageLiveEventResponse>> events = SecurityUtils.currentUserId()
                 .flatMapMany(messageBroadcaster::subscribe)
                 .map(event -> ServerSentEvent.builder(MessagingDtos.MessageLiveEventResponse.from(event)).build());
+        return SseHeartbeat.merge(events);
     }
 }

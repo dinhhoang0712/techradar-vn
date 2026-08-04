@@ -81,7 +81,7 @@ class RefreshTokenUseCaseTest {
 
     @Test
     void execute_issuesNewTokens_whenRefreshTokenValid() {
-        User user = User.builder().id(UUID.randomUUID()).email("dev@example.com").role("user").status("active").build();
+        User user = User.builder().id(UUID.randomUUID()).email("dev@example.com").role("user").status("ACTIVE").build();
         LoginResponse response = LoginResponse.builder().accessToken("new-access").build();
         when(tokenBlacklist.isBlacklisted("token")).thenReturn(Mono.just(false));
         when(tokenValidator.isValid("token")).thenReturn(true);
@@ -99,7 +99,7 @@ class RefreshTokenUseCaseTest {
     void execute_fails_whenUserIsInactive_evenWithAValidUnexpiredRefreshToken() {
         // Guards against a banned/deactivated user minting fresh access tokens forever via
         // /auth/refresh, bypassing the ban until their refresh token naturally expires.
-        User banned = User.builder().id(UUID.randomUUID()).email("dev@example.com").role("user").status("banned").build();
+        User banned = User.builder().id(UUID.randomUUID()).email("dev@example.com").role("user").status("SUSPENDED").build();
         when(tokenBlacklist.isBlacklisted("token")).thenReturn(Mono.just(false));
         when(tokenValidator.isValid("token")).thenReturn(true);
         when(tokenValidator.isRefreshToken("token")).thenReturn(true);

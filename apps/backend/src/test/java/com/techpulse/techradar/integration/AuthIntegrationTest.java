@@ -105,7 +105,7 @@ class AuthIntegrationTest extends IntegrationTestSupport {
         String admin = adminToken();
         web.put().uri("/api/v1/admin/users/" + userId).header("Authorization", bearer(admin))
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(Map.of("status", "banned"))
+                .bodyValue(Map.of("status", "SUSPENDED"))
                 .exchange().expectStatus().isOk();
 
         // Same access token as before, now rejected: banning bumped the user's security stamp in
@@ -125,7 +125,7 @@ class AuthIntegrationTest extends IntegrationTestSupport {
         String admin = adminToken();
         web.put().uri("/api/v1/admin/users/" + userId).header("Authorization", bearer(admin))
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(Map.of("status", "banned"))
+                .bodyValue(Map.of("status", "SUSPENDED"))
                 .exchange().expectStatus().isOk();
 
         // The refresh token itself is still structurally valid and was never blacklisted (no

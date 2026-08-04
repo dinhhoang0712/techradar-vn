@@ -1,6 +1,7 @@
 package com.techpulse.techradar.features.social.adapters.output;
 
 import com.techpulse.techradar.features.social.ports.CommentRepository;
+import com.techpulse.techradar.shared.db.R2dbcBinders;
 import io.r2dbc.spi.Row;
 import lombok.RequiredArgsConstructor;
 import org.springframework.r2dbc.core.DatabaseClient;
@@ -27,9 +28,7 @@ public class PostgresCommentRepository implements CommentRepository {
                 .bind("user_id", userId)
                 .bind("content", content)
                 .bind("created_at", createdAt);
-        spec = parentCommentId != null
-                ? spec.bind("parent_comment_id", parentCommentId)
-                : spec.bindNull("parent_comment_id", UUID.class);
+        spec = R2dbcBinders.bindNullable(spec, "parent_comment_id", parentCommentId, UUID.class);
         return spec.fetch().rowsUpdated().then();
     }
 

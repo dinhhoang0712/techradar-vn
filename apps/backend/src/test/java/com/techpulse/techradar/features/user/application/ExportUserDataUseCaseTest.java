@@ -46,7 +46,7 @@ class ExportUserDataUseCaseTest {
         UUID userId = UUID.randomUUID();
         User user = User.builder()
                 .id(userId).email("dev@example.com").fullName("Dev").role("user")
-                .status("active").subscriptionTier("free").createdAt(LocalDateTime.now())
+                .status("ACTIVE").subscriptionTier("FREE").createdAt(LocalDateTime.now())
                 .build();
         UserProfile profile = UserProfile.builder()
                 .userId(userId).jobRole("Backend Engineer").bio("bio").location("Hanoi")

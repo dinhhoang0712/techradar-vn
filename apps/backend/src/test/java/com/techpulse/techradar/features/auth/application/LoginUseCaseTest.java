@@ -40,7 +40,7 @@ class LoginUseCaseTest {
                 .email("dev@example.com")
                 .passwordHash("hashed")
                 .role("user")
-                .status("active")
+                .status("ACTIVE")
                 .build();
     }
 

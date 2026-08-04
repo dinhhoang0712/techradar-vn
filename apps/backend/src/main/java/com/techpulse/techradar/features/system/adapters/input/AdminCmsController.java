@@ -2,9 +2,13 @@ package com.techpulse.techradar.features.system.adapters.input;
 
 import com.techpulse.techradar.features.system.application.CmsService;
 import com.techpulse.techradar.features.system.domain.CmsContent;
+import com.techpulse.techradar.features.system.domain.CmsStatus;
+import com.techpulse.techradar.features.system.domain.CmsType;
 import com.techpulse.techradar.shared.dto.ApiResponse;
+import com.techpulse.techradar.shared.validation.OneOf;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -41,7 +45,7 @@ public class AdminCmsController {
     @Operation(summary = "Create CMS content")
     @PostMapping
     @PreAuthorize("hasAuthority('cms:manage')")
-    public Mono<ResponseEntity<ApiResponse<CmsContent>>> create(@RequestBody CmsContentRequest req) {
+    public Mono<ResponseEntity<ApiResponse<CmsContent>>> create(@Valid @RequestBody CmsContentRequest req) {
         return cmsService.create(req.getTitle(), req.getType(), req.getContentDate(), req.getStatus())
                 .map(c -> ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(c, "CMS content created")));
     }
@@ -50,7 +54,7 @@ public class AdminCmsController {
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('cms:manage')")
     public Mono<ResponseEntity<ApiResponse<CmsContent>>> update(
-            @PathVariable String id, @RequestBody CmsContentRequest req) {
+            @PathVariable String id, @Valid @RequestBody CmsContentRequest req) {
         return cmsService.update(id, req.getTitle(), req.getType(), req.getContentDate(), req.getStatus())
                 .map(c -> ResponseEntity.ok(ApiResponse.success(c, "CMS content updated")));
     }
@@ -70,8 +74,13 @@ public class AdminCmsController {
     public static class CmsContentRequest {
         @NotBlank(message = "title is required")
         private String title;
+
+        @OneOf(CmsType.class)
         private String type;
+
         private LocalDate contentDate;
+
+        @OneOf(CmsStatus.class)
         private String status;
     }
 }

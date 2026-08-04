@@ -16,6 +16,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.Locale;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -51,8 +52,8 @@ public class AdminUserService {
                             .fullName(fullName)
                             .passwordHash(passwordEncoder.encode(rawPassword))
                             .role(normalizedRole)
-                            .status(StringUtils.hasText(status) ? status : "active")
-                            .subscriptionTier(StringUtils.hasText(subscriptionTier) ? subscriptionTier : "free")
+                            .status(StringUtils.hasText(status) ? status : "ACTIVE")
+                            .subscriptionTier(StringUtils.hasText(subscriptionTier) ? subscriptionTier : "FREE")
                             .build();
                     return userRepository.save(user);
                 })
@@ -75,50 +76,49 @@ public class AdminUserService {
                     }
                     return Mono.just(existing);
                 })
-                .flatMap(existing -> resolveRoleChange(existing, role))
-                .flatMap(roleChange -> {
-                    User existing = roleChange.user();
-                    boolean revokesExistingTokens = roleChange.revokesExistingTokens();
-                    if (StringUtils.hasText(email)) {
-                        existing.setEmail(email);
-                    }
-                    if (StringUtils.hasText(fullName)) {
-                        existing.setFullName(fullName);
-                    }
-                    if (StringUtils.hasText(rawPassword)) {
-                        existing.setPasswordHash(passwordEncoder.encode(rawPassword));
-                        revokesExistingTokens = true;
-                    }
-                    if (StringUtils.hasText(status)) {
-                        revokesExistingTokens |= !status.equals(existing.getStatus());
-                        existing.setStatus(status);
-                    }
-                    if (StringUtils.hasText(subscriptionTier)) {
-                        existing.setSubscriptionTier(subscriptionTier);
-                    }
-                    if (revokesExistingTokens) {
-                        existing.setSecurityStamp(UUID.randomUUID());
-                    }
-                    boolean bumpStamp = revokesExistingTokens;
-                    return userRepository.save(existing)
-                            .flatMap(saved -> bumpStamp
-                                    ? securityStampService.set(saved.getId().toString(), saved.getSecurityStamp()).thenReturn(saved)
-                                    : Mono.just(saved));
+                .flatMap(existing -> {
+                    // Snapshotted before ANY mutation (including role, resolved async below) - so
+                    // whichever of changeRole/changePassword/changeStatus ends up rotating the
+                    // stamp internally (or not, if unchanged) is what decides whether to propagate
+                    // the new stamp, with no separate boolean bookkeeping to keep in sync.
+                    UUID originalStamp = existing.getSecurityStamp();
+                    return applyRoleChange(existing, role)
+                            .map(u -> {
+                                if (StringUtils.hasText(email)) {
+                                    u.setEmail(email);
+                                }
+                                if (StringUtils.hasText(fullName)) {
+                                    u.setFullName(fullName);
+                                }
+                                if (StringUtils.hasText(rawPassword)) {
+                                    u.changePassword(passwordEncoder.encode(rawPassword));
+                                }
+                                if (StringUtils.hasText(status)) {
+                                    u.changeStatus(status);
+                                }
+                                if (StringUtils.hasText(subscriptionTier)) {
+                                    u.setSubscriptionTier(subscriptionTier);
+                                }
+                                return u;
+                            })
+                            .flatMap(u -> {
+                                boolean bumpStamp = !Objects.equals(originalStamp, u.getSecurityStamp());
+                                return userRepository.save(u)
+                                        .flatMap(saved -> bumpStamp
+                                                ? securityStampService.set(saved.getId().toString(), saved.getSecurityStamp()).thenReturn(saved)
+                                                : Mono.just(saved));
+                            });
                 })
                 .doOnSuccess(u -> log.info("Admin updated user: id={}", u.getId()));
     }
 
-    private record RoleChange(User user, boolean revokesExistingTokens) {
-    }
-
-    private Mono<RoleChange> resolveRoleChange(User existing, String role) {
+    private Mono<User> applyRoleChange(User existing, String role) {
         if (!StringUtils.hasText(role)) {
-            return Mono.just(new RoleChange(existing, false));
+            return Mono.just(existing);
         }
         return normalizeRole(role).map(normalized -> {
-            boolean changed = !normalized.equals(existing.getRole());
-            existing.setRole(normalized);
-            return new RoleChange(existing, changed);
+            existing.changeRole(normalized);
+            return existing;
         });
     }
 

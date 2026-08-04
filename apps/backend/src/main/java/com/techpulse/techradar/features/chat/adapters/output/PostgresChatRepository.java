@@ -5,6 +5,7 @@ import com.techpulse.techradar.features.chat.domain.ChatSession;
 import com.techpulse.techradar.features.chat.domain.ChatMessageItem;
 import com.techpulse.techradar.features.chat.domain.ChatSessionItem;
 import com.techpulse.techradar.features.chat.ports.ChatRepository;
+import com.techpulse.techradar.shared.db.R2dbcBinders;
 import io.r2dbc.spi.Row;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,9 +47,9 @@ public class PostgresChatRepository implements ChatRepository {
                 .bind("user_id", session.getUserId())
                 .bind("created_at", session.getCreatedAt())
                 .bind("updated_at", session.getUpdatedAt());
-        spec = bindNullable(spec, "title", session.getTitle());
-        spec = bindNullable(spec, "model_used", session.getModelUsed());
-        spec = bindNullable(spec, "system_prompt", session.getSystemPrompt());
+        spec = R2dbcBinders.bindNullable(spec, "title", session.getTitle());
+        spec = R2dbcBinders.bindNullable(spec, "model_used", session.getModelUsed());
+        spec = R2dbcBinders.bindNullable(spec, "system_prompt", session.getSystemPrompt());
 
         return spec.fetch().rowsUpdated().thenReturn(session)
                 .doOnSuccess(s -> log.debug("Saved chat session id={} user_id={}", s.getId(), s.getUserId()));
@@ -61,11 +62,6 @@ public class PostgresChatRepository implements ChatRepository {
                 .fetch()
                 .rowsUpdated()
                 .doOnNext(rows -> log.info("Deleted chat session id={} (rows={})", sessionId, rows));
-    }
-
-    private static DatabaseClient.GenericExecuteSpec bindNullable(
-            DatabaseClient.GenericExecuteSpec spec, String name, String value) {
-        return value != null ? spec.bind(name, value) : spec.bindNull(name, String.class);
     }
 
     @Override
@@ -98,7 +94,7 @@ public class PostgresChatRepository implements ChatRepository {
                 .bind("prompt_tokens", message.getPromptTokens() != null ? message.getPromptTokens() : 0)
                 .bind("completion_tokens", message.getCompletionTokens() != null ? message.getCompletionTokens() : 0)
                 .bind("created_at", message.getCreatedAt());
-        spec = bindNullable(spec, "finish_reason", message.getFinishReason());
+        spec = R2dbcBinders.bindNullable(spec, "finish_reason", message.getFinishReason());
 
         return spec.fetch().rowsUpdated().thenReturn(message)
                 .doOnSuccess(m -> log.debug("Saved chat message id={} session_id={} role={}",

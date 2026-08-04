@@ -22,3 +22,7 @@ phải đoán hoặc vô tình đảo ngược một quyết định có chủ �
 | [0005](./0005-transactional-outbox-trend-alerts.md) | Transactional outbox cho `trend.alerts` | Accepted |
 | [0006](./0006-permission-based-rbac.md) | RBAC theo permission code (không hard-code role) | Accepted |
 | [0007](./0007-circuit-breaker-for-python-service-calls.md) | Circuit breaker cho lệnh gọi Python service (ai-rag-core/ml-clustering) | Accepted |
+| [0008](./0008-rich-user-entity-for-security-stamp-invariant.md) | Rich `User` entity cho invariant `securityStamp` | Accepted |
+| [0009](./0009-conversation-canonical-pair-value-object.md) | `ConversationParticipants` — value object cho canonical pair | Accepted |
+| [0010](./0010-oneof-validation-for-fixed-vocabulary-strings.md) | `@OneOf` validation cho string thuộc tập giá trị cố định | Accepted |
+| [0011](./0011-shared-utilities-r2dbc-ratelimit-sse.md) | 3 tiện ích dùng chung mới (R2DBC bind, rate limiter, SSE heartbeat) | Accepted |

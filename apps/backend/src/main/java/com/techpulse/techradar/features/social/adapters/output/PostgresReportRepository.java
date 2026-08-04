@@ -1,6 +1,7 @@
 package com.techpulse.techradar.features.social.adapters.output;
 
 import com.techpulse.techradar.features.social.ports.ReportRepository;
+import com.techpulse.techradar.shared.db.R2dbcBinders;
 import io.r2dbc.spi.Row;
 import lombok.RequiredArgsConstructor;
 import org.springframework.r2dbc.core.DatabaseClient;
@@ -45,8 +46,8 @@ public class PostgresReportRepository implements ReportRepository {
                 .bind("id", id)
                 .bind("reporter_id", reporterId)
                 .bind("reason", reason);
-        spec = postId != null ? spec.bind("post_id", postId) : spec.bindNull("post_id", UUID.class);
-        spec = commentId != null ? spec.bind("comment_id", commentId) : spec.bindNull("comment_id", UUID.class);
+        spec = R2dbcBinders.bindNullable(spec, "post_id", postId, UUID.class);
+        spec = R2dbcBinders.bindNullable(spec, "comment_id", commentId, UUID.class);
         return spec.fetch().rowsUpdated()
                 .map(rows -> rows > 0);
     }

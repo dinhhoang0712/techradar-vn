@@ -1,6 +1,7 @@
 package com.techpulse.techradar.features.social.adapters.output;
 
 import com.techpulse.techradar.features.social.ports.PostRepository;
+import com.techpulse.techradar.shared.db.R2dbcBinders;
 import io.r2dbc.spi.Row;
 import lombok.RequiredArgsConstructor;
 import org.springframework.r2dbc.core.DatabaseClient;
@@ -40,9 +41,9 @@ public class PostgresPostRepository implements PostRepository {
                 .bind("content", post.content())
                 .bind("hashtags", hashtags)
                 .bind("created_at", post.createdAt());
-        spec = bindNullable(spec, "tagged_company_id", post.taggedCompanyId());
-        spec = bindNullable(spec, "tagged_company_name", post.taggedCompanyName());
-        spec = bindNullable(spec, "tagged_company_location", post.taggedCompanyLocation());
+        spec = R2dbcBinders.bindNullable(spec, "tagged_company_id", post.taggedCompanyId());
+        spec = R2dbcBinders.bindNullable(spec, "tagged_company_name", post.taggedCompanyName());
+        spec = R2dbcBinders.bindNullable(spec, "tagged_company_location", post.taggedCompanyLocation());
         return spec.fetch().rowsUpdated().then();
     }
 
@@ -168,10 +169,5 @@ public class PostgresPostRepository implements PostRepository {
                 row.get("tagged_company_name", String.class),
                 row.get("tagged_company_location", String.class)
         );
-    }
-
-    private static DatabaseClient.GenericExecuteSpec bindNullable(
-            DatabaseClient.GenericExecuteSpec spec, String name, String value) {
-        return value != null ? spec.bind(name, value) : spec.bindNull(name, String.class);
     }
 }

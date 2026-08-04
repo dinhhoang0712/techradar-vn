@@ -45,8 +45,8 @@ class UserAdminControllerTest {
                 .email("admin-created@example.com")
                 .fullName("Created User")
                 .role("user")
-                .status("active")
-                .subscriptionTier("free")
+                .status("ACTIVE")
+                .subscriptionTier("FREE")
                 .build();
     }
 
@@ -69,11 +69,11 @@ class UserAdminControllerTest {
                 .password("password123")
                 .fullName("Created User")
                 .role("user")
-                .status("active")
-                .subscriptionTier("free")
+                .status("ACTIVE")
+                .subscriptionTier("FREE")
                 .build();
 
-        when(userService.createUser("admin-created@example.com", "password123", "Created User", "user", "active", "free"))
+        when(userService.createUser("admin-created@example.com", "password123", "Created User", "user", "ACTIVE", "FREE"))
                 .thenReturn(Mono.just(created));
 
         StepVerifier.create(controller.insertUser(request))
@@ -96,11 +96,11 @@ class UserAdminControllerTest {
                 .email("admin-created@example.com")
                 .fullName("Created User")
                 .role("user")
-                .status("active")
-                .subscriptionTier("free")
+                .status("ACTIVE")
+                .subscriptionTier("FREE")
                 .build();
 
-        when(userService.alterUser(id.toString(), "admin-created@example.com", null, "Created User", "user", "active", "free"))
+        when(userService.alterUser(id.toString(), "admin-created@example.com", null, "Created User", "user", "ACTIVE", "FREE"))
                 .thenReturn(Mono.just(updated));
 
         StepVerifier.create(controller.alterUser(id.toString(), request))

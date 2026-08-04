@@ -1223,7 +1223,9 @@ Chuẩn thật trong repo: JUnit 5 + Mockito + `StepVerifier` (Reactor), test tr
 `application` (use case). Khởi tạo class thật bằng `new XxxUseCase(mock1, mock2, ...)` qua
 constructor — KHÔNG dùng `@InjectMocks` (nhiều use case có nhiều constructor param cùng kiểu,
 `@InjectMocks` dễ wire nhầm). `User.role`/`User.status` là `String` phẳng (không có enum
-`Role`/`Status`) — build fixture bằng `.role("user").status("active")`. Rút gọn từ
+`Role`/`Status`) — build fixture bằng `.role("user").status("ACTIVE")` (status giờ theo vocabulary
+viết hoa `ACTIVE`/`INACTIVE`/`SUSPENDED`, ràng buộc bởi `@OneOf` + DB CHECK, xem
+[ADR-0010](./adr/0010-oneof-validation-for-fixed-vocabulary-strings.md)). Rút gọn từ
 `LoginUseCaseTest` (`features/auth/application/`):
 
 ```java
@@ -1247,7 +1249,7 @@ class LoginUseCaseTest {
                 .email("dev@example.com")
                 .passwordHash("hashed")
                 .role("user")
-                .status("active")
+                .status("ACTIVE")
                 .build();
     }
 

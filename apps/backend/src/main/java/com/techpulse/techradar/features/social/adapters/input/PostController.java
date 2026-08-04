@@ -11,6 +11,7 @@ import com.techpulse.techradar.features.social.application.ToggleLikeUseCase;
 import com.techpulse.techradar.features.social.realtime.FeedBroadcaster;
 import com.techpulse.techradar.shared.dto.ApiResponse;
 import com.techpulse.techradar.shared.security.SecurityUtils;
+import com.techpulse.techradar.shared.sse.SseHeartbeat;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -27,7 +28,6 @@ import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -75,10 +75,7 @@ public class PostController {
                 .map(event -> ServerSentEvent.builder(SocialDtos.FeedEventResponse.from(event))
                         .event(event.type().name())
                         .build());
-        // Heartbeat keeps the connection alive through proxies that time out idle streams.
-        Flux<ServerSentEvent<SocialDtos.FeedEventResponse>> heartbeat = Flux.interval(Duration.ofSeconds(25))
-                .map(i -> ServerSentEvent.<SocialDtos.FeedEventResponse>builder().comment("ping").build());
-        return Flux.merge(events, heartbeat);
+        return SseHeartbeat.merge(events);
     }
 
     @Operation(summary = "Create a post")

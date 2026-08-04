@@ -37,6 +37,7 @@ public enum ErrorCode {
     // 409 Conflict
     EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT),
     PIPELINE_RUNNING(HttpStatus.CONFLICT),
+    DATA_INTEGRITY_VIOLATION(HttpStatus.CONFLICT),
 
     // 413 Payload Too Large
     PAYLOAD_TOO_LARGE(HttpStatus.PAYLOAD_TOO_LARGE),

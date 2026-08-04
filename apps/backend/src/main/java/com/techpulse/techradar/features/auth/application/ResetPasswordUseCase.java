@@ -12,8 +12,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
-import java.util.UUID;
-
 /**
  * Resets a user's password given a valid, unused, non-expired reset token.
  */
@@ -47,8 +45,8 @@ public class ResetPasswordUseCase {
                             return Mono.error(new BadRequestException(ErrorCode.INVALID_TOKEN, "Invalid or expired token"));
                         }))
                         .flatMap(user -> {
-                            user.setPasswordHash(passwordEncoder.encode(newPassword));
-                            user.setSecurityStamp(UUID.randomUUID());
+                            // Rotates securityStamp internally - see User.changePassword().
+                            user.changePassword(passwordEncoder.encode(newPassword));
                             return userRepository.save(user)
                                     .flatMap(saved -> securityStampService
                                             .set(saved.getId().toString(), saved.getSecurityStamp()));

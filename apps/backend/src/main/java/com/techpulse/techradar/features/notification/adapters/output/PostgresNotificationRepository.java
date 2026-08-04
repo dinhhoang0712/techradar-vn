@@ -5,6 +5,7 @@ import com.techpulse.techradar.features.notification.domain.Notification;
 import com.techpulse.techradar.features.notification.domain.TrendSubscriber;
 import com.techpulse.techradar.features.notification.ports.NotificationRepository;
 import com.techpulse.techradar.features.user.ports.UserProfileRepository;
+import com.techpulse.techradar.shared.db.R2dbcBinders;
 import io.r2dbc.spi.Row;
 import lombok.RequiredArgsConstructor;
 import org.springframework.r2dbc.core.DatabaseClient;
@@ -38,8 +39,8 @@ public class PostgresNotificationRepository implements NotificationRepository {
                 .bind("user_id", n.getUserId())
                 .bind("type", n.getType())
                 .bind("title", n.getTitle());
-        spec = n.getBody() != null ? spec.bind("body", n.getBody()) : spec.bindNull("body", String.class);
-        spec = n.getLink() != null ? spec.bind("link", n.getLink()) : spec.bindNull("link", String.class);
+        spec = R2dbcBinders.bindNullable(spec, "body", n.getBody());
+        spec = R2dbcBinders.bindNullable(spec, "link", n.getLink());
         return spec.map((row, meta) -> {
             n.setId(row.get("id", UUID.class));
             n.setCreatedAt(row.get("created_at", java.time.LocalDateTime.class));

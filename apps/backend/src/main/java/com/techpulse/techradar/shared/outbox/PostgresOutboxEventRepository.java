@@ -2,6 +2,7 @@ package com.techpulse.techradar.shared.outbox;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.techpulse.techradar.shared.db.R2dbcBinders;
 import lombok.RequiredArgsConstructor;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
@@ -69,7 +70,7 @@ public class PostgresOutboxEventRepository implements OutboxEventRepository {
         DatabaseClient.GenericExecuteSpec spec = dbClient.sql(
                 "UPDATE outbox_event SET status = 'FAILED', attempts = attempts + 1, last_error = :error WHERE id = :id")
                 .bind("id", id);
-        spec = error != null ? spec.bind("error", error) : spec.bindNull("error", String.class);
+        spec = R2dbcBinders.bindNullable(spec, "error", error);
         return spec.then();
     }
 }

@@ -1,22 +1,19 @@
 package com.techpulse.techradar.shared.redis;
 
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
-import java.time.Duration;
-
 /**
  * Sliding-window rate limiter for unauthenticated auth endpoints (login/register/forgot-password),
- * backed by Redis INCR + EXPIRE. Keyed by client IP (there's no user id yet at this point) rather
- * than the {@code ratelimit:chat:<userId>} scheme {@link ChatRateLimiterService} uses.
+ * backed by Redis INCR + EXPIRE (core logic in {@link FixedWindowRateLimiter}). Keyed by client IP
+ * (there's no user id yet at this point) rather than the {@code ratelimit:chat:<userId>} scheme
+ * {@link ChatRateLimiterService} uses.
  * Key pattern: ratelimit:auth:<action>:<ip>
  */
 @Service
-@Slf4j
 @RequiredArgsConstructor
 public class AuthRateLimiterService {
 
@@ -52,20 +49,6 @@ public class AuthRateLimiterService {
     }
 
     private Mono<Boolean> isAllowed(String action, String ip, int maxRequests, long windowSeconds) {
-        String key = PREFIX + action + ":" + ip;
-        return redisTemplate.opsForValue().increment(key)
-                .flatMap(count -> {
-                    if (count == 1) {
-                        // First request in window — set expiry
-                        return redisTemplate.expire(key, Duration.ofSeconds(windowSeconds))
-                                .thenReturn(true);
-                    }
-                    boolean allowed = count <= maxRequests;
-                    if (!allowed) {
-                        log.warn("Auth rate limit exceeded action={} ip={} count={} max={}",
-                                action, ip, count, maxRequests);
-                    }
-                    return Mono.just(allowed);
-                });
+        return FixedWindowRateLimiter.isAllowed(redisTemplate, PREFIX + action + ":" + ip, maxRequests, windowSeconds);
     }
 }

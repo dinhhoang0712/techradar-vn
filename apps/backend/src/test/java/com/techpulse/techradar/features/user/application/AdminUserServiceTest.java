@@ -67,8 +67,8 @@ class AdminUserServiceTest {
                 .assertNext(saved -> {
                     assertThat(saved.getPasswordHash()).isEqualTo("hashed");
                     assertThat(saved.getRole()).isEqualTo("user");
-                    assertThat(saved.getStatus()).isEqualTo("active");
-                    assertThat(saved.getSubscriptionTier()).isEqualTo("free");
+                    assertThat(saved.getStatus()).isEqualTo("ACTIVE");
+                    assertThat(saved.getSubscriptionTier()).isEqualTo("FREE");
                 })
                 .verifyComplete();
     }
@@ -80,11 +80,11 @@ class AdminUserServiceTest {
         when(rolePermissionRepository.roleExists("admin")).thenReturn(Mono.just(true));
         when(userRepository.save(any(User.class))).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
 
-        StepVerifier.create(service.createUser("a@example.com", "plain", "A", "ADMIN", "banned", "pro"))
+        StepVerifier.create(service.createUser("a@example.com", "plain", "A", "ADMIN", "SUSPENDED", "PRO"))
                 .assertNext(saved -> {
                     assertThat(saved.getRole()).isEqualTo("admin");
-                    assertThat(saved.getStatus()).isEqualTo("banned");
-                    assertThat(saved.getSubscriptionTier()).isEqualTo("pro");
+                    assertThat(saved.getStatus()).isEqualTo("SUSPENDED");
+                    assertThat(saved.getSubscriptionTier()).isEqualTo("PRO");
                 })
                 .verifyComplete();
     }
@@ -135,8 +135,8 @@ class AdminUserServiceTest {
                 .email("old@example.com")
                 .fullName("Old Name")
                 .role("user")
-                .status("active")
-                .subscriptionTier("free")
+                .status("ACTIVE")
+                .subscriptionTier("FREE")
                 .passwordHash("old-hash")
                 .build();
         when(accountValidator.findByIdOrThrow(existing.getId().toString())).thenReturn(Mono.just(existing));
@@ -211,7 +211,7 @@ class AdminUserServiceTest {
     @Test
     void alterUser_bumpsSecurityStamp_whenRoleActuallyChanges() {
         User existing = User.builder()
-                .id(UUID.randomUUID()).email("dev@example.com").role("user").status("active")
+                .id(UUID.randomUUID()).email("dev@example.com").role("user").status("ACTIVE")
                 .build();
         when(accountValidator.findByIdOrThrow(existing.getId().toString())).thenReturn(Mono.just(existing));
         when(rolePermissionRepository.roleExists("admin")).thenReturn(Mono.just(true));
@@ -228,7 +228,7 @@ class AdminUserServiceTest {
     @Test
     void alterUser_doesNotBumpSecurityStamp_whenRoleProvidedButUnchanged() {
         User existing = User.builder()
-                .id(UUID.randomUUID()).email("dev@example.com").role("admin").status("active")
+                .id(UUID.randomUUID()).email("dev@example.com").role("admin").status("ACTIVE")
                 .build();
         when(accountValidator.findByIdOrThrow(existing.getId().toString())).thenReturn(Mono.just(existing));
         when(rolePermissionRepository.roleExists("admin")).thenReturn(Mono.just(true));
@@ -244,7 +244,7 @@ class AdminUserServiceTest {
     @Test
     void alterUser_rejectsUnknownRole_withoutSaving() {
         User existing = User.builder()
-                .id(UUID.randomUUID()).email("dev@example.com").role("user").status("active")
+                .id(UUID.randomUUID()).email("dev@example.com").role("user").status("ACTIVE")
                 .build();
         when(accountValidator.findByIdOrThrow(existing.getId().toString())).thenReturn(Mono.just(existing));
         when(rolePermissionRepository.roleExists("superadmin")).thenReturn(Mono.just(false));
@@ -259,14 +259,14 @@ class AdminUserServiceTest {
     @Test
     void alterUser_bumpsSecurityStamp_whenStatusChanges() {
         User existing = User.builder()
-                .id(UUID.randomUUID()).email("dev@example.com").role("user").status("active")
+                .id(UUID.randomUUID()).email("dev@example.com").role("user").status("ACTIVE")
                 .build();
         when(accountValidator.findByIdOrThrow(existing.getId().toString())).thenReturn(Mono.just(existing));
         when(userRepository.save(existing)).thenReturn(Mono.just(existing));
         when(securityStampService.set(eq(existing.getId().toString()), any(UUID.class))).thenReturn(Mono.empty());
 
-        StepVerifier.create(service.alterUser(existing.getId().toString(), null, null, null, null, "banned", null))
-                .assertNext(saved -> assertThat(saved.getStatus()).isEqualTo("banned"))
+        StepVerifier.create(service.alterUser(existing.getId().toString(), null, null, null, null, "SUSPENDED", null))
+                .assertNext(saved -> assertThat(saved.getStatus()).isEqualTo("SUSPENDED"))
                 .verifyComplete();
 
         verify(securityStampService).set(eq(existing.getId().toString()), any(UUID.class));
@@ -275,7 +275,7 @@ class AdminUserServiceTest {
     @Test
     void alterUser_bumpsSecurityStamp_whenPasswordChanges() {
         User existing = User.builder()
-                .id(UUID.randomUUID()).email("dev@example.com").role("user").status("active")
+                .id(UUID.randomUUID()).email("dev@example.com").role("user").status("ACTIVE")
                 .passwordHash("old-hash")
                 .build();
         when(accountValidator.findByIdOrThrow(existing.getId().toString())).thenReturn(Mono.just(existing));

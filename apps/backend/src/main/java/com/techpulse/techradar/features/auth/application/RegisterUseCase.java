@@ -41,9 +41,9 @@ public class RegisterUseCase {
                 .fullName(request.getFullName())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .role("user")
-                .status("active")
+                .status("ACTIVE")
                 .subscriptionTier(request.getSubscriptionTier() != null ?
-                        request.getSubscriptionTier() : "free")
+                        request.getSubscriptionTier() : "FREE")
                 .build();
 
         return userRepository.save(newUser)

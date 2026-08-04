@@ -52,7 +52,7 @@ class ProfileServiceTest {
                 .id(UUID.randomUUID())
                 .email("dev@example.com")
                 .fullName("Dev")
-                .subscriptionTier("free")
+                .subscriptionTier("FREE")
                 .passwordHash("old-hash")
                 .build();
     }
@@ -105,7 +105,7 @@ class ProfileServiceTest {
         UpdateProfileRequest request = UpdateProfileRequest.builder()
                 .fullName("New Name")
                 .password("newpassword")
-                .subscriptionTier("pro")
+                .subscriptionTier("PRO")
                 .jobRole("Staff Engineer")
                 .technologies(List.of("Java", "Kotlin"))
                 .build();
@@ -120,7 +120,7 @@ class ProfileServiceTest {
                 .assertNext(data -> {
                     assertThat(data.user().getFullName()).isEqualTo("New Name");
                     assertThat(data.user().getPasswordHash()).isEqualTo("new-hash");
-                    assertThat(data.user().getSubscriptionTier()).isEqualTo("pro");
+                    assertThat(data.user().getSubscriptionTier()).isEqualTo("PRO");
                     assertThat(data.profile().getJobRole()).isEqualTo("Staff Engineer");
                     assertThat(data.profile().getTechnologies()).containsExactly("Java", "Kotlin");
                 })

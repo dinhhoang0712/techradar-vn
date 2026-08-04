@@ -7,6 +7,7 @@ import com.techpulse.techradar.features.radar.domain.RadarExporter;
 import com.techpulse.techradar.features.radar.realtime.RadarBroadcaster;
 import com.techpulse.techradar.features.radar.realtime.RadarSnapshotEvent;
 import com.techpulse.techradar.shared.dto.ApiResponse;
+import com.techpulse.techradar.shared.sse.SseHeartbeat;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +19,6 @@ import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -64,10 +64,7 @@ public class RadarController {
     public Flux<ServerSentEvent<RadarSnapshotEvent>> stream() {
         Flux<ServerSentEvent<RadarSnapshotEvent>> events = radarBroadcaster.stream()
                 .map(snapshot -> ServerSentEvent.builder(snapshot).event("radar-snapshot").build());
-        // Heartbeat keeps the connection alive through proxies that time out idle streams.
-        Flux<ServerSentEvent<RadarSnapshotEvent>> heartbeat = Flux.interval(Duration.ofSeconds(25))
-                .map(i -> ServerSentEvent.<RadarSnapshotEvent>builder().comment("ping").build());
-        return Flux.merge(events, heartbeat);
+        return SseHeartbeat.merge(events);
     }
 
     @Operation(summary = "Monthly trend for one or more technologies",

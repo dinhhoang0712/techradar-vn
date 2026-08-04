@@ -2,6 +2,7 @@ package com.techpulse.techradar.features.system.adapters.output;
 
 import com.techpulse.techradar.features.system.domain.CmsContent;
 import com.techpulse.techradar.features.system.ports.CmsRepository;
+import com.techpulse.techradar.shared.db.R2dbcBinders;
 import io.r2dbc.spi.Row;
 import lombok.RequiredArgsConstructor;
 import org.springframework.r2dbc.core.DatabaseClient;
@@ -58,9 +59,9 @@ public class PostgresCmsRepository implements CmsRepository {
                 .bind("status", c.getStatus())
                 .bind("created_at", now)
                 .bind("updated_at", now);
-        spec = bindNullable(spec, "type", c.getType());
-        spec = bindNullableDate(spec, "content_date", c.getContentDate());
-        spec = bindNullable(spec, "body", c.getBody());
+        spec = R2dbcBinders.bindNullable(spec, "type", c.getType());
+        spec = R2dbcBinders.bindNullable(spec, "content_date", c.getContentDate(), LocalDate.class);
+        spec = R2dbcBinders.bindNullable(spec, "body", c.getBody());
 
         return spec.fetch().rowsUpdated().thenReturn(c);
     }
@@ -80,9 +81,9 @@ public class PostgresCmsRepository implements CmsRepository {
                 .bind("title", c.getTitle())
                 .bind("status", c.getStatus())
                 .bind("updated_at", now);
-        spec = bindNullable(spec, "type", c.getType());
-        spec = bindNullableDate(spec, "content_date", c.getContentDate());
-        spec = bindNullable(spec, "body", c.getBody());
+        spec = R2dbcBinders.bindNullable(spec, "type", c.getType());
+        spec = R2dbcBinders.bindNullable(spec, "content_date", c.getContentDate(), LocalDate.class);
+        spec = R2dbcBinders.bindNullable(spec, "body", c.getBody());
 
         return spec.fetch().rowsUpdated().thenReturn(c);
     }
@@ -106,15 +107,5 @@ public class PostgresCmsRepository implements CmsRepository {
                 .createdAt(row.get("created_at", LocalDateTime.class))
                 .updatedAt(row.get("updated_at", LocalDateTime.class))
                 .build();
-    }
-
-    private static DatabaseClient.GenericExecuteSpec bindNullable(
-            DatabaseClient.GenericExecuteSpec spec, String name, String value) {
-        return value != null ? spec.bind(name, value) : spec.bindNull(name, String.class);
-    }
-
-    private static DatabaseClient.GenericExecuteSpec bindNullableDate(
-            DatabaseClient.GenericExecuteSpec spec, String name, LocalDate value) {
-        return value != null ? spec.bind(name, value) : spec.bindNull(name, LocalDate.class);
     }
 }

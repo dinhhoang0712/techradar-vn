@@ -1,5 +1,6 @@
 package com.techpulse.techradar.features.messaging.adapters.output;
 
+import com.techpulse.techradar.features.messaging.domain.ConversationParticipants;
 import com.techpulse.techradar.features.messaging.ports.ConversationRepository;
 import com.techpulse.techradar.features.messaging.ports.MessagingStatsRepository;
 import io.r2dbc.spi.Row;
@@ -20,21 +21,15 @@ public class PostgresConversationRepository implements ConversationRepository, M
 
     @Override
     public Mono<UUID> findOrCreate(UUID userX, UUID userY) {
-        // Postgres compares uuid values byte-wise (unsigned), which disagrees with
-        // java.util.UUID#compareTo (signed long on the MSBs) whenever the two UUIDs' most
-        // significant bytes differ in sign bit — ordering by the canonical string form matches
-        // Postgres's ordering exactly, satisfying the `CHECK (user_a_id < user_b_id)` constraint.
-        boolean xFirst = userX.toString().compareTo(userY.toString()) < 0;
-        UUID a = xFirst ? userX : userY;
-        UUID b = xFirst ? userY : userX;
+        ConversationParticipants participants = ConversationParticipants.of(userX, userY);
 
         return dbClient.sql(
                 "INSERT INTO conversation (id, user_a_id, user_b_id) VALUES (:id, :a, :b) " +
                 "ON CONFLICT (user_a_id, user_b_id) DO UPDATE SET user_a_id = conversation.user_a_id " +
                 "RETURNING id")
                 .bind("id", UUID.randomUUID())
-                .bind("a", a)
-                .bind("b", b)
+                .bind("a", participants.userA())
+                .bind("b", participants.userB())
                 .map((row, meta) -> row.get("id", UUID.class))
                 .one();
     }
